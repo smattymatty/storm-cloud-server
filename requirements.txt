@@ -1,0 +1,9 @@
+Django>=5.2,<6.0
+djangorestframework>=3.16.0
+drf-spectacular>=0.29.0
+
+# Task 002: Testing Infrastructure & Auth
+factory-boy>=3.3.0
+django-cors-headers>=4.3.0
+coverage>=7.0.0
+django-mercury-performance>=0.1.1b2
