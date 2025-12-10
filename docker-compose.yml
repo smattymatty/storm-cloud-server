@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # For easy database backups
+    environment:
+      POSTGRES_DB: stormcloud
+      POSTGRES_USER: stormcloud
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stormcloud -d stormcloud"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - stormcloud_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_web
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - ./uploads:/app/uploads
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - stormcloud_network
+    # Traefik reverse proxy labels (uncomment if using Traefik)
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.stormcloud.rule=Host(`${DOMAIN:-stormcloud.local}`)"
+    #   - "traefik.http.routers.stormcloud.entrypoints=websecure"
+    #   - "traefik.http.routers.stormcloud.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.stormcloud.loadbalancer.server.port=8000"
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stormcloud_network:
+    driver: bridge

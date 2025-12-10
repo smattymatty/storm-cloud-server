@@ -1,0 +1,68 @@
+# Version control
+.git
+.gitignore
+
+# Environment files
+.env
+.env.*
+!.env.template
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+*.so
+*.egg
+*.egg-info
+.Python
+build/
+dist/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Databases
+*.sqlite3
+*.db
+db.sqlite3
+db.sqlite3-journal
+
+# Storage
+storage_root/
+storage_root_test/
+uploads/
+user_storage/
+media/
+
+# Static files (will be collected in container)
+staticfiles/
+static/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Logs
+*.log
+logs/
+
+# Documentation (except Docker docs)
+*.md
+!DOCKER.md
+
+# OS
+Thumbs.db

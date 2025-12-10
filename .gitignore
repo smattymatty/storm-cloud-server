@@ -24,7 +24,10 @@ db.sqlite3-journal
 
 # Local Storage
 /storage_root/
+/storage_root_test/
 /user_storage/
+/uploads/
+/backups/
 
 # IDE
 .vscode/

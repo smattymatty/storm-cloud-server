@@ -9,6 +9,12 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from core.views import StormCloudBaseAPIView
+from core.throttling import (
+    LoginRateThrottle,
+    AuthRateThrottle,
+    AnonLoginThrottle,
+    AnonRegistrationThrottle,
+)
 from .models import APIKey, UserProfile, EmailVerificationToken
 from .serializers import (
     UserSerializer,
@@ -46,6 +52,7 @@ User = get_user_model()
 class RegistrationView(StormCloudBaseAPIView):
     """User registration endpoint."""
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle, AnonRegistrationThrottle]
 
     @extend_schema(
         summary="Register new user",
@@ -201,6 +208,7 @@ class ResendVerificationView(StormCloudBaseAPIView):
 class LoginView(StormCloudBaseAPIView):
     """Session login endpoint."""
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle, AnonLoginThrottle]
 
     @extend_schema(
         summary="Login with session",
@@ -221,6 +229,26 @@ class LoginView(StormCloudBaseAPIView):
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
 
+        # Check if user exists and is active before authenticating
+        # (Django's authenticate() returns None for inactive users)
+        try:
+            user_check = User.objects.get(username=username)
+            if not user_check.is_active:
+                login_failed.send(
+                    sender=None,
+                    username=username,
+                    ip_address=get_client_ip(request),
+                    reason="account_disabled"
+                )
+                return Response({
+                    "error": {
+                        "code": "ACCOUNT_DISABLED",
+                        "message": "This account has been disabled.",
+                    }
+                }, status=status.HTTP_403_FORBIDDEN)
+        except User.DoesNotExist:
+            pass  # Will be handled by authenticate() below
+
         user = authenticate(request, username=username, password=password)
 
         if user is None:
@@ -238,7 +266,7 @@ class LoginView(StormCloudBaseAPIView):
                 }
             }, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Check if account is disabled
+        # Account is active (already checked above)
         if not user.is_active:
             login_failed.send(
                 sender=None,
@@ -307,6 +335,7 @@ class LogoutView(StormCloudBaseAPIView):
 
 class APIKeyCreateView(StormCloudBaseAPIView):
     """Create a new API key."""
+    throttle_classes = [AuthRateThrottle]
 
     @extend_schema(
         summary="Generate API key",
@@ -367,6 +396,7 @@ class APIKeyCreateView(StormCloudBaseAPIView):
 
 class APIKeyListView(StormCloudBaseAPIView):
     """List user's API keys and create new keys."""
+    throttle_classes = [AuthRateThrottle]
 
     @extend_schema(
         summary="List API keys",
@@ -508,7 +538,7 @@ class AuthMeView(StormCloudBaseAPIView):
     )
     def get(self, request):
         """Get current user info."""
-        profile = UserProfile.objects.get(user=request.user)
+        profile, created = UserProfile.objects.get_or_create(user=request.user)
 
         data = {
             'user': request.user,

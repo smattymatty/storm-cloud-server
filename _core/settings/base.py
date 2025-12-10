@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +21,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&oce!2!vbhefu^t%3&64&+pu-^wtm-0mcr(@d&uwx%nc3ub*=p'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-&oce!2!vbhefu^t%3&64&+pu-^wtm-0mcr(@d&uwx%nc3ub*=p')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
+# DEBUG and ALLOWED_HOSTS are set in dev.py and production.py
 
 
 # Application definition
@@ -39,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'drf_spectacular',
+    'django_mercury',
     'corsheaders',
     'core',
     'accounts',
@@ -79,6 +79,8 @@ WSGI_APPLICATION = '_core.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# Default SQLite for local development
+# Overridden in dev.py and production.py
 
 DATABASES = {
     'default': {
@@ -123,6 +125,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
@@ -139,6 +142,18 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'login': config('THROTTLE_LOGIN_RATE', default='5/min'),
+        'auth': config('THROTTLE_AUTH_RATE', default='10/hour'),
+        'uploads': config('THROTTLE_UPLOAD_RATE', default='100/hour'),
+        'downloads': config('THROTTLE_DOWNLOAD_RATE', default='500/hour'),
+        'user': config('THROTTLE_USER_RATE', default='1000/hour'),
+        'anon_login': config('THROTTLE_ANON_LOGIN_RATE', default='10/hour'),
+        'anon_registration': config('THROTTLE_ANON_REGISTRATION_RATE', default='5/hour'),
+    },
 }
 
 # drf-spectacular configuration
@@ -191,15 +206,30 @@ SPECTACULAR_SETTINGS = {
 # =============================================================================
 
 # Storage
-STORMCLOUD_STORAGE_BACKEND = 'core.storage.local.LocalStorageBackend'
+STORMCLOUD_STORAGE_BACKEND = config(
+    'STORMCLOUD_STORAGE_BACKEND',
+    default='core.storage.local.LocalStorageBackend'
+)
 STORMCLOUD_STORAGE_ROOT = BASE_DIR / 'storage_root'
 
 # Registration
-STORMCLOUD_ALLOW_REGISTRATION = False  # Only admin can create users by default
+STORMCLOUD_ALLOW_REGISTRATION = config(
+    'STORMCLOUD_ALLOW_REGISTRATION',
+    default=False,
+    cast=bool
+)
 
 # Email verification
-STORMCLOUD_REQUIRE_EMAIL_VERIFICATION = True  # Admins bypass this
-STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS = 24
+STORMCLOUD_REQUIRE_EMAIL_VERIFICATION = config(
+    'STORMCLOUD_REQUIRE_EMAIL_VERIFICATION',
+    default=True,
+    cast=bool
+)
+STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS = config(
+    'STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS',
+    default=24,
+    cast=int
+)
 
 # Email verification link format
 # None = direct API link (/api/v1/auth/verify-email/?token=xxx)
@@ -208,11 +238,18 @@ STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS = 24
 STORMCLOUD_EMAIL_VERIFICATION_LINK = None
 
 # API keys
-STORMCLOUD_MAX_API_KEYS_PER_USER = 0  # 0 = unlimited
+STORMCLOUD_MAX_API_KEYS_PER_USER = config(
+    'STORMCLOUD_MAX_API_KEYS_PER_USER',
+    default=0,
+    cast=int
+)
 
 # CORS
-STORMCLOUD_CORS_ORIGINS = []  # List of allowed origins, empty = none allowed
-# Example: ["https://myapp.com", "http://localhost:3000"]
+STORMCLOUD_CORS_ORIGINS = config(
+    'STORMCLOUD_CORS_ORIGINS',
+    default='',
+    cast=Csv()
+)
 
 # Email templates (can be overridden)
 STORMCLOUD_EMAIL_VERIFICATION_SUBJECT = "Verify your Storm Cloud account"
@@ -233,8 +270,16 @@ If you did not create an account, please ignore this email.
 # =============================================================================
 # EMAIL CONFIGURATION
 # =============================================================================
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@stormcloud.local'
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@stormcloud.local')
 
 # =============================================================================
 # CORS HEADERS
@@ -243,34 +288,7 @@ CORS_ALLOWED_ORIGINS = STORMCLOUD_CORS_ORIGINS
 CORS_ALLOW_CREDENTIALS = True  # Required for session auth
 
 # =============================================================================
-# LOGGING - Security Events
+# LOGGING
 # =============================================================================
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'security': {
-            'format': '{asctime} {levelname} {name} {message}',
-            'style': '{',
-            'datefmt': '%Y-%m-%d %H:%M:%S',
-        },
-    },
-    'handlers': {
-        'security_file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'security.log',
-            'formatter': 'security',
-        },
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'stormcloud.security': {
-            'handlers': ['security_file', 'console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-    },
-}
+# Logging configuration is set in dev.py and production.py
+# to match the deployment environment (console vs files)

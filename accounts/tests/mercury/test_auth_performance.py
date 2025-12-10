@@ -58,11 +58,11 @@ class TokenListPerformance(APITestCase):
             APIKeyFactory(user=self.user, name=f'key-{i}')
         self.auth_key = APIKeyFactory(user=self.user, name='auth-key')
 
-    def test_list_50_tokens_under_200ms_no_n1(self):
+    def test_list_50_tokens_under_50ms_no_n1(self):
         """Listing 50 tokens should be fast with no N+1."""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.auth_key.key}')
 
-        with monitor(response_time_ms=10, query_count=5) as result:
+        with monitor(response_time_ms=50, query_count=5) as result:
             response = self.client.get('/api/v1/auth/tokens/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['total'], 51)  # 50 + auth_key

@@ -2,6 +2,9 @@
 
 from django.urls import path
 from django.http import JsonResponse
+from django.db import connection
+from django.conf import settings
+import time
 
 from accounts.api import (
     # Registration & Email Verification
@@ -46,19 +49,54 @@ from cms.api import (
 )
 
 
+# Server start time for uptime calculation
+_server_start_time = time.time()
+
+
 # Health check views (simple, no authentication)
 def health_ping(request):
-    """Basic health check."""
+    """Basic health check for Docker healthcheck."""
     return JsonResponse({'status': 'ok'})
 
 
 def health_status(request):
-    """Detailed health status."""
-    return JsonResponse({'status': 'ok', 'version': '0.1.0'})
+    """Detailed health status with database check and uptime."""
+    status_data = {
+        'status': 'healthy',
+        'version': '0.1.0',
+        'timestamp': int(time.time()),
+    }
+
+    # Calculate uptime
+    uptime_seconds = int(time.time() - _server_start_time)
+    hours = uptime_seconds // 3600
+    minutes = (uptime_seconds % 3600) // 60
+    status_data['uptime'] = f"{hours}h {minutes}m"
+
+    # Check database connection
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        status_data['database'] = 'connected'
+    except Exception as e:
+        status_data['database'] = 'error'
+        status_data['status'] = 'degraded'
+
+    # Storage backend info
+    try:
+        from core.storage import get_storage_backend
+        backend = get_storage_backend()
+        status_data['storage'] = backend.__class__.__name__.replace('StorageBackend', '').lower()
+    except:
+        status_data['storage'] = 'unknown'
+
+    return JsonResponse(status_data)
 
 
 urlpatterns = [
-    # Health
+    # Health (no auth required for Docker healthchecks)
+    path('health/', health_ping, name='health'),
     path('health/ping/', health_ping, name='health-ping'),
     path('health/status/', health_status, name='health-status'),
 

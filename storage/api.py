@@ -11,6 +11,7 @@ from pathlib import Path
 from core.views import StormCloudBaseAPIView
 from core.storage.local import LocalStorageBackend
 from core.utils import normalize_path, PathValidationError
+from core.throttling import UploadRateThrottle, DownloadRateThrottle
 from .models import StoredFile
 from .serializers import (
     DirectoryListResponseSerializer,
@@ -68,17 +69,22 @@ class DirectoryListView(StormCloudBaseAPIView):
         try:
             entries = list(backend.list(full_path))
         except FileNotFoundError:
-            return Response(
-                {
-                    "error": {
-                        "code": "DIRECTORY_NOT_FOUND",
-                        "message": f"Directory '{dir_path}' does not exist.",
-                        "path": dir_path,
-                        "recovery": "Check the path and try again."
-                    }
-                },
-                status=status.HTTP_404_NOT_FOUND
-            )
+            # Auto-create user's root directory if it doesn't exist
+            if not dir_path:
+                backend.create_directory(full_path)
+                entries = []
+            else:
+                return Response(
+                    {
+                        "error": {
+                            "code": "DIRECTORY_NOT_FOUND",
+                            "message": f"Directory '{dir_path}' does not exist.",
+                            "path": dir_path,
+                            "recovery": "Check the path and try again."
+                        }
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
         except NotADirectoryError:
             return Response(
                 {
@@ -299,6 +305,7 @@ class FileUploadView(StormCloudBaseAPIView):
     """Upload file."""
 
     parser_classes = [MultiPartParser, FileUploadParser]
+    throttle_classes = [UploadRateThrottle]
 
     @extend_schema(
         summary="Upload file",
@@ -381,6 +388,8 @@ class FileUploadView(StormCloudBaseAPIView):
 
 class FileDownloadView(StormCloudBaseAPIView):
     """Download file."""
+
+    throttle_classes = [DownloadRateThrottle]
 
     @extend_schema(
         summary="Download file",

@@ -1,9 +1,15 @@
 Django>=5.2,<6.0
 djangorestframework>=3.16.0
 drf-spectacular>=0.29.0
+python-decouple>=3.8
+
+# Production server
+gunicorn>=22.0.0
+psycopg2-binary>=2.9.9
+whitenoise>=6.6.0
 
 # Task 002: Testing Infrastructure & Auth
 factory-boy>=3.3.0
 django-cors-headers>=4.3.0
 coverage>=7.0.0
-django-mercury-performance>=0.1.1b2
+django-mercury-performance>=0.1.1b4
