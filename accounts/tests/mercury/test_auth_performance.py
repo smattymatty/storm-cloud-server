@@ -17,7 +17,7 @@ class AuthEndpointPerformance(APITestCase):
 
     def test_login_under_800ms(self):
         """Login should complete under 800ms."""
-        with monitor(response_time_ms=800) as result:
+        with monitor(response_time_ms=800, query_count=11) as result:
             response = self.client.post('/api/v1/auth/login/', {
                 'username': self.user.username,
                 'password': 'testpass123'

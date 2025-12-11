@@ -48,16 +48,36 @@ MIDDLEWARE = [
 # WhiteNoise static file settings
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Security settings for production
+# =============================================================================
+# PRODUCTION SECURITY SETTINGS
+# =============================================================================
+# These settings enforce HTTPS, secure cookies, and security headers.
+# Designed for deployment behind a reverse proxy (nginx/Caddy) with TLS.
+# See SECURITY.md for detailed explanation and best practices.
+
+# SSL/TLS Redirect - Default: False
+# Let reverse proxy handle HTTP→HTTPS (recommended for Docker/nginx deployments)
+# Set True only if Django should handle redirects directly (not common)
 SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+
+# HTTP Strict Transport Security (HSTS) - Default: 31536000 (1 year)
+# WARNING: Browsers will refuse HTTP connections for the specified duration.
+# Start with 300 seconds (5 min) for testing, then increase to 31536000 (1 year).
+# See: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
 SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
 SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
+
+# Secure Cookies - Default: True
+# Requires HTTPS. Cookies will only be sent over encrypted connections.
+# Set False ONLY for local development HTTP testing (not recommended).
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
-SECURE_BROWSER_XSS_FILTER = True
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+
+# Additional Security Headers (always enabled in production)
+SECURE_BROWSER_XSS_FILTER = True  # Enable browser XSS protection
+SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
+X_FRAME_OPTIONS = 'DENY'  # Prevent clickjacking
 
 # Logging configuration for production
 # Docker deployments use console logging only (captured by docker logs)

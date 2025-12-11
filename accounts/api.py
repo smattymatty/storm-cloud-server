@@ -30,6 +30,8 @@ from .serializers import (
     DeleteAccountSerializer,
     AuthMeResponseSerializer,
     AdminUserCreateSerializer,
+    AdminUserUpdateSerializer,
+    AdminPasswordResetSerializer,
 )
 from .signals import (
     user_registered,
@@ -316,6 +318,7 @@ class LogoutView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Logout session",
         description="Invalidate the current session cookie.",
+        request=None,
         responses={
             200: OpenApiResponse(description="Logged out successfully"),
         },
@@ -480,6 +483,7 @@ class APIKeyRevokeView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Revoke API key",
         description="Revoke an API key by ID. The key will no longer be usable.",
+        request=None,
         responses={
             200: OpenApiResponse(description="Key revoked successfully"),
             404: OpenApiResponse(description="Key not found"),
@@ -696,6 +700,7 @@ class AdminUserListView(StormCloudBaseAPIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        operation_id='v1_admin_users_list',
         summary="Admin: List users",
         description="Get list of all users with filtering options. Note: Pagination deferred to Phase 3.",
         responses={
@@ -765,7 +770,9 @@ class AdminUserListView(StormCloudBaseAPIView):
                 username=serializer.validated_data['username'],
                 email=serializer.validated_data['email'],
                 password=serializer.validated_data['password'],
-                is_staff=serializer.validated_data.get('is_staff', False)
+                is_staff=serializer.validated_data.get('is_staff', False),
+                first_name=serializer.validated_data.get('first_name', ''),
+                last_name=serializer.validated_data.get('last_name', '')
             )
 
             # Create profile
@@ -806,6 +813,7 @@ class AdminUserDetailView(StormCloudBaseAPIView):
     permission_classes = [IsAdminUser]
 
     @extend_schema(
+        operation_id='v1_admin_users_detail',
         summary="Admin: Get user details",
         description="Get detailed information about a specific user.",
         responses={
@@ -841,6 +849,7 @@ class AdminUserVerifyView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Admin: Verify user email",
         description="Manually verify a user's email address.",
+        request=None,
         responses={
             200: OpenApiResponse(description="Email verified"),
             404: OpenApiResponse(description="User not found"),
@@ -877,6 +886,7 @@ class AdminUserDeactivateView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Admin: Deactivate user",
         description="Deactivate a user's account and revoke all their API keys.",
+        request=None,
         responses={
             200: OpenApiResponse(description="User deactivated"),
             404: OpenApiResponse(description="User not found"),
@@ -920,6 +930,7 @@ class AdminUserActivateView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Admin: Activate user",
         description="Reactivate a deactivated user account.",
+        request=None,
         responses={
             200: OpenApiResponse(description="User activated"),
             404: OpenApiResponse(description="User not found"),
@@ -1002,6 +1013,7 @@ class AdminAPIKeyRevokeView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Admin: Revoke API key",
         description="Revoke any user's API key.",
+        request=None,
         responses={
             200: OpenApiResponse(description="Key revoked"),
             404: OpenApiResponse(description="Key not found"),

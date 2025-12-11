@@ -36,6 +36,7 @@ class ManagedContentAddView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Add to CMS",
         description="Mark files for CMS management. NOT IMPLEMENTED in Phase 1.",
+        request=None,
         responses={501: None},
         tags=['CMS']
     )
@@ -75,16 +76,42 @@ class ManagedContentRemoveView(StormCloudBaseAPIView):
 
 
 class ManagedContentRenderView(StormCloudBaseAPIView):
-    """Render managed content."""
+    """Render single managed content item."""
 
     @extend_schema(
-        summary="Render content",
-        description="Render markdown content with Spellbook. NOT IMPLEMENTED in Phase 1.",
+        operation_id='v1_cms_render_single',
+        summary="Render content by ID",
+        description="Render a specific markdown content item with Spellbook. NOT IMPLEMENTED in Phase 1.",
+        request=None,
         responses={501: None},
         tags=['CMS']
     )
-    def post(self, request, content_id=None):
-        """Render content."""
+    def post(self, request, content_id):
+        """Render specific content."""
+        return Response(
+            {
+                "error": {
+                    "code": "NOT_IMPLEMENTED",
+                    "message": "CMS rendering not implemented in Phase 1.",
+                }
+            },
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+
+
+class ManagedContentRenderBulkView(StormCloudBaseAPIView):
+    """Render content in bulk."""
+
+    @extend_schema(
+        operation_id='v1_cms_render_bulk',
+        summary="Bulk render content",
+        description="Render multiple content items or arbitrary markdown. NOT IMPLEMENTED in Phase 1.",
+        request=None,
+        responses={501: None},
+        tags=['CMS']
+    )
+    def post(self, request):
+        """Bulk render content."""
         return Response(
             {
                 "error": {
