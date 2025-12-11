@@ -89,6 +89,13 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
         entries = sorted(entries, key=lambda x: (not x.is_directory, x.name))
 
         # Convert FileInfo objects to serializer format
+        # Fetch encryption metadata from database for entries
+        entry_paths = [entry.path.replace(f"{user_prefix}/", "") for entry in entries]
+        db_files = {
+            f.path: f.encryption_method
+            for f in StoredFile.objects.filter(owner=request.user, path__in=entry_paths)
+        }
+
         entry_data = [
             {
                 'name': entry.name,
@@ -97,6 +104,10 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                 'is_directory': entry.is_directory,
                 'content_type': entry.content_type,
                 'modified_at': entry.modified_at,
+                'encryption_method': db_files.get(
+                    entry.path.replace(f"{user_prefix}/", ""),
+                    StoredFile.ENCRYPTION_NONE
+                ),
             }
             for entry in entries
         ]
@@ -234,6 +245,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
                 'content_type': '',
                 'is_directory': True,
                 'parent_path': parent_path,
+                'encryption_method': StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
             }
         )
 
@@ -245,6 +257,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
             'is_directory': True,
             'created_at': file_info.modified_at,
             'modified_at': file_info.modified_at,
+            'encryption_method': StoredFile.ENCRYPTION_NONE,
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -316,8 +329,10 @@ class FileDetailView(StormCloudBaseAPIView):
         try:
             db_file = StoredFile.objects.get(owner=request.user, path=file_path)
             created_at = db_file.created_at
+            encryption_method = db_file.encryption_method
         except StoredFile.DoesNotExist:
             created_at = file_info.modified_at
+            encryption_method = StoredFile.ENCRYPTION_NONE
 
         response_data = {
             'path': file_path,
@@ -327,6 +342,7 @@ class FileDetailView(StormCloudBaseAPIView):
             'is_directory': False,
             'created_at': created_at,
             'modified_at': file_info.modified_at,
+            'encryption_method': encryption_method,
         }
 
         return Response(response_data)
@@ -401,6 +417,7 @@ class FileUploadView(StormCloudBaseAPIView):
                 'content_type': file_info.content_type or '',
                 'is_directory': False,
                 'parent_path': db_parent_path,
+                'encryption_method': StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
             }
         )
 
@@ -412,6 +429,7 @@ class FileUploadView(StormCloudBaseAPIView):
             'is_directory': False,
             'created_at': stored_file.created_at,
             'modified_at': file_info.modified_at,
+            'encryption_method': stored_file.encryption_method,
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)

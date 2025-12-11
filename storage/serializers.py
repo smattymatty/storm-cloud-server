@@ -19,6 +19,9 @@ class StoredFileSerializer(serializers.ModelSerializer):
             'parent_path',
             'created_at',
             'updated_at',
+            'encryption_method',
+            'key_id',
+            'encrypted_filename',
         ]
         read_only_fields = fields
 
@@ -32,6 +35,7 @@ class FileListItemSerializer(serializers.Serializer):
     is_directory = serializers.BooleanField()
     content_type = serializers.CharField(allow_null=True)
     modified_at = serializers.DateTimeField()
+    encryption_method = serializers.CharField(required=False, default='none')
 
 
 class DirectoryListResponseSerializer(serializers.Serializer):
@@ -58,3 +62,4 @@ class FileInfoResponseSerializer(serializers.Serializer):
     is_directory = serializers.BooleanField()
     created_at = serializers.DateTimeField()
     modified_at = serializers.DateTimeField()
+    encryption_method = serializers.CharField(required=False, default='none')

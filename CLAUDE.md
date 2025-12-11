@@ -11,6 +11,7 @@ Storm Cloud Server - Open source cloud storage with markdown CMS. Django 6.0, DR
 3. **API Key Auth** - `Authorization: Bearer <key>` header.
 4. **URL Versioning** - All endpoints under `/api/v1/`.
 5. **CLI-First** - API serves the CLI. If an endpoint is awkward to consume, fix the API.
+6. **Encryption Metadata** - All files have encryption metadata (ADR 006). Currently `encryption_method='none'`. Server-side and client-side encryption will be implemented in future phases.
 
 ## Virtual Environment
 
@@ -43,6 +44,7 @@ API responses should map cleanly to these commands.
 - File sharing/permissions
 - Versioning
 - Quotas
+- Encryption (metadata in place, implementation pending)
 
 ## Related Libraries
 

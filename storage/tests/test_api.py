@@ -76,3 +76,125 @@ class FileUploadTest(StormCloudAPITestCase):
         response = self.client.post('/api/v1/files/../etc/passwd/upload/', {'file': test_file})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['error']['code'], 'INVALID_PATH')
+
+
+class EncryptionGovernanceTest(StormCloudAPITestCase):
+    """Tests for ADR 006 encryption governance fitness functions."""
+
+    def test_all_stored_files_have_encryption_method_set(self):
+        """All stored files must have encryption_method set (ADR 006 fitness function)."""
+        from storage.models import StoredFile
+        self.authenticate()
+
+        # Create a file
+        test_file = BytesIO(b'test content')
+        test_file.name = 'test.txt'
+        response = self.client.post('/api/v1/files/governance-test.txt/upload/', {'file': test_file})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Verify encryption_method is set in database
+        stored_file = StoredFile.objects.get(owner=self.user, path='governance-test.txt')
+        self.assertIsNotNone(stored_file.encryption_method)
+        self.assertNotEqual(stored_file.encryption_method, '')
+        self.assertIn(stored_file.encryption_method, ['none', 'server', 'client'])
+
+    def test_encryption_method_validation(self):
+        """encryption_method must be one of the valid choices."""
+        from storage.models import StoredFile
+        from django.core.exceptions import ValidationError
+
+        self.authenticate()
+
+        # Valid encryption_method values
+        for method in ['none', 'server', 'client']:
+            file_obj = StoredFile(
+                owner=self.user,
+                path=f'test-{method}.txt',
+                name=f'test-{method}.txt',
+                encryption_method=method
+            )
+            file_obj.full_clean()  # Should not raise
+
+        # Invalid encryption_method value (via model validation)
+        file_obj = StoredFile(
+            owner=self.user,
+            path='test-invalid.txt',
+            name='test-invalid.txt',
+            encryption_method='invalid'
+        )
+        with self.assertRaises(ValidationError):
+            file_obj.full_clean()
+
+    def test_file_upload_sets_encryption_method_none(self):
+        """File upload should default to encryption_method='none'."""
+        self.authenticate()
+
+        test_file = BytesIO(b'test content')
+        test_file.name = 'test.txt'
+        response = self.client.post('/api/v1/files/default-encryption.txt/upload/', {'file': test_file})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['encryption_method'], 'none')
+
+    def test_file_detail_response_includes_encryption_method(self):
+        """File detail response must include encryption_method."""
+        from storage.models import StoredFile
+        self.authenticate()
+
+        # Create file
+        test_file = BytesIO(b'test content')
+        test_file.name = 'test.txt'
+        self.client.post('/api/v1/files/detail-test.txt/upload/', {'file': test_file})
+
+        # Get file details
+        response = self.client.get('/api/v1/files/detail-test.txt/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('encryption_method', response.data)
+        self.assertEqual(response.data['encryption_method'], 'none')
+
+    def test_directory_listing_includes_encryption_method(self):
+        """Directory listing must include encryption_method for each file."""
+        self.authenticate()
+
+        # Create a file
+        test_file = BytesIO(b'test content')
+        test_file.name = 'test.txt'
+        self.client.post('/api/v1/files/list-test.txt/upload/', {'file': test_file})
+
+        # List directory
+        response = self.client.get('/api/v1/dirs/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Check that entries have encryption_method
+        for entry in response.data['entries']:
+            self.assertIn('encryption_method', entry)
+
+    def test_directory_creation_sets_encryption_method(self):
+        """Directory creation should set encryption_method='none'."""
+        self.authenticate()
+        import uuid
+        unique_dir = f'dir-{uuid.uuid4().hex[:8]}'
+
+        response = self.client.post(f'/api/v1/dirs/{unique_dir}/create/')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('encryption_method', response.data)
+        self.assertEqual(response.data['encryption_method'], 'none')
+
+    def test_encryption_method_cannot_be_empty(self):
+        """encryption_method field must not be empty (ADR 006 governance)."""
+        from storage.models import StoredFile
+        from django.core.exceptions import ValidationError
+
+        self.authenticate()
+
+        # Attempt to create file with empty encryption_method
+        file_obj = StoredFile(
+            owner=self.user,
+            path='empty-encryption.txt',
+            name='empty-encryption.txt',
+            encryption_method=''
+        )
+        with self.assertRaises(ValidationError) as cm:
+            file_obj.full_clean()
+
+        # Check the error message mentions encryption_method
+        self.assertIn('encryption_method', str(cm.exception).lower())
