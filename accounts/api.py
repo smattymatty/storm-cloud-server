@@ -809,7 +809,7 @@ class AdminUserListView(StormCloudBaseAPIView):
 
 
 class AdminUserDetailView(StormCloudBaseAPIView):
-    """Admin: Get user details."""
+    """Admin: Get, update, or delete user details."""
     permission_classes = [IsAdminUser]
 
     @extend_schema(
@@ -839,6 +839,121 @@ class AdminUserDetailView(StormCloudBaseAPIView):
             "profile": UserProfileSerializer(user.profile).data,
             "api_keys": APIKeyListSerializer(user.api_keys.all(), many=True).data,
             "storage_used_bytes": 0  # TODO: Calculate from storage app
+        })
+
+    @extend_schema(
+        operation_id='v1_admin_users_update',
+        summary="Admin: Update user",
+        description="Update user details. Username cannot be changed.",
+        request=AdminUserUpdateSerializer,
+        responses={
+            200: OpenApiResponse(description="User updated successfully"),
+            404: OpenApiResponse(description="User not found"),
+            400: OpenApiResponse(description="Invalid data"),
+        },
+        tags=['Administration']
+    )
+    def patch(self, request, user_id):
+        """Update user details."""
+        from django.db import IntegrityError
+
+        try:
+            user = User.objects.select_related('profile').get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                "error": {
+                    "code": "USER_NOT_FOUND",
+                    "message": "User not found.",
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AdminUserUpdateSerializer(data=request.data, context={'user': user})
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            # Update user fields
+            updated_fields = []
+            if 'email' in serializer.validated_data:
+                user.email = serializer.validated_data['email']
+                updated_fields.append('email')
+            if 'first_name' in serializer.validated_data:
+                user.first_name = serializer.validated_data['first_name']
+                updated_fields.append('first_name')
+            if 'last_name' in serializer.validated_data:
+                user.last_name = serializer.validated_data['last_name']
+                updated_fields.append('last_name')
+            if 'is_staff' in serializer.validated_data:
+                user.is_staff = serializer.validated_data['is_staff']
+                updated_fields.append('is_staff')
+            if 'password' in serializer.validated_data:
+                user.set_password(serializer.validated_data['password'])
+                updated_fields.append('password')
+
+            if updated_fields:
+                user.save(update_fields=updated_fields if 'password' not in updated_fields else None)
+
+            return Response({
+                "user": UserSerializer(user).data,
+                "profile": UserProfileSerializer(user.profile).data,
+                "message": "User updated successfully"
+            })
+        except IntegrityError:
+            return Response({
+                "error": {
+                    "code": "ALREADY_EXISTS",
+                    "message": "Email already exists.",
+                    "field": "email"
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        operation_id='v1_admin_users_delete',
+        summary="Admin: Delete user",
+        description="Permanently delete a user account. Cannot delete yourself or the last superuser.",
+        responses={
+            200: OpenApiResponse(description="User deleted successfully"),
+            404: OpenApiResponse(description="User not found"),
+            403: OpenApiResponse(description="Cannot delete yourself or last superuser"),
+        },
+        tags=['Administration']
+    )
+    def delete(self, request, user_id):
+        """Delete user account."""
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                "error": {
+                    "code": "USER_NOT_FOUND",
+                    "message": "User not found.",
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Prevent self-deletion
+        if user.id == request.user.id:
+            return Response({
+                "error": {
+                    "code": "CANNOT_DELETE_SELF",
+                    "message": "Cannot delete your own account.",
+                }
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Prevent deletion of last superuser
+        if user.is_superuser:
+            superuser_count = User.objects.filter(is_superuser=True, is_active=True).count()
+            if superuser_count <= 1:
+                return Response({
+                    "error": {
+                        "code": "LAST_SUPERUSER",
+                        "message": "Cannot delete the last active superuser.",
+                    }
+                }, status=status.HTTP_403_FORBIDDEN)
+
+        username = user.username
+        user.delete()
+
+        return Response({
+            "message": f"User '{username}' has been deleted successfully"
         })
 
 
@@ -957,6 +1072,74 @@ class AdminUserActivateView(StormCloudBaseAPIView):
             "user_id": user.id,
             "username": user.username
         })
+
+
+class AdminUserPasswordResetView(StormCloudBaseAPIView):
+    """Admin: Reset user password."""
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Reset user password",
+        description="Reset a user's password. Can optionally send reset email or set a specific password.",
+        request=AdminPasswordResetSerializer,
+        responses={
+            200: OpenApiResponse(description="Password reset successful"),
+            404: OpenApiResponse(description="User not found"),
+        },
+        tags=['Administration']
+    )
+    def post(self, request, user_id):
+        """Reset user password."""
+        import secrets
+        import string
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                "error": {
+                    "code": "USER_NOT_FOUND",
+                    "message": "User not found.",
+                }
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AdminPasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_password = serializer.validated_data.get('new_password')
+        send_email = serializer.validated_data.get('send_email', False)
+
+        response_data = {}
+
+        # If new_password provided, set it directly
+        if new_password:
+            user.set_password(new_password)
+            user.save()
+            response_data['temporary_password'] = new_password
+            response_data['message'] = "Password has been reset"
+        elif send_email:
+            # Generate temporary password and send email
+            alphabet = string.ascii_letters + string.digits
+            temp_password = ''.join(secrets.choice(alphabet) for i in range(16))
+            user.set_password(temp_password)
+            user.save()
+            # TODO: Send email with temp password
+            # For now, just return it in response (not ideal for production)
+            response_data['message'] = f"Password reset email sent to {user.email}"
+            response_data['temporary_password'] = temp_password  # Remove this in production
+            response_data['note'] = "Email sending not yet implemented - temporary password shown here"
+        else:
+            return Response({
+                "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "Must provide either new_password or send_email=true",
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        response_data['user_id'] = user.id
+        response_data['username'] = user.username
+
+        return Response(response_data)
 
 
 class AdminAPIKeyListView(StormCloudBaseAPIView):

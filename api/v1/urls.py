@@ -29,6 +29,7 @@ from accounts.api import (
     AdminUserVerifyView,
     AdminUserDeactivateView,
     AdminUserActivateView,
+    AdminUserPasswordResetView,
     AdminAPIKeyListView,
     AdminAPIKeyRevokeView,
 )
@@ -136,6 +137,7 @@ urlpatterns = [
     path('admin/users/<int:user_id>/verify/', AdminUserVerifyView.as_view(), name='admin-users-verify'),
     path('admin/users/<int:user_id>/deactivate/', AdminUserDeactivateView.as_view(), name='admin-users-deactivate'),
     path('admin/users/<int:user_id>/activate/', AdminUserActivateView.as_view(), name='admin-users-activate'),
+    path('admin/users/<int:user_id>/reset-password/', AdminUserPasswordResetView.as_view(), name='admin-users-reset-password'),
 
     # API Key Management (Admin)
     path('admin/keys/', AdminAPIKeyListView.as_view(), name='admin-keys-list'),

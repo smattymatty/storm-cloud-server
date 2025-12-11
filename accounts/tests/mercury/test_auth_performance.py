@@ -66,3 +66,83 @@ class TokenListPerformance(APITestCase):
             response = self.client.get('/api/v1/auth/tokens/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['total'], 51)  # 50 + auth_key
+
+
+class AdminUserEndpointPerformance(APITestCase):
+    """Performance baselines for admin user management endpoints."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = UserWithProfileFactory(is_staff=True, is_superuser=True, verified=True)
+        self.admin_key = APIKeyFactory(user=self.admin)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.admin_key.key}')
+
+    def test_admin_user_list_under_200ms(self):
+        """Admin user list should complete under 200ms with 50 users."""
+        # Create 50 users to test at scale
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        existing_count = User.objects.count()
+
+        for i in range(50):
+            UserWithProfileFactory()
+
+        with monitor(response_time_ms=200) as result:
+            response = self.client.get('/api/v1/admin/users/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.data['total'], existing_count + 50)
+
+    def test_admin_user_detail_under_100ms(self):
+        """Admin user detail should complete under 100ms."""
+        user = UserWithProfileFactory()
+        # Create some API keys for the user
+        for i in range(5):
+            APIKeyFactory(user=user, name=f'key-{i}')
+
+        with monitor(response_time_ms=100) as result:
+            response = self.client.get(f'/api/v1/admin/users/{user.id}/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('user', response.data)
+        self.assertIn('api_keys', response.data)
+
+    def test_admin_user_update_under_100ms(self):
+        """Admin user update should complete under 100ms."""
+        user = UserWithProfileFactory()
+
+        with monitor(response_time_ms=100) as result:
+            response = self.client.patch(
+                f'/api/v1/admin/users/{user.id}/',
+                {'email': 'updated@example.com'},
+                format='json'
+            )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_user_delete_under_100ms(self):
+        """Admin user deletion should complete under 100ms."""
+        user = UserWithProfileFactory()
+        # Create related objects to test cascade deletion
+        for i in range(10):
+            APIKeyFactory(user=user, name=f'key-{i}')
+
+        # Allow up to 12 queries for deletion (cascades to profile, API keys, etc.)
+        with monitor(response_time_ms=100, query_count=12) as result:
+            response = self.client.delete(f'/api/v1/admin/users/{user.id}/')
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_password_reset_under_1000ms(self):
+        """Admin password reset should complete under 1s (password hashing is slow)."""
+        user = UserWithProfileFactory()
+
+        # Password hashing is intentionally slow for security
+        with monitor(response_time_ms=1000) as result:
+            response = self.client.post(
+                f'/api/v1/admin/users/{user.id}/reset-password/',
+                {'new_password': 'newpass123'},
+                format='json'
+            )
+
+        self.assertEqual(response.status_code, 200)
