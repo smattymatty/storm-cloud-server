@@ -37,13 +37,14 @@ class StormCloudAPITestCase(APITestCase):
         self.api_key = APIKeyFactory(user=self.user)
 
         # Use test storage root for this test run
-        # Disable throttling during tests to prevent rate limit failures
-        rest_framework_settings = dict(settings.REST_FRAMEWORK)
-        rest_framework_settings['DEFAULT_THROTTLE_CLASSES'] = []
-
+        # Disable throttling by using DummyCache (doesn't store anything)
         self.settings_override = override_settings(
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
-            REST_FRAMEWORK=rest_framework_settings
+            CACHES={
+                'default': {
+                    'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+                }
+            }
         )
         self.settings_override.enable()
 

@@ -127,9 +127,15 @@ All commands auto-detect whether you have `docker-compose` (v1) or `docker compo
 
 ### Security Variables
 
+**📖 See [SECURITY.md](SECURITY.md) for comprehensive security configuration guide.**
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEBUG` | `True` | Set to `False` in production |
+| `SECURE_HSTS_SECONDS` | `31536000` | HSTS duration - start with 300 for testing |
+| `SESSION_COOKIE_SECURE` | `True` | Require HTTPS for session cookies |
+| `CSRF_COOKIE_SECURE` | `True` | Require HTTPS for CSRF cookies |
+| `SECURE_SSL_REDIRECT` | `False` | Let reverse proxy handle redirects |
 | `STORMCLOUD_ALLOW_REGISTRATION` | `False` | Enable public user registration |
 | `STORMCLOUD_REQUIRE_EMAIL_VERIFICATION` | `True` | Require email verification |
 
@@ -425,16 +431,35 @@ server {
 
 Before exposing to the internet:
 
-- [ ] Change `SECRET_KEY` to unique value
-- [ ] Change `POSTGRES_PASSWORD` to strong password
+#### Required Changes
+- [ ] Change `SECRET_KEY` to unique value (in `.env`)
+- [ ] Change `POSTGRES_PASSWORD` to strong password (in `.env`)
 - [ ] Set `DEBUG=False` in `.env`
-- [ ] Update `ALLOWED_HOSTS` with your domain
-- [ ] Configure HTTPS via reverse proxy
-- [ ] Set up firewall (only expose 80/443)
+- [ ] Update `ALLOWED_HOSTS` with your domain (e.g., `cloud.example.com`)
+
+#### HTTPS/TLS Configuration
+- [ ] Configure HTTPS via reverse proxy (nginx/Caddy/Traefik)
+- [ ] Obtain SSL certificate (Let's Encrypt recommended)
+- [ ] Test HTTPS is working before enabling security settings
+- [ ] Verify `SECURE_HSTS_SECONDS` in `.env` (start with 300, increase to 31536000)
+- [ ] Confirm `SESSION_COOKIE_SECURE=True` (default, requires HTTPS)
+- [ ] Confirm `CSRF_COOKIE_SECURE=True` (default, requires HTTPS)
+- [ ] Keep `SECURE_SSL_REDIRECT=False` (reverse proxy handles redirects)
+
+**⚠️ IMPORTANT:** Read [SECURITY.md](SECURITY.md) for detailed explanations of each security setting.
+
+#### Infrastructure Security
+- [ ] Set up firewall (only expose 80/443, block 8000)
 - [ ] Configure SMTP for email notifications
 - [ ] Set up automated backups (database + uploads)
-- [ ] Review rate limiting configuration
+- [ ] Review rate limiting configuration (see `.env.template`)
 - [ ] Set up monitoring (health checks, disk space, logs)
+
+#### Validation
+- [ ] Run `python manage.py check --deploy` inside container
+- [ ] Test login/logout over HTTPS
+- [ ] Verify security headers with [securityheaders.com](https://securityheaders.com/)
+- [ ] Check SSL configuration with [ssllabs.com](https://www.ssllabs.com/ssltest/)
 
 ### Environment Separation
 

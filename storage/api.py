@@ -27,23 +27,10 @@ def get_user_storage_path(user) -> str:
     return f"{user.id}"
 
 
-class DirectoryListView(StormCloudBaseAPIView):
-    """List directory contents with pagination."""
+class DirectoryListBaseView(StormCloudBaseAPIView):
+    """Base view for listing directory contents with pagination."""
 
-    @extend_schema(
-        summary="List directory",
-        description="List contents of a directory. Returns files and subdirectories.",
-        parameters=[
-            OpenApiParameter('limit', int, description='Items per page (default 50, max 200)'),
-            OpenApiParameter('cursor', str, description='Pagination cursor'),
-        ],
-        responses={
-            200: DirectoryListResponseSerializer,
-            404: OpenApiResponse(description="Directory not found"),
-        },
-        tags=['Files']
-    )
-    def get(self, request, dir_path=""):
+    def list_directory(self, request, dir_path=""):
         """List directory contents with pagination."""
         backend = LocalStorageBackend()
         user_prefix = get_user_storage_path(request.user)
@@ -71,7 +58,7 @@ class DirectoryListView(StormCloudBaseAPIView):
         except FileNotFoundError:
             # Auto-create user's root directory if it doesn't exist
             if not dir_path:
-                backend.create_directory(full_path)
+                backend.mkdir(full_path)
                 entries = []
             else:
                 return Response(
@@ -144,12 +131,56 @@ class DirectoryListView(StormCloudBaseAPIView):
         return Response(response_data)
 
 
+class DirectoryListRootView(DirectoryListBaseView):
+    """List root directory contents."""
+
+    @extend_schema(
+        operation_id='v1_dirs_list_root',
+        summary="List root directory",
+        description="List contents of the root directory. Returns files and subdirectories.",
+        parameters=[
+            OpenApiParameter('limit', int, description='Items per page (default 50, max 200)'),
+            OpenApiParameter('cursor', str, description='Pagination cursor'),
+        ],
+        responses={
+            200: DirectoryListResponseSerializer,
+        },
+        tags=['Files']
+    )
+    def get(self, request):
+        """List root directory."""
+        return self.list_directory(request, dir_path="")
+
+
+class DirectoryListView(DirectoryListBaseView):
+    """List directory contents."""
+
+    @extend_schema(
+        operation_id='v1_dirs_list',
+        summary="List directory",
+        description="List contents of a specific directory. Returns files and subdirectories.",
+        parameters=[
+            OpenApiParameter('limit', int, description='Items per page (default 50, max 200)'),
+            OpenApiParameter('cursor', str, description='Pagination cursor'),
+        ],
+        responses={
+            200: DirectoryListResponseSerializer,
+            404: OpenApiResponse(description="Directory not found"),
+        },
+        tags=['Files']
+    )
+    def get(self, request, dir_path):
+        """List directory contents."""
+        return self.list_directory(request, dir_path)
+
+
 class DirectoryCreateView(StormCloudBaseAPIView):
     """Create directory."""
 
     @extend_schema(
         summary="Create directory",
         description="Create a new directory. Parent directories are created as needed.",
+        request=None,  # No request body needed
         responses={
             201: FileInfoResponseSerializer,
         },
@@ -519,6 +550,7 @@ class IndexRebuildView(StormCloudBaseAPIView):
     @extend_schema(
         summary="Rebuild file index",
         description="Reconcile database with filesystem. Admin only. NOT IMPLEMENTED in Phase 1.",
+        request=None,
         responses={
             501: OpenApiResponse(description="Not implemented"),
         },

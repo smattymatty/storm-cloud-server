@@ -3,6 +3,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 
 from .models import APIKey, UserProfile
 
@@ -14,7 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'is_staff', 'is_superuser']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'is_staff', 'is_superuser', 'is_active']
         read_only_fields = ['id', 'date_joined']
 
 
@@ -115,6 +117,15 @@ class AuthMeResponseSerializer(serializers.Serializer):
     profile = UserProfileSerializer()
     api_key = serializers.SerializerMethodField()
 
+    @extend_schema_field({
+        'type': 'object',
+        'properties': {
+            'id': {'type': 'string', 'format': 'uuid'},
+            'name': {'type': 'string'},
+            'last_used_at': {'type': 'string', 'format': 'date-time', 'nullable': True},
+        },
+        'nullable': True,
+    })
     def get_api_key(self, obj):
         """Return only the ID and name of the current API key."""
         api_key = self.context.get('api_key')
@@ -134,12 +145,50 @@ class AdminUserCreateSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     is_email_verified = serializers.BooleanField(default=False)
     is_staff = serializers.BooleanField(default=False)
 
     def validate_password(self, value):
         """Validate password."""
         validate_password(value)
+        return value
+
+
+class AdminUserUpdateSerializer(serializers.Serializer):
+    """Serializer for admin user update."""
+
+    email = serializers.EmailField(required=False)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    is_staff = serializers.BooleanField(required=False)
+    password = serializers.CharField(write_only=True, required=False)
+
+    def validate_password(self, value):
+        """Validate password."""
+        if value:
+            validate_password(value)
+        return value
+
+    def validate_email(self, value):
+        """Check if email already exists (excluding current user)."""
+        user = self.context.get('user')
+        if user and User.objects.filter(email=value).exclude(id=user.id).exists():
+            raise serializers.ValidationError("Email already exists.")
+        return value
+
+
+class AdminPasswordResetSerializer(serializers.Serializer):
+    """Serializer for admin password reset."""
+
+    new_password = serializers.CharField(write_only=True, required=False)
+    send_email = serializers.BooleanField(default=False)
+
+    def validate_new_password(self, value):
+        """Validate password."""
+        if value:
+            validate_password(value)
         return value
 
 

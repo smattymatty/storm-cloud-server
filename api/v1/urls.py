@@ -29,10 +29,12 @@ from accounts.api import (
     AdminUserVerifyView,
     AdminUserDeactivateView,
     AdminUserActivateView,
+    AdminUserPasswordResetView,
     AdminAPIKeyListView,
     AdminAPIKeyRevokeView,
 )
 from storage.api import (
+    DirectoryListRootView,
     DirectoryListView,
     DirectoryCreateView,
     FileUploadView,
@@ -46,6 +48,7 @@ from cms.api import (
     ManagedContentAddView,
     ManagedContentRemoveView,
     ManagedContentRenderView,
+    ManagedContentRenderBulkView,
 )
 
 
@@ -134,6 +137,7 @@ urlpatterns = [
     path('admin/users/<int:user_id>/verify/', AdminUserVerifyView.as_view(), name='admin-users-verify'),
     path('admin/users/<int:user_id>/deactivate/', AdminUserDeactivateView.as_view(), name='admin-users-deactivate'),
     path('admin/users/<int:user_id>/activate/', AdminUserActivateView.as_view(), name='admin-users-activate'),
+    path('admin/users/<int:user_id>/reset-password/', AdminUserPasswordResetView.as_view(), name='admin-users-reset-password'),
 
     # API Key Management (Admin)
     path('admin/keys/', AdminAPIKeyListView.as_view(), name='admin-keys-list'),
@@ -144,7 +148,7 @@ urlpatterns = [
     # =========================================================================
 
     # Directories (ls operations)
-    path('dirs/', DirectoryListView.as_view(), name='dir-list-root'),
+    path('dirs/', DirectoryListRootView.as_view(), name='dir-list-root'),
     path('dirs/<path:dir_path>/create/', DirectoryCreateView.as_view(), name='dir-create'),
     path('dirs/<path:dir_path>/', DirectoryListView.as_view(), name='dir-list'),
 
@@ -164,5 +168,5 @@ urlpatterns = [
     path('cms/add/', ManagedContentAddView.as_view(), name='cms-add'),
     path('cms/<uuid:content_id>/remove/', ManagedContentRemoveView.as_view(), name='cms-remove'),
     path('cms/<uuid:content_id>/render/', ManagedContentRenderView.as_view(), name='cms-render'),
-    path('cms/render/', ManagedContentRenderView.as_view(), name='cms-render-bulk'),
+    path('cms/render/', ManagedContentRenderBulkView.as_view(), name='cms-render-bulk'),
 ]

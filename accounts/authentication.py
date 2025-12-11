@@ -3,6 +3,7 @@
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 from .models import APIKey
 
@@ -47,3 +48,19 @@ class APIKeyAuthentication(BaseAuthentication):
         api_key.save(update_fields=['last_used_at'])
 
         return (api_key.user, api_key)
+
+
+class APIKeyAuthenticationScheme(OpenApiAuthenticationExtension):
+    """OpenAPI schema extension for API Key authentication."""
+
+    target_class = 'accounts.authentication.APIKeyAuthentication'
+    name = 'APIKeyAuth'
+
+    def get_security_definition(self, auto_schema):
+        """Define the security scheme for OpenAPI."""
+        return {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'API Key',
+            'description': 'API key authentication using Bearer token. Format: `Authorization: Bearer <api_key>`'
+        }
