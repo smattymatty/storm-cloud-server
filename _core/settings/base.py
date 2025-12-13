@@ -39,16 +39,19 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'django_mercury',
+    'django_spellbook',
     'corsheaders',
     'core',
     'accounts',
     'storage',
     'cms',
+    'docs_app',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'core.middleware.SentryContextMiddleware',  # Add user context to Sentry errors
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -153,6 +156,8 @@ REST_FRAMEWORK = {
         'user': config('THROTTLE_USER_RATE', default='1000/hour'),
         'anon_login': config('THROTTLE_ANON_LOGIN_RATE', default='10/hour'),
         'anon_registration': config('THROTTLE_ANON_REGISTRATION_RATE', default='5/hour'),
+        'public_share': config('THROTTLE_PUBLIC_SHARE_RATE', default='60/min'),
+        'public_share_download': config('THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE', default='30/min'),
     },
 }
 
@@ -244,6 +249,18 @@ STORMCLOUD_MAX_API_KEYS_PER_USER = config(
     cast=int
 )
 
+# Share Links
+STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS = config(
+    'STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS',
+    default=True,
+    cast=bool
+)
+STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS = config(
+    'STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS',
+    default=7,
+    cast=int
+)
+
 # CORS
 STORMCLOUD_CORS_ORIGINS = config(
     'STORMCLOUD_CORS_ORIGINS',
@@ -288,7 +305,16 @@ CORS_ALLOWED_ORIGINS = STORMCLOUD_CORS_ORIGINS
 CORS_ALLOW_CREDENTIALS = True  # Required for session auth
 
 # =============================================================================
-# LOGGING
+# DJANGO SPELLBOOK SETTINGS
 # =============================================================================
-# Logging configuration is set in dev.py and production.py
-# to match the deployment environment (console vs files)
+SPELLBOOK_MD_APP = [
+    'docs_app',
+]
+
+SPELLBOOK_MD_PATH = [
+    'docs_content',
+]
+
+SPELLBOOK_MD_URL_PREFIX = [
+    'docs',
+]

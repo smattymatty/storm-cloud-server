@@ -1,0 +1,608 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<h1 id="file-storage-api">File Storage API</h1>
+<p>Upload, download, list, and manage files via REST API.</p>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>The Storage API provides CRUD operations for files stored in your Storm Cloud instance. All operations are user-isolated - you can only access your own files.</p>
+<p><strong>Base URL:</strong> <code>/api/v1/files/</code></p>
+<p><strong>Authentication:</strong> API Key required</p>
+<pre><code>Authorization: Bearer YOUR_API_KEY
+</code></pre>
+<hr />
+<h2 id="endpoints">Endpoints</h2>
+<h3 id="list-files">List Files</h3>
+<p><strong>GET</strong> <code>/api/v1/dirs/</code> or <strong>GET</strong> <code>/api/v1/dirs/{dir_path}/</code></p>
+<p>List files and directories.</p>
+<p><strong>Path Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dir_path</code></td>
+<td>string</td>
+<td>No</td>
+<td>Directory path to list (omit for root)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example Request:</strong></p>
+<pre><code class="language-bash"># List root directory
+curl http://localhost:8000/api/v1/dirs/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+
+# List subdirectory
+curl http://localhost:8000/api/v1/dirs/documents/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<p><strong>Example Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;path&quot;: &quot;documents&quot;,
+  &quot;entries&quot;: [
+    {
+      &quot;name&quot;: &quot;report.pdf&quot;,
+      &quot;path&quot;: &quot;documents/report.pdf&quot;,
+      &quot;size&quot;: 1048576,
+      &quot;is_directory&quot;: false,
+      &quot;content_type&quot;: &quot;application/pdf&quot;,
+      &quot;modified_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+      &quot;encryption_method&quot;: &quot;none&quot;
+    },
+    {
+      &quot;name&quot;: &quot;notes.txt&quot;,
+      &quot;path&quot;: &quot;documents/notes.txt&quot;,
+      &quot;size&quot;: 2048,
+      &quot;is_directory&quot;: false,
+      &quot;content_type&quot;: &quot;text/plain&quot;,
+      &quot;modified_at&quot;: &quot;2025-12-11T09:30:00Z&quot;,
+      &quot;encryption_method&quot;: &quot;none&quot;
+    }
+  ],
+  &quot;total&quot;: 2
+}
+</code></pre>
+<hr />
+<h3 id="upload-file">Upload File</h3>
+<p><strong>POST</strong> <code>/api/v1/files/{file_path}/upload/</code></p>
+<p>Upload a file to the specified path.</p>
+<p><strong>Path Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Destination path (e.g., <code>documents/report.pdf</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Body:</strong></p>
+<p>Multipart form data with <code>file</code> field.</p>
+<p><strong>Example Request:</strong></p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/files/documents/report.pdf/upload/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -F &quot;file=@/path/to/local/report.pdf&quot;
+</code></pre>
+<p><strong>Example Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;path&quot;: &quot;documents/report.pdf&quot;,
+  &quot;name&quot;: &quot;report.pdf&quot;,
+  &quot;size&quot;: 1048576,
+  &quot;content_type&quot;: &quot;application/pdf&quot;,
+  &quot;is_directory&quot;: false,
+  &quot;created_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+  &quot;modified_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+  &quot;encryption_method&quot;: &quot;none&quot;
+}
+</code></pre>
+<p><strong>Error Codes:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FILE_REQUIRED</code></td>
+<td>No file provided in request</td>
+</tr>
+<tr>
+<td><code>PATH_TRAVERSAL_DETECTED</code></td>
+<td>Invalid path (e.g., <code>../etc/passwd</code>)</td>
+</tr>
+<tr>
+<td><code>FILE_ALREADY_EXISTS</code></td>
+<td>File exists at this path (delete first or upload to different path)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="download-file">Download File</h3>
+<p><strong>GET</strong> <code>/api/v1/files/{file_path}/download/</code></p>
+<p>Download a file from storage.</p>
+<p><strong>Path Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>File path to download</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example Request:</strong></p>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/files/documents/report.pdf/download/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -o report.pdf
+</code></pre>
+<p><strong>Response:</strong></p>
+<p>Binary file stream with appropriate <code>Content-Type</code> and <code>Content-Disposition</code> headers.</p>
+<p><strong>Error Codes:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FILE_NOT_FOUND</code></td>
+<td>File does not exist at this path</td>
+</tr>
+<tr>
+<td><code>PATH_TRAVERSAL_DETECTED</code></td>
+<td>Invalid path</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="file-info">File Info</h3>
+<p><strong>GET</strong> <code>/api/v1/files/{file_path}/</code></p>
+<p>Get metadata about a file without downloading it.</p>
+<p><strong>Path Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>File path to query</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example Request:</strong></p>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/files/documents/report.pdf/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<p><strong>Example Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;path&quot;: &quot;documents/report.pdf&quot;,
+  &quot;name&quot;: &quot;report.pdf&quot;,
+  &quot;size&quot;: 1048576,
+  &quot;content_type&quot;: &quot;application/pdf&quot;,
+  &quot;is_directory&quot;: false,
+  &quot;created_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+  &quot;modified_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+  &quot;encryption_method&quot;: &quot;none&quot;
+}
+</code></pre>
+<hr />
+<h3 id="delete-file">Delete File</h3>
+<p><strong>DELETE</strong> <code>/api/v1/files/{file_path}/delete/</code></p>
+<p>Delete a file from storage.</p>
+<p><strong>Path Parameters:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>File path to delete</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example Request:</strong></p>
+<pre><code class="language-bash">curl -X DELETE http://localhost:8000/api/v1/files/documents/old-report.pdf/delete/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<p><strong>Example Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;File deleted successfully&quot;,
+  &quot;path&quot;: &quot;documents/old-report.pdf&quot;
+}
+</code></pre>
+<p><strong>Note:</strong> Deleting a file also deletes all associated share links (CASCADE).</p>
+<hr />
+<h2 id="api-differences-from-typical-rest">API Differences from Typical REST</h2>
+<p>Storm Cloud uses an unusual but CLI-friendly API design:</p>
+<ul>
+<li>
+<p><strong>No <code>/api/v1/files/</code> list endpoint</strong> - Use <code>/api/v1/dirs/</code> instead</p>
+</li>
+<li>
+<p><strong>Action-based URLs</strong> - <code>/upload/</code>, <code>/download/</code>, <code>/delete/</code> suffixes</p>
+</li>
+<li>
+<p><strong>No PUT/PATCH for updates</strong> - Delete and re-upload instead</p>
+</li>
+<li>
+<p><strong>Flat responses</strong> - No nested objects, easy to parse in shell scripts</p>
+</li>
+</ul>
+<p>This design prioritizes command-line usability over REST conventions.</p>
+<hr />
+<h2 id="path-structure">Path Structure</h2>
+<h3 id="valid-paths">Valid Paths</h3>
+<ul>
+<li>
+<p><code>file.txt</code> - Root level</p>
+</li>
+<li>
+<p><code>documents/report.pdf</code> - Single directory</p>
+</li>
+<li>
+<p><code>projects/2025/january/notes.md</code> - Nested directories</p>
+</li>
+</ul>
+<h3 id="invalid-paths">Invalid Paths</h3>
+<ul>
+<li>
+<p><code>../etc/passwd</code> - Path traversal (rejected)</p>
+</li>
+<li>
+<p><code>/absolute/path</code> - Absolute paths (rejected)</p>
+</li>
+<li>
+<p><code>file?.txt</code> - Special characters (may fail)</p>
+</li>
+</ul>
+<h3 id="best-practices">Best Practices</h3>
+<ul>
+<li>
+<p>Use forward slashes <code>/</code> for directory separation</p>
+</li>
+<li>
+<p>Avoid spaces in filenames (use hyphens or underscores)</p>
+</li>
+<li>
+<p>Use descriptive names: <code>project-proposal.pdf</code> not <code>doc.pdf</code></p>
+</li>
+<li>
+<p>Organize with directories: <code>invoices/2025/january.pdf</code></p>
+</li>
+</ul>
+<hr />
+<h2 id="no-pagination">No Pagination</h2>
+<p>Directory listings return <strong>all entries</strong> in a single response. No pagination is currently implemented.</p>
+<pre><code class="language-bash"># Get all files in directory
+curl http://localhost:8000/api/v1/dirs/documents/ \
+  -H &quot;Authorization: Bearer KEY&quot;
+</code></pre>
+<p><strong>Response structure:</strong></p>
+<ul>
+<li>
+<p><code>path</code> - Directory path</p>
+</li>
+<li>
+<p><code>entries</code> - Array of all files/subdirectories</p>
+</li>
+<li>
+<p><code>total</code> - Count of entries</p>
+</li>
+</ul>
+<p>For large directories, consider organizing files into subdirectories.</p>
+<hr />
+<h2 id="content-types">Content Types</h2>
+<p>Storm Cloud automatically detects content types:</p>
+<table>
+<thead>
+<tr>
+<th>Extension</th>
+<th>Content-Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.txt</code></td>
+<td><code>text/plain</code></td>
+</tr>
+<tr>
+<td><code>.pdf</code></td>
+<td><code>application/pdf</code></td>
+</tr>
+<tr>
+<td><code>.jpg</code>, <code>.jpeg</code></td>
+<td><code>image/jpeg</code></td>
+</tr>
+<tr>
+<td><code>.png</code></td>
+<td><code>image/png</code></td>
+</tr>
+<tr>
+<td><code>.json</code></td>
+<td><code>application/json</code></td>
+</tr>
+<tr>
+<td><code>.zip</code></td>
+<td><code>application/zip</code></td>
+</tr>
+</tbody>
+</table>
+<p>Unknown extensions default to <code>application/octet-stream</code>.</p>
+<hr />
+<h2 id="encryption-metadata">Encryption Metadata</h2>
+<p>All files have an <code>encryption_method</code> field:</p>
+<ul>
+<li>
+<p><code>"none"</code> - Currently the only supported value</p>
+</li>
+<li>
+<p>Future: <code>"server-side-aes256"</code>, <code>"client-side-age"</code></p>
+</li>
+</ul>
+<p>This field is reserved for future encryption features. See <a href="../../architecture/records/006-encryption-metadata.md">ADR 006</a> for design details.</p>
+<hr />
+<h2 id="storage-backend">Storage Backend</h2>
+<p>Files are stored using a pluggable backend system:</p>
+<ul>
+<li>
+<p><strong>Default:</strong> Local filesystem in <code>uploads/</code> directory</p>
+</li>
+<li>
+<p><strong>Future:</strong> Backblaze B2, AWS S3, custom backends</p>
+</li>
+</ul>
+<p>See <a href="../../architecture/records/002-storage-backend.md">ADR 002</a> for architecture details.</p>
+<hr />
+<h2 id="rate-limits">Rate Limits</h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Rate Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>List</td>
+<td>60 requests/minute</td>
+</tr>
+<tr>
+<td>Upload</td>
+<td>30 requests/minute</td>
+</tr>
+<tr>
+<td>Download</td>
+<td>60 requests/minute</td>
+</tr>
+<tr>
+<td>Info</td>
+<td>100 requests/minute</td>
+</tr>
+<tr>
+<td>Replace</td>
+<td>30 requests/minute</td>
+</tr>
+<tr>
+<td>Delete</td>
+<td>30 requests/minute</td>
+</tr>
+</tbody>
+</table>
+<p>Limits are per API key.</p>
+<hr />
+<h2 id="error-handling">Error Handling</h2>
+<p>All errors follow this format:</p>
+<pre><code class="language-json">{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;ERROR_CODE&quot;,
+    &quot;message&quot;: &quot;Human-readable description&quot;,
+    &quot;details&quot;: {}
+  }
+}
+</code></pre>
+<h3 id="common-error-codes">Common Error Codes</h3>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FILE_NOT_FOUND</code></td>
+<td>404</td>
+<td>File doesn't exist</td>
+</tr>
+<tr>
+<td><code>FILE_REQUIRED</code></td>
+<td>400</td>
+<td>No file in upload request</td>
+</tr>
+<tr>
+<td><code>FILE_ALREADY_EXISTS</code></td>
+<td>409</td>
+<td>File exists (use replace)</td>
+</tr>
+<tr>
+<td><code>PATH_TRAVERSAL_DETECTED</code></td>
+<td>400</td>
+<td>Invalid path</td>
+</tr>
+<tr>
+<td><code>UNAUTHORIZED</code></td>
+<td>401</td>
+<td>Missing/invalid API key</td>
+</tr>
+<tr>
+<td><code>RATE_LIMIT_EXCEEDED</code></td>
+<td>429</td>
+<td>Too many requests</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="examples">Examples</h2>
+<h3 id="python">Python</h3>
+<pre><code class="language-python">import requests
+
+API_KEY = &quot;your-api-key-here&quot;
+BASE_URL = &quot;http://localhost:8000/api/v1&quot;
+
+headers = {&quot;Authorization&quot;: f&quot;Bearer {API_KEY}&quot;}
+
+# Upload
+with open(&quot;document.pdf&quot;, &quot;rb&quot;) as f:
+    response = requests.post(
+        f&quot;{BASE_URL}/files/documents/document.pdf/upload/&quot;,
+        headers=headers,
+        files={&quot;file&quot;: f}
+    )
+print(response.json())
+
+# Download
+response = requests.get(
+    f&quot;{BASE_URL}/files/documents/document.pdf/download/&quot;,
+    headers=headers
+)
+with open(&quot;downloaded.pdf&quot;, &quot;wb&quot;) as f:
+    f.write(response.content)
+
+# List directory
+response = requests.get(
+    f&quot;{BASE_URL}/dirs/documents/&quot;,
+    headers=headers
+)
+files = response.json()[&quot;entries&quot;]
+</code></pre>
+<h3 id="javascripttypescript">JavaScript/TypeScript</h3>
+<pre><code class="language-typescript">const API_KEY = &quot;your-api-key-here&quot;;
+const BASE_URL = &quot;http://localhost:8000/api/v1&quot;;
+
+// Upload
+const uploadFile = async (file: File, path: string) =&gt; {
+  const formData = new FormData();
+  formData.append(&quot;file&quot;, file);
+
+  const response = await fetch(
+    `${BASE_URL}/files/${path}/upload/`,
+    {
+      method: &quot;POST&quot;,
+      headers: { &quot;Authorization&quot;: `Bearer ${API_KEY}` },
+      body: formData
+    }
+  );
+  return await response.json();
+};
+
+// Download
+const downloadFile = async (path: string) =&gt; {
+  const response = await fetch(
+    `${BASE_URL}/files/${path}/download/`,
+    { headers: { &quot;Authorization&quot;: `Bearer ${API_KEY}` } }
+  );
+  const blob = await response.blob();
+
+  // Create download link
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement(&quot;a&quot;);
+  a.href = url;
+  a.download = path.split(&quot;/&quot;).pop() || &quot;download&quot;;
+  a.click();
+};
+
+// List directory
+const listFiles = async (dirPath: string = &quot;&quot;) =&gt; {
+  const url = dirPath
+    ? `${BASE_URL}/dirs/${dirPath}/`
+    : `${BASE_URL}/dirs/`;
+  const response = await fetch(url, {
+    headers: { &quot;Authorization&quot;: `Bearer ${API_KEY}` }
+  });
+  const data = await response.json();
+  return data.entries; // Array of files
+};
+</code></pre>
+<h3 id="bashcli">Bash/CLI</h3>
+<pre><code class="language-bash">API_KEY=&quot;your-api-key-here&quot;
+BASE_URL=&quot;http://localhost:8000/api/v1&quot;
+
+# Upload
+curl -X POST &quot;$BASE_URL/files/backup.zip/upload/&quot; \
+  -H &quot;Authorization: Bearer $API_KEY&quot; \
+  -F &quot;file=@backup.zip&quot;
+
+# Download
+curl &quot;$BASE_URL/files/backup.zip/download/&quot; \
+  -H &quot;Authorization: Bearer $API_KEY&quot; \
+  -o restored-backup.zip
+
+# List directory
+curl &quot;$BASE_URL/dirs/&quot; \
+  -H &quot;Authorization: Bearer $API_KEY&quot; \
+  | jq '.entries[].path'
+
+# Delete
+curl -X DELETE &quot;$BASE_URL/files/old-file.txt/delete/&quot; \
+  -H &quot;Authorization: Bearer $API_KEY&quot;
+</code></pre>
+<hr />
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+<li>
+<p><a href="../share-links-api.md">Share Links API</a> - Create public download links</p>
+</li>
+<li>
+<p><a href="../accounts/authentication.md">Authentication Guide</a> - Get your API key</p>
+</li>
+<li>
+<p><a href="../cli-usage.md">CLI Tool</a> - Use the <code>stormcloud</code> CLI</p>
+</li>
+</ul>
+{% endblock %}

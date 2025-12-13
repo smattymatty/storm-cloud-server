@@ -30,6 +30,7 @@ This projects `venv/` installs from `requirements.txt` - ensure to activate the 
 ```
 stormcloud auth login/logout/whoami
 stormcloud files ls/upload/download/rm/info
+stormcloud share create/list/revoke/info
 stormcloud cms add/remove/list/render
 stormcloud health ping/status
 ```
@@ -41,7 +42,7 @@ API responses should map cleanly to these commands.
 - Web dashboard
 - Backblaze B2 backend
 - Custom SpellBlocks
-- File sharing/permissions
+- Advanced permissions (basic share links implemented)
 - Versioning
 - Quotas
 - Encryption (metadata in place, implementation pending)

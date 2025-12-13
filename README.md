@@ -27,6 +27,14 @@ Part of the Storm Developments open source stack.
 - User-isolated storage paths
 - Pluggable storage backend (local filesystem implemented)
 
+### Share Links
+- Public file sharing with unique URLs
+- Optional password protection
+- Configurable expiry (1, 3, 7, 30, 90 days, or unlimited)
+- Custom slugs for user-friendly URLs
+- Access analytics (view count, last accessed)
+- Anonymous rate limiting for public endpoints
+
 ### Content Management System
 - Markdown rendering with Django Spellbook
 - Managed content with custom SpellBlocks (in development)
@@ -101,6 +109,16 @@ All endpoints are versioned under `/api/v1/`. Full API documentation available a
 | GET | `/api/v1/files/{path}/download/` | Download file |
 | DELETE | `/api/v1/files/{path}/delete/` | Delete file |
 
+### Share Link Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET/POST | `/api/v1/shares/` | List/create share links (authenticated) |
+| GET | `/api/v1/shares/{id}/` | Get share link details (authenticated) |
+| DELETE | `/api/v1/shares/{id}/` | Revoke share link (authenticated) |
+| GET | `/api/v1/public/{token}/` | Get public share info (no auth) |
+| GET | `/api/v1/public/{token}/download/` | Download shared file (no auth) |
+
 ### Admin Endpoints
 
 | Method | Endpoint | Description |
@@ -119,6 +137,52 @@ All endpoints are versioned under `/api/v1/`. Full API documentation available a
 |--------|----------|-------------|
 | GET | `/api/v1/health/ping/` | Basic health check |
 | GET | `/api/v1/health/status/` | Detailed status with version |
+
+---
+
+## Usage Examples
+
+### Creating and Sharing Files
+
+```bash
+# Upload a file
+curl -X POST http://127.0.0.1:8000/api/v1/files/document.pdf/upload/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -F "file=@/path/to/document.pdf"
+
+# Create a public share link (7 day expiry)
+curl -X POST http://127.0.0.1:8000/api/v1/shares/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "document.pdf", "expiry_days": 7}'
+
+# Create password-protected share with custom slug
+curl -X POST http://127.0.0.1:8000/api/v1/shares/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_path": "document.pdf",
+    "custom_slug": "my-document",
+    "password": "secret123",
+    "expiry_days": 30
+  }'
+
+# Access public share (no authentication required)
+curl http://127.0.0.1:8000/api/v1/public/my-document/
+
+# Download shared file with password
+curl http://127.0.0.1:8000/api/v1/public/my-document/download/ \
+  -H "X-Share-Password: secret123" \
+  -o document.pdf
+
+# List your share links
+curl http://127.0.0.1:8000/api/v1/shares/ \
+  -H "Authorization: Bearer YOUR-API-KEY"
+
+# Revoke a share link
+curl -X DELETE http://127.0.0.1:8000/api/v1/shares/{share-id}/ \
+  -H "Authorization: Bearer YOUR-API-KEY"
+```
 
 ---
 
@@ -177,6 +241,10 @@ cp .env.template .env
 | `THROTTLE_UPLOAD_RATE` | `100/hour` | File upload limit |
 | `THROTTLE_DOWNLOAD_RATE` | `500/hour` | File download limit |
 | `THROTTLE_USER_RATE` | `1000/hour` | General authenticated API limit |
+| `THROTTLE_PUBLIC_SHARE_RATE` | `60/min` | Public share info access limit |
+| `THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE` | `30/min` | Public share download limit |
+| `STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS` | `True` | Allow unlimited expiry on share links |
+| `STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS` | `7` | Default expiry for new share links |
 
 ### Email Configuration
 
@@ -240,6 +308,47 @@ coverage html  # Open htmlcov/index.html
 
 ---
 
+## Monitoring (Optional)
+
+Storm Cloud supports optional error tracking and performance monitoring via [Sentry](https://sentry.io/).
+
+### Enable Sentry
+
+1. Create free Sentry account: https://sentry.io/signup/
+2. Create new Python/Django project
+3. Copy your DSN from Project Settings > Client Keys (DSN)
+4. Add to `.env`:
+   ```bash
+   SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+   ```
+5. Restart application
+
+Sentry is **completely optional** - if `SENTRY_DSN` is not set, the application runs normally with existing logging.
+
+### Test Integration (Development)
+
+Visit `http://127.0.0.1:8000/api/v1/debug/sentry-test/?type=division` to trigger a test error.
+
+Check your Sentry dashboard to verify the error was captured.
+
+### What's Tracked
+
+- **Errors**: Unhandled exceptions, 500 errors, crashes
+- **Performance**: Slow endpoints, database queries, cache hits/misses (10% sampling)
+- **Context**: User info (user_id, username, is_staff), request path, storage backend
+- **Privacy**: API keys, passwords, and tokens are automatically filtered
+
+### Free Tier Limits
+
+Sentry free tier includes:
+- 5,000 errors per month
+- 10,000 performance transactions per month
+- 30 day event retention
+
+Perfect for small-to-medium deployments.
+
+---
+
 ## Architecture
 
 ### Design Principles
@@ -284,10 +393,11 @@ See [ADR 007: Rate Limiting Strategy](architecture/records/007-rate-limiting-str
 
 ## Project Status
 
-**Current Phase**: Storage implementation complete, CMS in development
+**Current Phase**: Storage + sharing complete, CMS in development
 
 - Authentication system: Complete (18 endpoints, comprehensive test coverage)
 - Storage system: Complete (7 endpoints, pagination, path security)
+- Share links: Complete (5 endpoints, public access, analytics)
 - Content management: In progress (markdown rendering with Spellbook)
 - CLI client: Planned
 

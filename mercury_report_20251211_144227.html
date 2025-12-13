@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mercury Performance Test Summary - 2025-12-11 14:42:27</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            color: #f0f6fc;
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        h2 {
+            color: #f0f6fc;
+            font-size: 20px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #30363d;
+        }
+
+        h3 {
+            color: #c9d1d9;
+            font-size: 16px;
+            margin: 16px 0 12px 0;
+        }
+
+        .header {
+            background: #161b22;
+            border: 1px solid #30363d;
+            text-align: center;
+        }
+
+        .timestamp {
+            color: #8b949e;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .stat {
+            background: #0d1117;
+            padding: 20px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #30363d;
+        }
+
+        .stat.pass {
+            border-color: #238636;
+        }
+
+        .stat.fail {
+            border-color: #da3633;
+        }
+
+        .stat-label {
+            color: #8b949e;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #f0f6fc;
+        }
+
+        .stat-value.pass {
+            color: #3fb950;
+        }
+
+        .stat-value.fail {
+            color: #f85149;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .chart-container {
+            background: #0d1117;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+        }
+
+        .chart-container canvas {
+            max-height: 300px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        table.sortable th {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th {
+            background: #0d1117;
+            color: #f0f6fc;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px;
+            border: 1px solid #30363d;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        th.sortable-header:hover {
+            background: #161b22;
+        }
+
+        th.sort-active {
+            background: #161b22;
+            color: #58a6ff;
+        }
+
+        .sort-indicator {
+            float: right;
+            color: #8b949e;
+            font-size: 12px;
+        }
+
+        td {
+            padding: 12px;
+            border: 1px solid #30363d;
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: #0d1117;
+        }
+
+        .status-pass {
+            color: #3fb950;
+            font-weight: 600;
+        }
+
+        .status-fail {
+            color: #f85149;
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            border: 1px solid;
+        }
+
+        .badge.n1 {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border-color: #da3633;
+        }
+
+        .badge.slow {
+            background: rgba(210, 153, 34, 0.15);
+            color: #d29922;
+            border-color: #d29922;
+        }
+
+        .pattern-summary {
+            background: rgba(248, 81, 73, 0.1);
+            border-left: 3px solid #f85149;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-radius: 6px;
+        }
+
+        .pattern-query {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 12px;
+            color: #c9d1d9;
+            background: #0d1117;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 8px 0;
+            overflow-x: auto;
+            border: 1px solid #30363d;
+        }
+
+        .pattern-tests {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #8b949e;
+        }
+
+        .footer {
+            text-align: center;
+            color: #8b949e;
+            font-size: 12px;
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid #30363d;
+        }
+
+        .footer a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #30363d;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #238636;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.fail {
+            background: #da3633;
+        }
+
+        .no-patterns {
+            color: #3fb950;
+            font-size: 14px;
+            padding: 16px;
+            text-align: center;
+            background: rgba(35, 134, 54, 0.1);
+            border-radius: 6px;
+            border: 1px solid #238636;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="card header">
+            <h1>Mercury Performance Test Summary</h1>
+            <div class="timestamp">Generated: 2025-12-11 14:42:27</div>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div class="card">
+            <h2>Test Run Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="stat-label">Total Tests</div>
+                    <div class="stat-value">13</div>
+                </div>
+                <div class="stat pass">
+                    <div class="stat-label">Passed</div>
+                    <div class="stat-value pass">13</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 100.0%"></div>
+                    </div>
+                </div>
+                <div class="stat fail">
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-value fail">0</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill fail" style="width: 0.0%"></div>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Avg Response Time</div>
+                    <div class="stat-value">109.5<small style="font-size: 16px;">ms</small></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Avg Query Count</div>
+                    <div class="stat-value">5.2</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="card">
+            <h2>Performance Visualization</h2>
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <canvas id="responseTimeChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="queryDistChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        
+    <div class="card">
+        <h2>Slowest Tests (Top 10)</h2>
+        <table class="sortable">
+            <thead>
+                <tr>
+                    <th data-sort="string">Test Name</th>
+                    <th data-sort="number">Response Time</th>
+                    <th data-sort="number">Query Count</th>
+                    <th>N+1</th>
+                    <th data-sort="string">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_password_reset_under_1000ms</td>
+            <td>712.77ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AuthEndpointPerformance.test_login_under_800ms</td>
+            <td>611.31ms</td>
+            <td>11</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_update_under_100ms</td>
+            <td>42.91ms</td>
+            <td>5</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>FileOperationPerformance.test_file_upload_1mb_under_50ms</td>
+            <td>11.40ms</td>
+            <td>8</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>FileOperationPerformance.test_directory_listing_under_50ms</td>
+            <td>7.43ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_delete_under_100ms</td>
+            <td>6.12ms</td>
+            <td>12</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>TokenListPerformance.test_list_50_tokens_under_50ms_no_n1</td>
+            <td>5.73ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_detail_under_100ms</td>
+            <td>5.49ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_list_under_200ms</td>
+            <td>4.91ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AuthEndpointPerformance.test_auth_me_under_50ms</td>
+            <td>4.70ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+    
+
+        
+        <div class="card">
+            <h2>N+1 Query Patterns</h2>
+            <div class="no-patterns">No N+1 patterns detected across all tests</div>
+        </div>
+        
+
+        
+    <div class="card">
+        <h2>All Test Results (13 tests)</h2>
+        <table class="sortable">
+            <thead>
+                <tr>
+                    <th data-sort="string">Test Name</th>
+                    <th data-sort="number">Response Time</th>
+                    <th data-sort="number">Query Count</th>
+                    <th>N+1</th>
+                    <th data-sort="string">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+        <tr>
+            <td>FileOperationPerformance.test_directory_listing_under_50ms</td>
+            <td>7.43ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>FileOperationPerformance.test_file_upload_1mb_under_50ms</td>
+            <td>11.40ms</td>
+            <td>8</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>DirectoryListingScaleTest.test_list_100_files_under_500ms_no_n1</td>
+            <td>2.94ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>PublicShareAccessPerformance.test_public_download_under_50ms</td>
+            <td>3.55ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AuthEndpointPerformance.test_login_under_800ms</td>
+            <td>611.31ms</td>
+            <td>11</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AuthEndpointPerformance.test_auth_me_under_50ms</td>
+            <td>4.70ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AuthEndpointPerformance.test_token_create_under_100ms</td>
+            <td>3.90ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>TokenListPerformance.test_list_50_tokens_under_50ms_no_n1</td>
+            <td>5.73ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_list_under_200ms</td>
+            <td>4.91ms</td>
+            <td>3</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_detail_under_100ms</td>
+            <td>5.49ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_update_under_100ms</td>
+            <td>42.91ms</td>
+            <td>5</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_user_delete_under_100ms</td>
+            <td>6.12ms</td>
+            <td>12</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+        <tr>
+            <td>AdminUserEndpointPerformance.test_admin_password_reset_under_1000ms</td>
+            <td>712.77ms</td>
+            <td>4</td>
+            <td></td>
+            <td class="status-pass">PASS</td>
+        </tr>
+        
+            </tbody>
+        </table>
+    </div>
+    
+
+        <div class="footer">
+            Generated by <a href="https://github.com/smattymatty/django-mercury-performance" target="_blank">Django Mercury Performance Testing</a> v0.1.1
+        </div>
+    </div>
+
+    <!-- Data for JavaScript -->
+    <script>
+        window.MERCURY_DATA = {"tests": [{"name": "FileOperationPerformance.test_directory_listing_under_50ms", "response_time": 7.432851001794916, "query_count": 3, "status": "pass", "has_n1": false}, {"name": "FileOperationPerformance.test_file_upload_1mb_under_50ms", "response_time": 11.402739000914153, "query_count": 8, "status": "pass", "has_n1": false}, {"name": "DirectoryListingScaleTest.test_list_100_files_under_500ms_no_n1", "response_time": 2.937528995971661, "query_count": 3, "status": "pass", "has_n1": false}, {"name": "PublicShareAccessPerformance.test_public_download_under_50ms", "response_time": 3.5489400033839047, "query_count": 4, "status": "pass", "has_n1": false}, {"name": "AuthEndpointPerformance.test_login_under_800ms", "response_time": 611.3100040020072, "query_count": 11, "status": "pass", "has_n1": false}, {"name": "AuthEndpointPerformance.test_auth_me_under_50ms", "response_time": 4.703690996393561, "query_count": 3, "status": "pass", "has_n1": false}, {"name": "AuthEndpointPerformance.test_token_create_under_100ms", "response_time": 3.8982650003163144, "query_count": 4, "status": "pass", "has_n1": false}, {"name": "TokenListPerformance.test_list_50_tokens_under_50ms_no_n1", "response_time": 5.732945995987393, "query_count": 4, "status": "pass", "has_n1": false}, {"name": "AdminUserEndpointPerformance.test_admin_user_list_under_200ms", "response_time": 4.9121359988930635, "query_count": 3, "status": "pass", "has_n1": false}, {"name": "AdminUserEndpointPerformance.test_admin_user_detail_under_100ms", "response_time": 5.48652699944796, "query_count": 4, "status": "pass", "has_n1": false}, {"name": "AdminUserEndpointPerformance.test_admin_user_update_under_100ms", "response_time": 42.91438099608058, "query_count": 5, "status": "pass", "has_n1": false}, {"name": "AdminUserEndpointPerformance.test_admin_user_delete_under_100ms", "response_time": 6.120332000136841, "query_count": 12, "status": "pass", "has_n1": false}, {"name": "AdminUserEndpointPerformance.test_admin_password_reset_under_1000ms", "response_time": 712.7745599937043, "query_count": 4, "status": "pass", "has_n1": false}], "stats": {"total": 13, "passed": 13, "failed": 0, "avg_time": 109.47499238346398, "avg_queries": 5.230769230769231}};
+    </script>
+
+    <!-- Load Chart.js and modules -->
+    <script type="module" src="./static/main.mjs"></script>
+</body>
+</html>

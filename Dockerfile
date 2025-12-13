@@ -41,6 +41,9 @@ RUN chmod +x /entrypoint.sh
 # Set production settings module
 ENV DJANGO_SETTINGS_MODULE=_core.settings.production
 
+# Note: collectstatic and migrations run in entrypoint.sh at runtime
+# This allows them to access .env variables and database connection
+
 # Expose port
 EXPOSE 8000
 

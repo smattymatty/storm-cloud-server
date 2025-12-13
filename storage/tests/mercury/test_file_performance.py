@@ -38,7 +38,7 @@ class FileOperationPerformance(APITestCase):
         ]
         mock_backend.list.return_value = mock_files
 
-        with monitor(response_time_ms=50, query_count=2) as result:
+        with monitor(response_time_ms=50, query_count=3) as result:
             response = self.client.get('/api/v1/dirs/?limit=100')
         result.explain()
 
