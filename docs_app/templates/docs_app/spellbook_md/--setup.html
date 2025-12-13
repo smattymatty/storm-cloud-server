@@ -1,0 +1,320 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<p>Get Storm Cloud Server running locally in 5 minutes.</p>
+<p><strong>Architecture:</strong> Storm Cloud uses <strong>Docker + Docker Compose</strong> to orchestrate the web server and PostgreSQL database. The included <strong>Makefile</strong> provides convenient commands for all operations.</p>
+<hr />
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li>
+<p><strong>Docker</strong> and <strong>Docker Compose</strong> (required)</p>
+</li>
+<li>
+<p><strong>Git</strong> for cloning the repository</p>
+</li>
+<li>
+<p><strong>Make</strong> (pre-installed on Linux/macOS, Windows users can use WSL)</p>
+</li>
+</ul>
+<hr />
+<h2 id="quick-start">Quick Start</h2>
+<h3 id="1-clone-the-repository">1. Clone the Repository</h3>
+<pre><code class="language-bash">git clone https://github.com/smattymatty/storm-cloud-server.git
+cd storm-cloud-server
+</code></pre>
+<h3 id="2-first-time-setup">2. First-Time Setup</h3>
+<p>Run the automated setup script:</p>
+<pre><code class="language-bash">make setup
+</code></pre>
+<p>This will:</p>
+<ul>
+<li>
+<p>Create <code>.env</code> file from template</p>
+</li>
+<li>
+<p>Generate secure <code>SECRET_KEY</code> and <code>POSTGRES_PASSWORD</code></p>
+</li>
+<li>
+<p>Set default configuration values</p>
+</li>
+</ul>
+<h3 id="3-build-and-start-services">3. Build and Start Services</h3>
+<pre><code class="language-bash">make build  # Build Docker images
+make up     # Start services
+</code></pre>
+<p>The <code>make up</code> command will:</p>
+<ul>
+<li>
+<p>Start PostgreSQL container</p>
+</li>
+<li>
+<p>Start web server container</p>
+</li>
+<li>
+<p>Wait for database to be ready (auto-retries)</p>
+</li>
+<li>
+<p>Run migrations automatically</p>
+</li>
+<li>
+<p>Collect static files</p>
+</li>
+<li>
+<p>Build Spellbook markdown docs</p>
+</li>
+<li>
+<p>Start server on <code>http://localhost:8000</code></p>
+</li>
+</ul>
+<h3 id="4-create-admin-user">4. Create Admin User</h3>
+<pre><code class="language-bash">make superuser
+</code></pre>
+<p>Follow the prompts:</p>
+<pre><code>Username: admin
+Email: admin@example.com
+Password: ********
+Password (again): ********
+</code></pre>
+<h3 id="5-generate-api-key">5. Generate API Key</h3>
+<pre><code class="language-bash">make api_key
+</code></pre>
+<p>Enter your username when prompted:</p>
+<pre><code>Username: admin
+✓ API Key created successfully!
+Your API key: abc123xyz456...
+</code></pre>
+<p><strong>Save this key!</strong> You'll need it for API access and CLI tools.</p>
+<hr />
+<h2 id="makefile-commands-reference">Makefile Commands Reference</h2>
+<p>Run <code>make</code> to see all available commands:</p>
+<pre><code class="language-bash">make                 # Show all commands
+make setup           # First-time setup (creates .env, generates secrets)
+make build           # Build Docker images
+make up              # Start services (auto-fixes conflicts)
+make down            # Stop services
+make restart         # Restart services
+make logs            # View logs (interactive menu)
+make shell           # Access bash or psql shell (interactive menu)
+make superuser       # Create admin user
+make api_key         # Generate API key for a user
+make ps              # Show container status
+make backup          # Backup database + uploads
+make restore         # Restore from backup
+make clean           # Delete everything (containers, volumes, images)
+</code></pre>
+<hr />
+<h2 id="verify-installation">Verify Installation</h2>
+<h3 id="health-check">Health Check</h3>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/health/status/
+</code></pre>
+<p>Expected response:</p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;healthy&quot;,
+  &quot;version&quot;: &quot;0.1.0&quot;,
+  &quot;timestamp&quot;: 1702324800,
+  &quot;uptime&quot;: &quot;0h 5m&quot;,
+  &quot;database&quot;: &quot;connected&quot;,
+  &quot;storage&quot;: &quot;local&quot;
+}
+</code></pre>
+<h3 id="test-authentication">Test Authentication</h3>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/auth/login/ \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;username&quot;: &quot;admin&quot;, &quot;password&quot;: &quot;your-password&quot;}'
+</code></pre>
+<h3 id="upload-a-test-file">Upload a Test File</h3>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/files/test.txt/upload/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot; \
+  -F &quot;file=@test.txt&quot;
+</code></pre>
+<hr />
+<h2 id="common-issues">Common Issues</h2>
+<h3 id="docker-container-exits-immediately">Docker: Container Exits Immediately</h3>
+<p><strong>Problem:</strong> <code>SECRET_KEY</code> or <code>POSTGRES_PASSWORD</code> not set correctly.</p>
+<p><strong>Solution:</strong> Re-run setup or check <code>.env</code>:</p>
+<pre><code class="language-bash">make setup  # Re-generate .env with valid secrets
+cat .env | grep SECRET_KEY
+cat .env | grep POSTGRES_PASSWORD
+</code></pre>
+<h3 id="database-connection-refused">Database Connection Refused</h3>
+<p><strong>Problem:</strong> PostgreSQL not ready yet.</p>
+<p><strong>Solution:</strong> The entrypoint waits 30 seconds. Check logs:</p>
+<pre><code class="language-bash">make logs  # Select [3] Database only
+</code></pre>
+<h3 id="port-8000-already-in-use">Port 8000 Already in Use</h3>
+<p><strong>Problem:</strong> Another service using port 8000.</p>
+<p><strong>Solution:</strong> Change port in <code>docker-compose.yml</code>:</p>
+<pre><code class="language-yaml">ports:
+
+  - &quot;8001:8000&quot;  # Use 8001 instead
+</code></pre>
+<h3 id="migrations-fail">Migrations Fail</h3>
+<p><strong>Problem:</strong> Database schema out of sync.</p>
+<p><strong>Solution:</strong> Reset database (WARNING: deletes all data):</p>
+<pre><code class="language-bash">make down
+docker volume rm storm-cloud-server_postgres_data  # Delete DB volume
+make up  # Recreate with fresh database
+</code></pre>
+<hr />
+<h2 id="development-workflow">Development Workflow</h2>
+<h3 id="view-logs">View Logs</h3>
+<pre><code class="language-bash">make logs
+</code></pre>
+<p>Interactive menu:</p>
+<pre><code>Which logs do you want to view?
+  [1] All services (snapshot)
+  [2] Web only (snapshot)
+  [3] Database only (snapshot)
+  [f] Follow all (live)
+  [w] Follow web (live)
+  [d] Follow database (live)
+</code></pre>
+<h3 id="access-shell">Access Shell</h3>
+<pre><code class="language-bash">make shell
+</code></pre>
+<p>Interactive menu:</p>
+<pre><code>Which shell do you want?
+  [1] Web server (bash)
+  [2] PostgreSQL (psql)
+</code></pre>
+<h3 id="run-tests">Run Tests</h3>
+<pre><code class="language-bash"># Access web container first
+make shell  # Select [1] Web server
+
+# Then run tests
+python manage.py test
+python manage.py test accounts
+python manage.py test storage
+
+# With coverage
+coverage run --source='.' manage.py test
+coverage report
+</code></pre>
+<h3 id="check-container-status">Check Container Status</h3>
+<pre><code class="language-bash">make ps
+</code></pre>
+<p>Shows running containers and their health status.</p>
+<hr />
+<h2 id="manual-setup-without-docker">Manual Setup (Without Docker)</h2>
+<p><strong>Not Recommended:</strong> Storm Cloud is designed to run with Docker. Manual setup requires more configuration and may have environment-specific issues.</p>
+<p>If you must run without Docker:</p>
+<h3 id="1-install-dependencies">1. Install Dependencies</h3>
+<pre><code class="language-bash">python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+</code></pre>
+<h3 id="2-setup-postgresql">2. Setup PostgreSQL</h3>
+<pre><code class="language-sql">CREATE DATABASE stormcloud;
+CREATE USER stormcloud WITH PASSWORD 'your-password';
+GRANT ALL PRIVILEGES ON DATABASE stormcloud TO stormcloud;
+</code></pre>
+<h3 id="3-configure-environment">3. Configure Environment</h3>
+<pre><code class="language-bash">cp .env.template .env
+# Edit .env with your PostgreSQL credentials
+# Set POSTGRES_HOST=localhost
+</code></pre>
+<h3 id="4-run-migrations">4. Run Migrations</h3>
+<pre><code class="language-bash">python manage.py migrate
+python manage.py createsuperuser
+</code></pre>
+<h3 id="5-start-development-server">5. Start Development Server</h3>
+<pre><code class="language-bash">python manage.py runserver
+</code></pre>
+<hr />
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+<li>
+<p><strong>API Documentation:</strong> Visit <code>http://localhost:8000/api/docs/</code> (Swagger UI)</p>
+</li>
+<li>
+<p><strong>Upload Files:</strong> <a href="storage/files.md">Storage API Guide</a></p>
+</li>
+<li>
+<p><strong>Share Links:</strong> <a href="share-links-api.md">Share Links API</a></p>
+</li>
+<li>
+<p><strong>Monitoring:</strong> <a href="production/monitoring.md">Production Monitoring</a></p>
+</li>
+<li>
+<p><strong>Architecture:</strong> <a href="../architecture/records/">Design Decisions</a></p>
+</li>
+</ul>
+<hr />
+<h2 id="production-deployment">Production Deployment</h2>
+<p>For production deployments, see:</p>
+<ul>
+<li>
+<p><a href="../DOCKER.md">DOCKER.md</a> - Production Docker configuration</p>
+</li>
+<li>
+<p><a href="../SECURITY.md">SECURITY.md</a> - Security best practices</p>
+</li>
+<li>
+<p><a href="production/monitoring.md">Production Monitoring</a> - Error tracking with Sentry</p>
+</li>
+</ul>
+<p>Key production requirements:</p>
+<ul>
+<li>
+<p>HTTPS via reverse proxy (nginx/Caddy)</p>
+</li>
+<li>
+<p>Secure <code>SECRET_KEY</code> and <code>POSTGRES_PASSWORD</code></p>
+</li>
+<li>
+<p>Set <code>DEBUG=False</code></p>
+</li>
+<li>
+<p>Configure SMTP for emails</p>
+</li>
+<li>
+<p>Set up monitoring (Sentry)</p>
+</li>
+<li>
+<p>Configure automated backups</p>
+</li>
+</ul>
+<hr />
+<h2 id="backup-restore">Backup &amp; Restore</h2>
+<h3 id="create-backup">Create Backup</h3>
+<pre><code class="language-bash">make backup
+</code></pre>
+<p>Creates timestamped backup in <code>backups/</code> directory:</p>
+<ul>
+<li>
+<p>Database dump (<code>stormcloud_YYYYMMDD_HHMMSS.sql</code>)</p>
+</li>
+<li>
+<p>Uploaded files (<code>uploads_YYYYMMDD_HHMMSS.tar.gz</code>)</p>
+</li>
+</ul>
+<h3 id="restore-from-backup">Restore from Backup</h3>
+<pre><code class="language-bash">make restore
+</code></pre>
+<p>Interactive menu will list available backups.</p>
+<hr />
+<h2 id="getting-help">Getting Help</h2>
+<ul>
+<li>
+<p><strong>Documentation:</strong> Visit <code>/api/docs/</code> on your running server</p>
+</li>
+<li>
+<p><strong>GitHub Issues:</strong> <a href="https://github.com/smattymatty/storm-cloud-server/issues">storm-cloud-server/issues</a></p>
+</li>
+<li>
+<p><strong>Make Commands:</strong> Run <code>make</code> to see all available commands</p>
+</li>
+</ul>
+<hr />
+<h2 id="uninstall">Uninstall</h2>
+<h3 id="stop-and-remove-everything">Stop and Remove Everything</h3>
+<pre><code class="language-bash">make clean
+</code></pre>
+<p><strong>Warning:</strong> This deletes containers, volumes, and images. All data will be lost.</p>
+<p>Manual cleanup:</p>
+<pre><code class="language-bash">make down                                           # Stop containers
+docker volume rm storm-cloud-server_postgres_data  # Delete database
+docker volume rm storm-cloud-server_uploads        # Delete uploads
+docker rmi storm-cloud-server_web                  # Delete image
+</code></pre>
+{% endblock %}

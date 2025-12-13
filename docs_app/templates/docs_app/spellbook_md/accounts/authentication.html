@@ -1,0 +1,551 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<h1 id="authentication-guide">Authentication Guide</h1>
+<p>Storm Cloud supports two authentication methods: <strong>API Keys</strong> for CLI/programmatic access and <strong>JWT Tokens</strong> for web dashboard access.</p>
+<hr />
+<h2 id="api-keys-primary-method">API Keys (Primary Method)</h2>
+<p>API keys are the primary authentication method for Storm Cloud. They work for both CLI and web applications.</p>
+<p><strong>Note:</strong> JWT token authentication is planned but not yet implemented. Currently, all authentication uses API keys or session cookies.</p>
+<h3 id="creating-an-api-key">Creating an API Key</h3>
+<p><strong>Method 1: Django Admin</strong></p>
+<ol>
+<li>
+<p>Log into Django admin at <code>http://localhost:8000/admin/</code></p>
+</li>
+<li>
+<p>Navigate to <strong>Accounts → API Keys</strong></p>
+</li>
+<li>
+<p>Click <strong>Add API Key</strong></p>
+</li>
+<li>
+<p>Select your user and give it a name (e.g., "CLI Key")</p>
+</li>
+<li>
+<p>Save and copy the generated key</p>
+</li>
+</ol>
+<p><strong>Method 2: Django Shell</strong></p>
+<pre><code class="language-bash">docker compose exec web python manage.py shell
+</code></pre>
+<pre><code class="language-python">from accounts.models import User, APIKey
+
+# Get your user
+user = User.objects.get(username='yourusername')
+
+# Create key
+key = APIKey.objects.create(user=user, name='CLI Key')
+print(f&quot;Your API key: {key.key}&quot;)
+</code></pre>
+<p><strong>Method 3: API Endpoint</strong></p>
+<p>First, login to create a session:</p>
+<pre><code class="language-bash"># Login (creates session cookie)
+curl -X POST http://localhost:8000/api/v1/auth/login/ \
+  -c cookies.txt \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;username&quot;: &quot;youruser&quot;, &quot;password&quot;: &quot;yourpass&quot;}'
+
+# Create API key using session
+curl -X POST http://localhost:8000/api/v1/auth/tokens/ \
+  -b cookies.txt \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;name&quot;: &quot;CLI Key&quot;}'
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;uuid-here&quot;,
+  &quot;name&quot;: &quot;CLI Key&quot;,
+  &quot;key&quot;: &quot;your-api-key-here&quot;,
+  &quot;created_at&quot;: &quot;2025-12-11T10:00:00Z&quot;
+}
+</code></pre>
+<p><strong>IMPORTANT:</strong> Save the <code>key</code> value immediately - it's only shown once and cannot be retrieved later!</p>
+<h3 id="using-api-keys">Using API Keys</h3>
+<p>Include the API key in the <code>Authorization</code> header:</p>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/dirs/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<p><strong>Python:</strong></p>
+<pre><code class="language-python">import requests
+
+headers = {&quot;Authorization&quot;: f&quot;Bearer {api_key}&quot;}
+response = requests.get(&quot;http://localhost:8000/api/v1/dirs/&quot;, headers=headers)
+</code></pre>
+<p><strong>JavaScript:</strong></p>
+<pre><code class="language-javascript">fetch(&quot;http://localhost:8000/api/v1/dirs/&quot;, {
+  headers: { &quot;Authorization&quot;: `Bearer ${apiKey}` }
+})
+</code></pre>
+<h3 id="managing-api-keys">Managing API Keys</h3>
+<p><strong>List Your Keys</strong></p>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/auth/tokens/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<p>Response:</p>
+<pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;uuid-1&quot;,
+    &quot;name&quot;: &quot;CLI Key&quot;,
+    &quot;created_at&quot;: &quot;2025-12-11T10:00:00Z&quot;,
+    &quot;last_used_at&quot;: &quot;2025-12-11T15:30:00Z&quot;
+  },
+  {
+    &quot;id&quot;: &quot;uuid-2&quot;,
+    &quot;name&quot;: &quot;Mobile App&quot;,
+    &quot;created_at&quot;: &quot;2025-12-10T09:00:00Z&quot;,
+    &quot;last_used_at&quot;: null
+  }
+]
+</code></pre>
+<p><strong>Revoke a Key</strong></p>
+<pre><code class="language-bash">curl -X DELETE http://localhost:8000/api/v1/auth/tokens/{key_id}/revoke/ \
+  -H &quot;Authorization: Bearer YOUR_API_KEY&quot;
+</code></pre>
+<h3 id="security-best-practices">Security Best Practices</h3>
+<ul>
+<li>
+<p>✅ Store keys in environment variables, never commit to git</p>
+</li>
+<li>
+<p>✅ Use separate keys for different applications</p>
+</li>
+<li>
+<p>✅ Rotate keys periodically (every 90 days)</p>
+</li>
+<li>
+<p>✅ Revoke keys immediately if compromised</p>
+</li>
+<li>
+<p>❌ Never share keys via email or chat</p>
+</li>
+<li>
+<p>❌ Never hardcode keys in source code</p>
+</li>
+</ul>
+<hr />
+<h2 id="session-authentication-web-dashboard">Session Authentication (Web Dashboard)</h2>
+<p>Storm Cloud uses Django session authentication for the web dashboard. JWT tokens are planned for future releases.</p>
+<h3 id="login">Login</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/login/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;username&quot;: &quot;youruser&quot;,
+  &quot;password&quot;: &quot;yourpassword&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Login successful&quot;,
+  &quot;user&quot;: {
+    &quot;id&quot;: 1,
+    &quot;username&quot;: &quot;youruser&quot;,
+    &quot;email&quot;: &quot;you@example.com&quot;
+  }
+}
+</code></pre>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/auth/login/ \
+  -c cookies.txt \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;username&quot;: &quot;youruser&quot;, &quot;password&quot;: &quot;yourpass&quot;}'
+</code></pre>
+<p>Session cookie is stored in <code>cookies.txt</code> and can be used for subsequent requests.</p>
+<h3 id="using-session-authentication">Using Session Authentication</h3>
+<p>Include the session cookie in requests:</p>
+<pre><code class="language-bash">curl http://localhost:8000/api/v1/dirs/ \
+  -b cookies.txt
+</code></pre>
+<h3 id="logout">Logout</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/logout/</code></p>
+<p>Destroys the session.</p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/auth/logout/ \
+  -b cookies.txt
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Logout successful&quot;
+}
+</code></pre>
+<hr />
+<h2 id="registration">Registration</h2>
+<h3 id="create-account">Create Account</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/register/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;username&quot;: &quot;newuser&quot;,
+  &quot;email&quot;: &quot;newuser@example.com&quot;,
+  &quot;password&quot;: &quot;SecurePass123!&quot;,
+  &quot;password_confirm&quot;: &quot;SecurePass123!&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;id&quot;: 2,
+  &quot;username&quot;: &quot;newuser&quot;,
+  &quot;email&quot;: &quot;newuser@example.com&quot;,
+  &quot;is_verified&quot;: false,
+  &quot;message&quot;: &quot;Registration successful. Please check your email to verify your account.&quot;
+}
+</code></pre>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/auth/register/ \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{
+    &quot;username&quot;: &quot;newuser&quot;,
+    &quot;email&quot;: &quot;newuser@example.com&quot;,
+    &quot;password&quot;: &quot;SecurePass123!&quot;,
+    &quot;password_confirm&quot;: &quot;SecurePass123!&quot;
+  }'
+</code></pre>
+<h3 id="email-verification">Email Verification</h3>
+<p>After registration, a verification email is sent (if email is configured).</p>
+<p><strong>Verify Email:</strong></p>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/verify-email/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;token&quot;: &quot;verification-token-from-email&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Email verified successfully&quot;
+}
+</code></pre>
+<hr />
+<h2 id="password-management">Password Management</h2>
+<h3 id="request-password-reset">Request Password Reset</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/password-reset/request/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;email&quot;: &quot;you@example.com&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Password reset email sent if account exists&quot;
+}
+</code></pre>
+<h3 id="confirm-password-reset">Confirm Password Reset</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/password-reset/confirm/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;token&quot;: &quot;reset-token-from-email&quot;,
+  &quot;password&quot;: &quot;NewSecurePass123!&quot;,
+  &quot;password_confirm&quot;: &quot;NewSecurePass123!&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Password reset successful&quot;
+}
+</code></pre>
+<h3 id="change-password-authenticated">Change Password (Authenticated)</h3>
+<p><strong>Endpoint:</strong> <code>POST /api/v1/auth/password/change/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;old_password&quot;: &quot;CurrentPass123!&quot;,
+  &quot;new_password&quot;: &quot;NewSecurePass123!&quot;,
+  &quot;new_password_confirm&quot;: &quot;NewSecurePass123!&quot;
+}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Password changed successfully&quot;
+}
+</code></pre>
+<hr />
+<h2 id="user-profile">User Profile</h2>
+<h3 id="get-current-user">Get Current User</h3>
+<p><strong>Endpoint:</strong> <code>GET /api/v1/auth/me/</code></p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;id&quot;: 1,
+  &quot;username&quot;: &quot;youruser&quot;,
+  &quot;email&quot;: &quot;you@example.com&quot;,
+  &quot;is_verified&quot;: true,
+  &quot;date_joined&quot;: &quot;2025-12-01T10:00:00Z&quot;,
+  &quot;profile&quot;: {
+    &quot;display_name&quot;: &quot;Your Name&quot;,
+    &quot;avatar_url&quot;: null,
+    &quot;bio&quot;: &quot;Software developer&quot;
+  }
+}
+</code></pre>
+<h3 id="update-profile">Update Profile</h3>
+<p><strong>Endpoint:</strong> <code>PATCH /api/v1/auth/me/</code></p>
+<p><strong>Request:</strong></p>
+<pre><code class="language-json">{
+  &quot;email&quot;: &quot;newemail@example.com&quot;,
+  &quot;profile&quot;: {
+    &quot;display_name&quot;: &quot;New Display Name&quot;,
+    &quot;bio&quot;: &quot;Updated bio&quot;
+  }
+}
+</code></pre>
+<hr />
+<h2 id="rate-limiting">Rate Limiting</h2>
+<p>All authentication endpoints are rate-limited to prevent abuse:</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Rate Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Login</td>
+<td>5 requests / minute</td>
+</tr>
+<tr>
+<td>Register</td>
+<td>3 requests / minute</td>
+</tr>
+<tr>
+<td>Password Reset</td>
+<td>3 requests / minute</td>
+</tr>
+<tr>
+<td>Token Refresh</td>
+<td>10 requests / minute</td>
+</tr>
+</tbody>
+</table>
+<p>Exceeding limits returns <code>429 Too Many Requests</code>:</p>
+<pre><code class="language-json">{
+  &quot;error&quot;: {
+    &quot;code&quot;: &quot;RATE_LIMIT_EXCEEDED&quot;,
+    &quot;message&quot;: &quot;Request was throttled. Expected available in 45 seconds.&quot;
+  }
+}
+</code></pre>
+<hr />
+<h2 id="error-codes">Error Codes</h2>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INVALID_CREDENTIALS</code></td>
+<td>401</td>
+<td>Wrong username/password</td>
+</tr>
+<tr>
+<td><code>EMAIL_NOT_VERIFIED</code></td>
+<td>403</td>
+<td>Account requires email verification</td>
+</tr>
+<tr>
+<td><code>ACCOUNT_DISABLED</code></td>
+<td>403</td>
+<td>User account is disabled</td>
+</tr>
+<tr>
+<td><code>TOKEN_EXPIRED</code></td>
+<td>401</td>
+<td>JWT access token expired</td>
+</tr>
+<tr>
+<td><code>TOKEN_INVALID</code></td>
+<td>401</td>
+<td>Malformed or invalid token</td>
+</tr>
+<tr>
+<td><code>PASSWORD_MISMATCH</code></td>
+<td>400</td>
+<td>Passwords don't match</td>
+</tr>
+<tr>
+<td><code>WEAK_PASSWORD</code></td>
+<td>400</td>
+<td>Password too simple</td>
+</tr>
+<tr>
+<td><code>USERNAME_TAKEN</code></td>
+<td>409</td>
+<td>Username already exists</td>
+</tr>
+<tr>
+<td><code>EMAIL_TAKEN</code></td>
+<td>409</td>
+<td>Email already registered</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="security-features">Security Features</h2>
+<h3 id="password-requirements">Password Requirements</h3>
+<ul>
+<li>
+<p>Minimum 8 characters</p>
+</li>
+<li>
+<p>Must contain letters and numbers</p>
+</li>
+<li>
+<p>Cannot be too similar to username/email</p>
+</li>
+<li>
+<p>Cannot be a common password</p>
+</li>
+</ul>
+<h3 id="api-key-security">API Key Security</h3>
+<ul>
+<li>
+<p>Keys are hashed in database (SHA-256)</p>
+</li>
+<li>
+<p>Only shown once during creation</p>
+</li>
+<li>
+<p>Cannot be retrieved later (must create new key)</p>
+</li>
+<li>
+<p>Automatically invalidated on user account deletion</p>
+</li>
+</ul>
+<h3 id="jwt-token-security">JWT Token Security</h3>
+<ul>
+<li>
+<p>Access tokens expire after 15 minutes</p>
+</li>
+<li>
+<p>Refresh tokens expire after 7 days</p>
+</li>
+<li>
+<p>Tokens signed with <code>SECRET_KEY</code> from settings</p>
+</li>
+<li>
+<p>Tokens include user ID and timestamp</p>
+</li>
+</ul>
+<h3 id="account-security">Account Security</h3>
+<ul>
+<li>
+<p>Passwords hashed with Argon2</p>
+</li>
+<li>
+<p>Rate limiting on all auth endpoints</p>
+</li>
+<li>
+<p>Email verification (optional)</p>
+</li>
+<li>
+<p>Failed login tracking (coming soon)</p>
+</li>
+<li>
+<p>Two-factor authentication (planned)</p>
+</li>
+</ul>
+<hr />
+<h2 id="environment-configuration">Environment Configuration</h2>
+<p>Configure authentication in <code>.env</code>:</p>
+<pre><code class="language-env"># JWT Settings
+JWT_ACCESS_TOKEN_LIFETIME_MINUTES=15
+JWT_REFRESH_TOKEN_LIFETIME_DAYS=7
+
+# Email Verification
+REQUIRE_EMAIL_VERIFICATION=false
+
+# Password Requirements
+MIN_PASSWORD_LENGTH=8
+PASSWORD_REQUIRE_UPPERCASE=false
+PASSWORD_REQUIRE_NUMBERS=true
+
+# Rate Limiting
+AUTH_RATE_LIMIT_PER_MINUTE=5
+</code></pre>
+<hr />
+<h2 id="examples">Examples</h2>
+<h3 id="python-sdk">Python SDK</h3>
+<pre><code class="language-python">import requests
+
+class StormCloudClient:
+    def __init__(self, base_url: str, api_key: str):
+        self.base_url = base_url
+        self.headers = {&quot;Authorization&quot;: f&quot;Bearer {api_key}&quot;}
+
+    def list_files(self):
+        response = requests.get(
+            f&quot;{self.base_url}/api/v1/files/&quot;,
+            headers=self.headers
+        )
+        return response.json()
+
+# Usage
+client = StormCloudClient(
+    base_url=&quot;http://localhost:8000&quot;,
+    api_key=&quot;your-api-key-here&quot;
+)
+files = client.list_files()
+</code></pre>
+<h3 id="javascriptreact">JavaScript/React</h3>
+<pre><code class="language-typescript">import { useState, useEffect } from 'react';
+
+interface AuthTokens {
+  access: string;
+  refresh: string;
+}
+
+const useAuth = () =&gt; {
+  const [tokens, setTokens] = useState&lt;AuthTokens | null&gt;(null);
+
+  const login = async (username: string, password: string) =&gt; {
+    const response = await fetch('http://localhost:8000/api/v1/auth/login/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      setTokens({ access: data.access, refresh: data.refresh });
+      localStorage.setItem('tokens', JSON.stringify(data));
+    }
+  };
+
+  const logout = () =&gt; {
+    setTokens(null);
+    localStorage.removeItem('tokens');
+  };
+
+  // Auto-load tokens on mount
+  useEffect(() =&gt; {
+    const stored = localStorage.getItem('tokens');
+    if (stored) setTokens(JSON.parse(stored));
+  }, []);
+
+  return { tokens, login, logout };
+};
+</code></pre>
+<h3 id="cli-integration">CLI Integration</h3>
+<pre><code class="language-bash"># Store API key in config
+mkdir -p ~/.stormcloud
+echo &quot;YOUR_API_KEY&quot; &gt; ~/.stormcloud/api_key
+chmod 600 ~/.stormcloud/api_key
+
+# Use in scripts
+API_KEY=$(cat ~/.stormcloud/api_key)
+curl http://localhost:8000/api/v1/files/ \
+  -H &quot;Authorization: Bearer $API_KEY&quot;
+</code></pre>
+<hr />
+<h2 id="next-steps">Next Steps</h2>
+<ul>
+<li>
+<p><a href="../storage/files.md">File Storage API</a> - Upload and manage files</p>
+</li>
+<li>
+<p><a href="../share-links-api.md">Share Links API</a> - Create public download links</p>
+</li>
+<li>
+<p><a href="../cli-usage.md">CLI Tool</a> - Use the <code>stormcloud</code> CLI</p>
+</li>
+</ul>
+{% endblock %}

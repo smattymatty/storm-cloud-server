@@ -106,7 +106,7 @@ fi
 # 4. COLLECT STATIC FILES
 # ============================================
 echo ""
-echo "Step 4/5: Collecting static files..."
+echo "Step 4/6: Collecting static files..."
 
 python manage.py collectstatic --noinput --clear
 
@@ -117,10 +117,24 @@ else
 fi
 
 # ============================================
-# 5. START APPLICATION
+# 5. BUILD SPELLBOOK MARKDOWN
 # ============================================
 echo ""
-echo "Step 5/5: Starting application server..."
+echo "Step 5/6: Building Spellbook markdown files..."
+
+python manage.py spellbook_md
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} Spellbook markdown built"
+else
+    echo -e "${YELLOW}WARNING: Spellbook build failed (non-fatal)${NC}"
+fi
+
+# ============================================
+# 6. START APPLICATION
+# ============================================
+echo ""
+echo "Step 6/6: Starting application server..."
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Storm Cloud Server is starting...${NC}"

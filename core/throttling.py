@@ -85,3 +85,29 @@ class AnonRegistrationThrottle(AnonRateThrottle):
     Purpose: Prevent spam account creation from single IP
     """
     scope = 'anon_registration'
+
+
+class PublicShareRateThrottle(AnonRateThrottle):
+    """
+    Throttle for public share link access (IP-based).
+
+    Rate: 60 requests per minute (default)
+    Scope: 'public_share'
+
+    Applied to: /api/v1/public/{token}/ endpoints
+    Purpose: Prevent abuse of public share links
+    """
+    scope = 'public_share'
+
+
+class PublicShareDownloadRateThrottle(AnonRateThrottle):
+    """
+    Throttle for public share file downloads (IP-based).
+
+    Rate: 30 requests per minute (default)
+    Scope: 'public_share_download'
+
+    Applied to: /api/v1/public/{token}/download/ endpoint
+    Purpose: Prevent bandwidth abuse via downloads
+    """
+    scope = 'public_share_download'

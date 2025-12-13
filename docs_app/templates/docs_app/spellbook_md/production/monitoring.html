@@ -1,0 +1,573 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<h1 id="monitoring-error-tracking">Monitoring &amp; Error Tracking</h1>
+<p>Storm Cloud Server supports optional error tracking and performance monitoring via <a href="https://sentry.io/">Sentry</a>.</p>
+<hr />
+<h2 id="overview">Overview</h2>
+<p><strong>Key Principle:</strong> Monitoring is <strong>completely optional</strong>. Storm Cloud works perfectly fine without Sentry, using Django's built-in logging to <code>logs/security.log</code>.</p>
+<h3 id="what-gets-tracked">What Gets Tracked</h3>
+<p><strong>Without Sentry (Default):</strong></p>
+<ul>
+<li>
+<p>Security events → <code>logs/security.log</code></p>
+</li>
+<li>
+<p>Application errors → Django console logging</p>
+</li>
+<li>
+<p>Performance → None</p>
+</li>
+</ul>
+<p><strong>With Sentry (Optional):</strong></p>
+<ul>
+<li>
+<p>Security events → <code>logs/security.log</code> (unchanged)</p>
+</li>
+<li>
+<p>Application errors → Sentry dashboard + Django logging</p>
+</li>
+<li>
+<p>Performance → Sentry tracing (10% sampling)</p>
+</li>
+<li>
+<p>User context → Attached to errors (user_id, username, is_staff)</p>
+</li>
+<li>
+<p>Privacy → API keys, passwords, tokens automatically filtered</p>
+</li>
+</ul>
+<hr />
+<h2 id="setup-sentry-optional">Setup Sentry (Optional)</h2>
+<h3 id="1-create-sentry-account">1. Create Sentry Account</h3>
+<p>Visit <a href="https://sentry.io/signup/">sentry.io/signup</a> and create a free account.</p>
+<p><strong>Free tier includes:</strong></p>
+<ul>
+<li>
+<p>5,000 errors per month</p>
+</li>
+<li>
+<p>10,000 performance transactions per month</p>
+</li>
+<li>
+<p>30 day event retention</p>
+</li>
+<li>
+<p>Unlimited projects</p>
+</li>
+</ul>
+<h3 id="2-create-django-project">2. Create Django Project</h3>
+<ol>
+<li>
+<p>Click "Create Project"</p>
+</li>
+<li>
+<p>Select <strong>Django</strong> as the platform</p>
+</li>
+<li>
+<p>Set alert frequency (recommended: "Alert me on every new issue")</p>
+</li>
+<li>
+<p>Name your project (e.g., "storm-cloud-production")</p>
+</li>
+<li>
+<p>Click "Create Project"</p>
+</li>
+</ol>
+<h3 id="3-get-your-dsn">3. Get Your DSN</h3>
+<p>After creating the project, Sentry will show you a DSN that looks like:</p>
+<pre><code>https://examplePublicKey@o0.ingest.sentry.io/0
+</code></pre>
+<p>Copy this DSN - you'll need it next.</p>
+<h3 id="4-configure-environment">4. Configure Environment</h3>
+<p>Add to your <code>.env</code> file:</p>
+<pre><code class="language-bash"># Sentry DSN (leave blank to disable)
+SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+
+# Optional: Adjust sampling rates
+SENTRY_TRACES_SAMPLE_RATE=0.1    # 10% of requests
+SENTRY_PROFILES_SAMPLE_RATE=0.1  # 10% of traces
+
+# Optional: Set environment name
+ENVIRONMENT=production  # or staging, development
+</code></pre>
+<h3 id="5-install-sdk-restart">5. Install SDK &amp; Restart</h3>
+<pre><code class="language-bash"># If using Docker
+docker compose down
+docker compose up -d
+
+# If using venv
+pip install -r requirements.txt  # Installs sentry-sdk[django]
+python manage.py runserver
+</code></pre>
+<p>Check logs for confirmation:</p>
+<pre><code>Sentry initialized for environment 'production'
+</code></pre>
+<hr />
+<h2 id="testing-integration">Testing Integration</h2>
+<h3 id="debug-endpoint-development-only">Debug Endpoint (Development Only)</h3>
+<p>Visit these endpoints to trigger test errors:</p>
+<pre><code class="language-bash"># Basic division error
+curl http://localhost:8000/api/v1/debug/sentry-test/?type=division
+
+# Value error
+curl http://localhost:8000/api/v1/debug/sentry-test/?type=value
+
+# API key filtering test
+curl http://localhost:8000/api/v1/debug/sentry-test/?type=api_key
+</code></pre>
+<p><strong>Note:</strong> This endpoint is <strong>only available when <code>DEBUG=True</code></strong>. It will not exist in production.</p>
+<h3 id="verify-in-sentry-dashboard">Verify in Sentry Dashboard</h3>
+<ol>
+<li>
+<p>Go to your Sentry project</p>
+</li>
+<li>
+<p>Click "Issues" in the left sidebar</p>
+</li>
+<li>
+<p>You should see the test error appear within seconds</p>
+</li>
+<li>
+<p>Click the error to see:</p>
+</li>
+<li>
+<p>Stack trace</p>
+</li>
+<li>
+<p>User context (if logged in)</p>
+</li>
+<li>
+<p>Request details (URL, method)</p>
+</li>
+<li>
+<p>Breadcrumbs (recent log messages)</p>
+</li>
+</ol>
+<hr />
+<h2 id="whats-tracked">What's Tracked</h2>
+<h3 id="errors">Errors</h3>
+<p><strong>Automatically captured:</strong></p>
+<ul>
+<li>
+<p>All unhandled exceptions (500 errors)</p>
+</li>
+<li>
+<p>Python errors (ValueError, TypeError, etc.)</p>
+</li>
+<li>
+<p>Database errors</p>
+</li>
+<li>
+<p>Template rendering errors</p>
+</li>
+<li>
+<p>Middleware errors</p>
+</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre><code class="language-python"># This will be captured by Sentry
+def my_view(request):
+    user = User.objects.get(id=999)  # DoesNotExist error → Sentry
+    return JsonResponse({&quot;user&quot;: user.username})
+</code></pre>
+<h3 id="performance">Performance</h3>
+<p><strong>Automatically tracked:</strong></p>
+<ul>
+<li>
+<p>Endpoint response times</p>
+</li>
+<li>
+<p>Database query performance</p>
+</li>
+<li>
+<p>Cache hit/miss rates</p>
+</li>
+<li>
+<p>Middleware execution time</p>
+</li>
+</ul>
+<p><strong>Sampling:</strong> Only 10% of requests are traced by default (configurable via <code>SENTRY_TRACES_SAMPLE_RATE</code>).</p>
+<p><strong>Example transaction:</strong></p>
+<pre><code>POST /api/v1/files/document.pdf/upload/
+├─ Middleware execution: 12ms
+├─ Database query: 45ms
+├─ File write: 230ms
+└─ Total: 287ms
+</code></pre>
+<h3 id="user-context">User Context</h3>
+<p>When errors occur, Sentry automatically attaches:</p>
+<pre><code class="language-json">{
+  &quot;user&quot;: {
+    &quot;id&quot;: 42,
+    &quot;username&quot;: &quot;alice&quot;,
+    &quot;is_staff&quot;: false
+  },
+  &quot;tags&quot;: {
+    &quot;request_path&quot;: &quot;/api/v1/files/test.txt/upload/&quot;,
+    &quot;request_method&quot;: &quot;POST&quot;,
+    &quot;storage_backend&quot;: &quot;local&quot;
+  }
+}
+</code></pre>
+<p><strong>Privacy note:</strong> Emails and IP addresses are <strong>NOT</strong> sent to Sentry by default (GDPR-compliant).</p>
+<hr />
+<h2 id="privacy-security">Privacy &amp; Security</h2>
+<h3 id="whats-filtered">What's Filtered</h3>
+<p>Storm Cloud <strong>automatically redacts</strong> sensitive data before sending to Sentry:</p>
+<ol>
+<li>
+<p><strong>Authorization headers</strong> - <code>Bearer xxx</code> → <code>[Filtered]</code></p>
+</li>
+<li>
+<p><strong>Password fields</strong> - Any form field named <code>password</code>, <code>api_key</code>, <code>token</code>, <code>secret</code>, <code>key</code></p>
+</li>
+<li>
+<p><strong>API keys in error messages</strong> - 64+ character tokens → <code>[REDACTED_TOKEN]</code></p>
+</li>
+</ol>
+<p><strong>Example:</strong></p>
+<pre><code class="language-python"># Before filtering
+raise Exception(&quot;Failed to authenticate with key: abc123xyz...&quot;)
+
+# Sent to Sentry
+raise Exception(&quot;Failed to authenticate with key: [REDACTED_TOKEN]&quot;)
+</code></pre>
+<h3 id="gdpr-compliance">GDPR Compliance</h3>
+<p>Sentry integration is configured to be GDPR-compliant:</p>
+<ul>
+<li>
+<p><code>send_default_pii=False</code> - No emails or IP addresses</p>
+</li>
+<li>
+<p>User context limited to: <code>id</code>, <code>username</code>, <code>is_staff</code></p>
+</li>
+<li>
+<p>No tracking cookies or client-side monitoring</p>
+</li>
+<li>
+<p>Data retention: 30 days (Sentry free tier)</p>
+</li>
+</ul>
+<h3 id="opting-out">Opting Out</h3>
+<p>Users cannot opt out individually (server-side errors). To disable Sentry entirely:</p>
+<ol>
+<li>
+<p>Remove <code>SENTRY_DSN</code> from <code>.env</code></p>
+</li>
+<li>
+<p>Restart application</p>
+</li>
+<li>
+<p>Errors will only be logged to Django console/files</p>
+</li>
+</ol>
+<hr />
+<h2 id="configuration-reference">Configuration Reference</h2>
+<h3 id="environment-variables">Environment Variables</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SENTRY_DSN</code></td>
+<td><code>""</code></td>
+<td>Sentry Data Source Name. Leave blank to disable.</td>
+</tr>
+<tr>
+<td><code>SENTRY_TRACES_SAMPLE_RATE</code></td>
+<td><code>0.1</code></td>
+<td>Percentage of requests to trace (0.0 to 1.0). <code>0.1</code> = 10%.</td>
+</tr>
+<tr>
+<td><code>SENTRY_PROFILES_SAMPLE_RATE</code></td>
+<td><code>0.1</code></td>
+<td>Percentage of traces to profile (0.0 to 1.0). Requires traces &gt; 0.</td>
+</tr>
+<tr>
+<td><code>ENVIRONMENT</code></td>
+<td><code>production</code></td>
+<td>Environment name shown in Sentry (production, staging, dev).</td>
+</tr>
+<tr>
+<td><code>GIT_COMMIT</code></td>
+<td><code>unknown</code></td>
+<td>Git commit hash for release tracking. Auto-set by CI/CD.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="example-configurations">Example Configurations</h3>
+<p><strong>Production (recommended):</strong></p>
+<pre><code class="language-bash">SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+SENTRY_TRACES_SAMPLE_RATE=0.1   # 10% sampling
+SENTRY_PROFILES_SAMPLE_RATE=0.1
+ENVIRONMENT=production
+</code></pre>
+<p><strong>Staging (higher sampling):</strong></p>
+<pre><code class="language-bash">SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+SENTRY_TRACES_SAMPLE_RATE=0.5   # 50% sampling
+SENTRY_PROFILES_SAMPLE_RATE=0.5
+ENVIRONMENT=staging
+</code></pre>
+<p><strong>Development (disabled):</strong></p>
+<pre><code class="language-bash">SENTRY_DSN=  # Leave blank
+</code></pre>
+<hr />
+<h2 id="operational-guide">Operational Guide</h2>
+<h3 id="responding-to-sentry-alerts">Responding to Sentry Alerts</h3>
+<p>When you receive a Sentry alert:</p>
+<ol>
+<li>
+<p><strong>Check severity</strong> - Is this affecting multiple users or just one?</p>
+</li>
+<li>
+<p><strong>Review context</strong> - What user, endpoint, and action triggered it?</p>
+</li>
+<li>
+<p><strong>Check recent deployments</strong> - Did this start after a recent release?</p>
+</li>
+<li>
+<p><strong>Reproduce</strong> - Can you trigger the error yourself?</p>
+</li>
+<li>
+<p><strong>Fix and deploy</strong> - Resolve the issue and push a fix</p>
+</li>
+<li>
+<p><strong>Verify</strong> - Mark the issue as "Resolved" in Sentry</p>
+</li>
+</ol>
+<h3 id="common-false-positives">Common False Positives</h3>
+<p><strong>404 errors for share links:</strong></p>
+<ul>
+<li>
+<p>Expected when share link expires or is invalid</p>
+</li>
+<li>
+<p>Mark as "Ignore" in Sentry</p>
+</li>
+</ul>
+<p><strong>Rate limiting errors:</strong></p>
+<ul>
+<li>
+<p>Expected when users exceed throttle limits</p>
+</li>
+<li>
+<p>Already handled gracefully by API</p>
+</li>
+<li>
+<p>Mark as "Ignore" in Sentry</p>
+</li>
+</ul>
+<p><strong>Database connection during restart:</strong></p>
+<ul>
+<li>
+<p>Expected during deployments</p>
+</li>
+<li>
+<p>Temporary and self-healing</p>
+</li>
+<li>
+<p>Mark as "Ignore" in Sentry</p>
+</li>
+</ul>
+<h3 id="best-practices">Best Practices</h3>
+<ol>
+<li>
+<p><strong>Set up alerts</strong> - Configure Slack/email notifications in Sentry</p>
+</li>
+<li>
+<p><strong>Use releases</strong> - Tag deployments with git commit hash (<code>GIT_COMMIT</code>)</p>
+</li>
+<li>
+<p><strong>Create teams</strong> - Invite team members to Sentry project</p>
+</li>
+<li>
+<p><strong>Monitor trends</strong> - Check Sentry dashboard weekly for patterns</p>
+</li>
+<li>
+<p><strong>Clean up</strong> - Archive or ignore resolved/wontfix issues monthly</p>
+</li>
+</ol>
+<hr />
+<h2 id="performance-monitoring">Performance Monitoring</h2>
+<h3 id="understanding-transactions">Understanding Transactions</h3>
+<p>Transactions represent complete request/response cycles:</p>
+<pre><code>GET /api/v1/files/document.pdf/download/
+Duration: 523ms
+├─ middleware.security          12ms
+├─ middleware.cors              3ms
+├─ middleware.sentry_context    2ms
+├─ middleware.session           8ms
+├─ authentication               15ms
+├─ view.file_download           480ms
+│  ├─ database.query            25ms
+│  ├─ filesystem.read           450ms
+│  └─ response.prepare          5ms
+└─ middleware.total             523ms
+</code></pre>
+<h3 id="slow-query-detection">Slow Query Detection</h3>
+<p>Sentry automatically highlights slow database queries:</p>
+<pre><code>SELECT * FROM storage_storedfile WHERE owner_id = 1 AND path LIKE '%test%'
+Duration: 450ms (SLOW)
+</code></pre>
+<p><strong>Solution:</strong> Add database index or optimize query.</p>
+<h3 id="cache-performance">Cache Performance</h3>
+<p>Monitor cache hit/miss rates:</p>
+<pre><code>cache.get('user_profile_42')
+Result: HIT (2ms)
+
+cache.get('user_profile_43')
+Result: MISS (0ms) → database query (25ms)
+</code></pre>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="sentry-not-capturing-errors">Sentry Not Capturing Errors</h3>
+<p><strong>Problem:</strong> Errors occur but don't appear in Sentry.</p>
+<p><strong>Solutions:</strong></p>
+<ol>
+<li>
+<p><strong>Verify DSN is set:</strong><br />
+<code>bash
+   docker compose exec web env | grep SENTRY_DSN</code></p>
+</li>
+<li>
+<p><strong>Check initialization:</strong><br />
+<code>bash
+   docker compose logs web | grep "Sentry initialized"</code></p>
+</li>
+<li>
+<p><strong>Test with debug endpoint:</strong><br />
+<code>bash
+   curl http://localhost:8000/api/v1/debug/sentry-test/?type=division</code></p>
+</li>
+<li>
+<p><strong>Check Sentry quota:</strong></p>
+</li>
+<li>
+<p>Go to Sentry → Settings → Quota Management</p>
+</li>
+<li>
+<p>Ensure you haven't exceeded 5K errors/month</p>
+</li>
+</ol>
+<h3 id="errors-sent-but-privacy-data-leaked">Errors Sent But Privacy Data Leaked</h3>
+<p><strong>Problem:</strong> API keys or passwords appearing in Sentry.</p>
+<p><strong>Solution:</strong> This shouldn't happen, but if it does:</p>
+<ol>
+<li>
+<p><strong>Delete the event</strong> in Sentry dashboard</p>
+</li>
+<li>
+<p><strong>Report the issue</strong> on GitHub</p>
+</li>
+<li>
+<p><strong>Verify <code>before_send</code> filter</strong> in <code>_core/settings/production.py</code></p>
+</li>
+</ol>
+<h3 id="too-many-errors">Too Many Errors</h3>
+<p><strong>Problem:</strong> Sentry quota exceeded due to error spam.</p>
+<p><strong>Solutions:</strong></p>
+<ol>
+<li>
+<p><strong>Increase sample rate filtering:</strong><br />
+<code>bash
+   SENTRY_TRACES_SAMPLE_RATE=0.01  # 1% instead of 10%</code></p>
+</li>
+<li>
+<p><strong>Ignore specific errors:</strong></p>
+</li>
+<li>
+<p>Go to Sentry → Settings → Inbound Filters</p>
+</li>
+<li>
+<p>Add error patterns to ignore</p>
+</li>
+<li>
+<p><strong>Fix the root cause</strong> (obviously!)</p>
+</li>
+</ol>
+<hr />
+<h2 id="disabling-sentry">Disabling Sentry</h2>
+<p>To disable Sentry entirely:</p>
+<h3 id="option-1-remove-dsn-recommended">Option 1: Remove DSN (Recommended)</h3>
+<p>Edit <code>.env</code>:</p>
+<pre><code class="language-bash">SENTRY_DSN=  # Leave blank or comment out
+</code></pre>
+<p>Restart:</p>
+<pre><code class="language-bash">docker compose restart web
+</code></pre>
+<h3 id="option-2-uninstall-sdk">Option 2: Uninstall SDK</h3>
+<p>Edit <code>requirements.txt</code> and remove:</p>
+<pre><code>sentry-sdk[django]&gt;=2.0.0
+</code></pre>
+<p>Rebuild:</p>
+<pre><code class="language-bash">docker compose build web
+docker compose up -d
+</code></pre>
+<hr />
+<h2 id="advanced-topics">Advanced Topics</h2>
+<h3 id="custom-error-tags">Custom Error Tags</h3>
+<p>Add custom tags in your code:</p>
+<pre><code class="language-python">from sentry_sdk import set_tag
+
+def my_view(request):
+    set_tag(&quot;payment_provider&quot;, &quot;stripe&quot;)
+    set_tag(&quot;user_tier&quot;, &quot;premium&quot;)
+    # Your code here
+</code></pre>
+<h3 id="manual-error-capture">Manual Error Capture</h3>
+<p>Capture errors without raising:</p>
+<pre><code class="language-python">from sentry_sdk import capture_exception
+
+try:
+    risky_operation()
+except Exception as e:
+    capture_exception(e)
+    # Continue execution
+</code></pre>
+<h3 id="performance-measurements">Performance Measurements</h3>
+<p>Track custom operations:</p>
+<pre><code class="language-python">from sentry_sdk import start_transaction
+
+with start_transaction(op=&quot;task&quot;, name=&quot;video_encoding&quot;):
+    encode_video(video_file)
+</code></pre>
+<hr />
+<h2 id="related-documentation">Related Documentation</h2>
+<ul>
+<li>
+<p><a href="../SECURITY.md">Security Guide</a> - Security best practices</p>
+</li>
+<li>
+<p><a href="setup.md">Setup Guide</a> - Installation instructions</p>
+</li>
+<li>
+<p><a href="../architecture/records/">Architecture Decisions</a> - Design rationale</p>
+</li>
+</ul>
+<hr />
+<h2 id="getting-help">Getting Help</h2>
+<p><strong>Sentry Issues:</strong></p>
+<ul>
+<li>
+<p><a href="https://docs.sentry.io/">Sentry Documentation</a></p>
+</li>
+<li>
+<p><a href="https://discord.gg/sentry">Sentry Discord</a></p>
+</li>
+</ul>
+<p><strong>Storm Cloud Issues:</strong></p>
+<ul>
+<li>
+<p><a href="https://github.com/smattymatty/storm-cloud-server/issues">GitHub Issues</a></p>
+</li>
+<li>
+<p>Tag with <code>monitoring</code> label</p>
+</li>
+</ul>
+{% endblock %}

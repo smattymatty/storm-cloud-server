@@ -1,0 +1,804 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<h1 id="share-links-api-specification">Share Links API Specification</h1>
+<p><strong>Version:</strong> 1.0<br />
+<strong>Base URL:</strong> <code>http://localhost:8000/api/v1</code><br />
+<strong>Authentication:</strong> API Key (CLI) or JWT (Web UI - coming soon)</p>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>Share links allow users to create public URLs for their files with optional password protection, expiration, and custom slugs. The API tracks views and downloads separately.</p>
+<hr />
+<h2 id="authentication">Authentication</h2>
+<p>All authenticated endpoints require:</p>
+<pre><code class="language-http">Authorization: Bearer YOUR-API-KEY
+</code></pre>
+<p>Public endpoints (file access) require no authentication.</p>
+<hr />
+<h2 id="endpoints">Endpoints</h2>
+<h3 id="1-create-share-link">1. Create Share Link</h3>
+<p><strong>POST</strong> <code>/api/v1/shares/</code></p>
+<p>Create a public share link for a file.</p>
+<p><strong>Request Body:</strong></p>
+<pre><code class="language-json">{
+  &quot;file_path&quot;: &quot;documents/report.pdf&quot;,
+  &quot;expiry_days&quot;: 7,
+  &quot;password&quot;: &quot;optional-password&quot;,
+  &quot;custom_slug&quot;: &quot;my-report&quot;
+}
+</code></pre>
+<p><strong>Fields:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>✅</td>
+<td>Path to the file (must exist)</td>
+</tr>
+<tr>
+<td><code>expiry_days</code></td>
+<td>integer</td>
+<td>❌</td>
+<td>Days until expiration. Options: <code>1</code>, <code>3</code>, <code>7</code>, <code>30</code>, <code>90</code>, <code>0</code> (never). Default: <code>7</code></td>
+</tr>
+<tr>
+<td><code>password</code></td>
+<td>string</td>
+<td>❌</td>
+<td>Password protection (hashed server-side)</td>
+</tr>
+<tr>
+<td><code>custom_slug</code></td>
+<td>string</td>
+<td>❌</td>
+<td>Custom URL slug (3-64 chars, alphanumeric + hyphens)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Response:</strong> <code>201 Created</code></p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;123e4567-e89b-12d3-a456-426614174000&quot;,
+  &quot;owner&quot;: 42,
+  &quot;file_path&quot;: &quot;documents/report.pdf&quot;,
+  &quot;token&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
+  &quot;custom_slug&quot;: &quot;my-report&quot;,
+  &quot;url&quot;: &quot;/api/v1/public/my-report/&quot;,
+  &quot;has_password&quot;: true,
+  &quot;expiry_days&quot;: 7,
+  &quot;expires_at&quot;: &quot;2025-12-18T12:00:00Z&quot;,
+  &quot;created_at&quot;: &quot;2025-12-11T12:00:00Z&quot;,
+  &quot;view_count&quot;: 0,
+  &quot;download_count&quot;: 0,
+  &quot;last_accessed_at&quot;: null,
+  &quot;is_active&quot;: true,
+  &quot;is_expired&quot;: false
+}
+</code></pre>
+<p><strong>Errors:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td><code>VALIDATION_ERROR</code></td>
+<td>Invalid slug format or duplicate</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>FORBIDDEN</code></td>
+<td>Not authenticated</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>FILE_NOT_FOUND</code></td>
+<td>File doesn't exist</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">curl -X POST http://localhost:8000/api/v1/shares/ \
+  -H &quot;Authorization: Bearer YOUR-API-KEY&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{
+    &quot;file_path&quot;: &quot;vacation.jpg&quot;,
+    &quot;expiry_days&quot;: 7,
+    &quot;custom_slug&quot;: &quot;hawaii-2025&quot;
+  }'
+</code></pre>
+<hr />
+<h3 id="2-list-share-links">2. List Share Links</h3>
+<p><strong>GET</strong> <code>/api/v1/shares/</code></p>
+<p>Get all share links for the authenticated user.</p>
+<p><strong>Response:</strong> <code>200 OK</code></p>
+<pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;123e4567-e89b-12d3-a456-426614174000&quot;,
+    &quot;owner&quot;: 42,
+    &quot;file_path&quot;: &quot;documents/report.pdf&quot;,
+    &quot;token&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
+    &quot;custom_slug&quot;: &quot;my-report&quot;,
+    &quot;url&quot;: &quot;/api/v1/public/my-report/&quot;,
+    &quot;has_password&quot;: true,
+    &quot;expiry_days&quot;: 7,
+    &quot;expires_at&quot;: &quot;2025-12-18T12:00:00Z&quot;,
+    &quot;created_at&quot;: &quot;2025-12-11T12:00:00Z&quot;,
+    &quot;view_count&quot;: 42,
+    &quot;download_count&quot;: 15,
+    &quot;last_accessed_at&quot;: &quot;2025-12-17T10:30:00Z&quot;,
+    &quot;is_active&quot;: true,
+    &quot;is_expired&quot;: false
+  },
+  {
+    &quot;id&quot;: &quot;987fcdeb-51a2-43f1-9876-543210fedcba&quot;,
+    &quot;owner&quot;: 42,
+    &quot;file_path&quot;: &quot;photos/vacation.jpg&quot;,
+    &quot;token&quot;: &quot;9876fedc-ba98-7654-3210-fedcba987654&quot;,
+    &quot;custom_slug&quot;: null,
+    &quot;url&quot;: &quot;/api/v1/public/9876fedc-ba98-7654-3210-fedcba987654/&quot;,
+    &quot;has_password&quot;: false,
+    &quot;expiry_days&quot;: 0,
+    &quot;expires_at&quot;: null,
+    &quot;created_at&quot;: &quot;2025-12-10T08:00:00Z&quot;,
+    &quot;view_count&quot;: 128,
+    &quot;download_count&quot;: 64,
+    &quot;last_accessed_at&quot;: &quot;2025-12-17T14:22:00Z&quot;,
+    &quot;is_active&quot;: true,
+    &quot;is_expired&quot;: false
+  }
+]
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>
+<p>Returns only the authenticated user's links</p>
+</li>
+<li>
+<p>Includes both active and expired links</p>
+</li>
+<li>
+<p>Ordered by <code>created_at</code> descending (newest first)</p>
+</li>
+</ul>
+<hr />
+<h3 id="3-get-share-link-details">3. Get Share Link Details</h3>
+<p><strong>GET</strong> <code>/api/v1/shares/{share_id}/</code></p>
+<p>Get details for a specific share link.</p>
+<p><strong>Response:</strong> <code>200 OK</code></p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;123e4567-e89b-12d3-a456-426614174000&quot;,
+  &quot;owner&quot;: 42,
+  &quot;file_path&quot;: &quot;documents/report.pdf&quot;,
+  &quot;token&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;,
+  &quot;custom_slug&quot;: &quot;my-report&quot;,
+  &quot;url&quot;: &quot;/api/v1/public/my-report/&quot;,
+  &quot;has_password&quot;: true,
+  &quot;expiry_days&quot;: 7,
+  &quot;expires_at&quot;: &quot;2025-12-18T12:00:00Z&quot;,
+  &quot;created_at&quot;: &quot;2025-12-11T12:00:00Z&quot;,
+  &quot;view_count&quot;: 42,
+  &quot;download_count&quot;: 15,
+  &quot;last_accessed_at&quot;: &quot;2025-12-17T10:30:00Z&quot;,
+  &quot;is_active&quot;: true,
+  &quot;is_expired&quot;: false
+}
+</code></pre>
+<p><strong>Errors:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>404</td>
+<td><code>NOT_FOUND</code></td>
+<td>Link doesn't exist or belongs to another user</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="4-revoke-share-link">4. Revoke Share Link</h3>
+<p><strong>DELETE</strong> <code>/api/v1/shares/{share_id}/</code></p>
+<p>Revoke (soft-delete) a share link. The link becomes inaccessible immediately.</p>
+<p><strong>Response:</strong> <code>200 OK</code></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &quot;Share link revoked&quot;,
+  &quot;id&quot;: &quot;123e4567-e89b-12d3-a456-426614174000&quot;
+}
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>
+<p>Soft delete: Sets <code>is_active = false</code></p>
+</li>
+<li>
+<p>Link cannot be un-revoked (create a new one instead)</p>
+</li>
+<li>
+<p>Public access immediately returns 404</p>
+</li>
+</ul>
+<hr />
+<h3 id="5-get-public-share-info">5. Get Public Share Info</h3>
+<p><strong>GET</strong> <code>/api/v1/public/{token}/</code></p>
+<p>Get information about a shared file (public, no authentication).</p>
+<p><strong>Headers (optional):</strong></p>
+<pre><code class="language-http">X-Share-Password: password-if-protected
+</code></pre>
+<p><strong>Response:</strong> <code>200 OK</code></p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;report.pdf&quot;,
+  &quot;size&quot;: 2048576,
+  &quot;content_type&quot;: &quot;application/pdf&quot;,
+  &quot;requires_password&quot;: false,
+  &quot;download_url&quot;: &quot;/api/v1/public/my-report/download/&quot;
+}
+</code></pre>
+<p><strong>Errors:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401</td>
+<td><code>PASSWORD_REQUIRED</code></td>
+<td>Password needed but not provided</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>INVALID_PASSWORD</code></td>
+<td>Wrong password</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>SHARE_NOT_FOUND</code></td>
+<td>Link expired, revoked, or doesn't exist</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash"># Without password
+curl http://localhost:8000/api/v1/public/my-report/
+
+# With password
+curl http://localhost:8000/api/v1/public/my-report/ \
+  -H &quot;X-Share-Password: secret123&quot;
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>
+<p>Token can be UUID or custom slug</p>
+</li>
+<li>
+<p>Increments <code>view_count</code> on success</p>
+</li>
+<li>
+<p>Rate limited: 60 requests/minute per IP</p>
+</li>
+</ul>
+<hr />
+<h3 id="6-download-shared-file">6. Download Shared File</h3>
+<p><strong>GET</strong> <code>/api/v1/public/{token}/download/</code></p>
+<p>Download the shared file (public, no authentication).</p>
+<p><strong>Headers (optional):</strong></p>
+<pre><code class="language-http">X-Share-Password: password-if-protected
+</code></pre>
+<p><strong>Response:</strong> <code>200 OK</code> (file stream)</p>
+<pre><code class="language-http">Content-Type: application/pdf
+Content-Disposition: attachment; filename=&quot;report.pdf&quot;
+</code></pre>
+<p><strong>Errors:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401</td>
+<td><code>PASSWORD_REQUIRED</code></td>
+<td>Password needed but not provided</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>INVALID_PASSWORD</code></td>
+<td>Wrong password</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>DOWNLOAD_DISABLED</code></td>
+<td>Downloads disabled for this link</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>SHARE_NOT_FOUND</code></td>
+<td>Link expired, revoked, or doesn't exist</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>FILE_NOT_FOUND</code></td>
+<td>File was deleted from storage</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash"># Download without password
+curl -O http://localhost:8000/api/v1/public/my-report/download/
+
+# Download with password
+curl -O http://localhost:8000/api/v1/public/my-report/download/ \
+  -H &quot;X-Share-Password: secret123&quot;
+</code></pre>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>
+<p>Increments <code>download_count</code> on success (not view_count)</p>
+</li>
+<li>
+<p>Rate limited: 30 requests/minute per IP</p>
+</li>
+<li>
+<p>Streams file efficiently (doesn't load into memory)</p>
+</li>
+</ul>
+<hr />
+<h2 id="rate-limits">Rate Limits</h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Limit</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Public share info</td>
+<td>60/min</td>
+<td>Per IP address</td>
+</tr>
+<tr>
+<td>Public download</td>
+<td>30/min</td>
+<td>Per IP address</td>
+</tr>
+<tr>
+<td>Authenticated endpoints</td>
+<td>1000/hour</td>
+<td>Per user</td>
+</tr>
+</tbody>
+</table>
+<p>Rate limit exceeded returns <code>429 Too Many Requests</code>.</p>
+<hr />
+<h2 id="field-reference">Field Reference</h2>
+<h3 id="share-link-object">Share Link Object</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>UUID</td>
+<td>Unique identifier</td>
+</tr>
+<tr>
+<td><code>owner</code></td>
+<td>integer</td>
+<td>User ID who created the link</td>
+</tr>
+<tr>
+<td><code>file_path</code></td>
+<td>string</td>
+<td>Path to the file</td>
+</tr>
+<tr>
+<td><code>token</code></td>
+<td>UUID</td>
+<td>Auto-generated access token</td>
+</tr>
+<tr>
+<td><code>custom_slug</code></td>
+<td>string|null</td>
+<td>Custom URL slug (if set)</td>
+</tr>
+<tr>
+<td><code>url</code></td>
+<td>string</td>
+<td>Public access URL (uses slug or token)</td>
+</tr>
+<tr>
+<td><code>has_password</code></td>
+<td>boolean</td>
+<td>Whether password protection is enabled</td>
+</tr>
+<tr>
+<td><code>expiry_days</code></td>
+<td>integer</td>
+<td>Expiration setting (<code>0</code> = never)</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>datetime|null</td>
+<td>Expiration timestamp (null if unlimited)</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td>datetime</td>
+<td>When link was created</td>
+</tr>
+<tr>
+<td><code>view_count</code></td>
+<td>integer</td>
+<td>Number of times info was viewed</td>
+</tr>
+<tr>
+<td><code>download_count</code></td>
+<td>integer</td>
+<td>Number of times file was downloaded</td>
+</tr>
+<tr>
+<td><code>last_accessed_at</code></td>
+<td>datetime|null</td>
+<td>Last view or download time</td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>boolean</td>
+<td>Whether link is active (false = revoked)</td>
+</tr>
+<tr>
+<td><code>is_expired</code></td>
+<td>boolean</td>
+<td>Whether link has expired</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="frontend-implementation-guide">Frontend Implementation Guide</h2>
+<h3 id="creating-a-share-link">Creating a Share Link</h3>
+<pre><code class="language-typescript">async function createShareLink(
+  filePath: string,
+  options: {
+    expiryDays?: 1 | 3 | 7 | 30 | 90 | 0;
+    password?: string;
+    customSlug?: string;
+  } = {}
+) {
+  const response = await fetch('http://localhost:8000/api/v1/shares/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${getApiKey()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      file_path: filePath,
+      expiry_days: options.expiryDays ?? 7,
+      password: options.password,
+      custom_slug: options.customSlug,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error.message);
+  }
+
+  return await response.json();
+}
+
+// Usage
+const link = await createShareLink('photos/vacation.jpg', {
+  expiryDays: 30,
+  customSlug: 'my-vacation-2025',
+});
+
+console.log(`Share URL: ${window.location.origin}${link.url}`);
+</code></pre>
+<h3 id="listing-share-links">Listing Share Links</h3>
+<pre><code class="language-typescript">async function listShareLinks() {
+  const response = await fetch('http://localhost:8000/api/v1/shares/', {
+    headers: {
+      'Authorization': `Bearer ${getApiKey()}`,
+    },
+  });
+
+  return await response.json();
+}
+
+// Usage
+const links = await listShareLinks();
+links.forEach(link =&gt; {
+  console.log(`${link.file_path}: ${link.view_count} views, ${link.download_count} downloads`);
+});
+</code></pre>
+<h3 id="revoking-a-share-link">Revoking a Share Link</h3>
+<pre><code class="language-typescript">async function revokeShareLink(shareId: string) {
+  const response = await fetch(`http://localhost:8000/api/v1/shares/${shareId}/`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${getApiKey()}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to revoke share link');
+  }
+
+  return await response.json();
+}
+</code></pre>
+<h3 id="public-share-access-no-auth">Public Share Access (No Auth)</h3>
+<pre><code class="language-typescript">async function getPublicShareInfo(token: string, password?: string) {
+  const headers: Record&lt;string, string&gt; = {};
+
+  if (password) {
+    headers['X-Share-Password'] = password;
+  }
+
+  const response = await fetch(`http://localhost:8000/api/v1/public/${token}/`, {
+    headers,
+  });
+
+  if (response.status === 401) {
+    const error = await response.json();
+    if (error.error.code === 'PASSWORD_REQUIRED') {
+      // Prompt user for password
+      return null;
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error('Share link not found or expired');
+  }
+
+  return await response.json();
+}
+
+async function downloadSharedFile(token: string, password?: string) {
+  const headers: Record&lt;string, string&gt; = {};
+
+  if (password) {
+    headers['X-Share-Password'] = password;
+  }
+
+  const response = await fetch(`http://localhost:8000/api/v1/public/${token}/download/`, {
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error('Download failed');
+  }
+
+  // Download as blob
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = response.headers.get('Content-Disposition')?.split('filename=')[1]?.replace(/&quot;/g, '') || 'file';
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+</code></pre>
+<hr />
+<h2 id="ui-component-suggestions">UI Component Suggestions</h2>
+<h3 id="share-link-creation-form">Share Link Creation Form</h3>
+<pre><code class="language-tsx">&lt;ShareLinkForm&gt;
+  &lt;FileSelector value={filePath} onChange={setFilePath} /&gt;
+
+  &lt;ExpiryDropdown
+    options={[
+      { value: 1, label: '1 day' },
+      { value: 3, label: '3 days' },
+      { value: 7, label: '7 days' },
+      { value: 30, label: '30 days' },
+      { value: 90, label: '90 days' },
+      { value: 0, label: 'Never expires' },
+    ]}
+    defaultValue={7}
+  /&gt;
+
+  &lt;PasswordInput optional placeholder=&quot;Optional password protection&quot; /&gt;
+
+  &lt;SlugInput
+    optional
+    placeholder=&quot;custom-url-slug&quot;
+    pattern=&quot;^[a-zA-Z0-9-]{3,64}$&quot;
+    helperText=&quot;3-64 characters, letters, numbers, and hyphens&quot;
+  /&gt;
+
+  &lt;CreateButton onClick={handleCreate} /&gt;
+&lt;/ShareLinkForm&gt;
+</code></pre>
+<h3 id="share-links-list">Share Links List</h3>
+<pre><code class="language-tsx">&lt;ShareLinksTable&gt;
+  &lt;Column header=&quot;File&quot; render={link =&gt; link.file_path} /&gt;
+  &lt;Column header=&quot;URL&quot; render={link =&gt; &lt;CopyableURL url={link.url} /&gt;} /&gt;
+  &lt;Column header=&quot;Views&quot; render={link =&gt; link.view_count} /&gt;
+  &lt;Column header=&quot;Downloads&quot; render={link =&gt; link.download_count} /&gt;
+  &lt;Column header=&quot;Expires&quot; render={link =&gt;
+    link.is_expired ? '❌ Expired' :
+    link.expires_at ? formatDate(link.expires_at) :
+    '∞ Never'
+  } /&gt;
+  &lt;Column header=&quot;Status&quot; render={link =&gt;
+    !link.is_active ? '🚫 Revoked' :
+    link.is_expired ? '❌ Expired' :
+    '✅ Active'
+  } /&gt;
+  &lt;Column header=&quot;Actions&quot; render={link =&gt;
+    &lt;RevokeButton onClick={() =&gt; revokeLink(link.id)} /&gt;
+  } /&gt;
+&lt;/ShareLinksTable&gt;
+</code></pre>
+<h3 id="public-share-page">Public Share Page</h3>
+<pre><code class="language-tsx">&lt;PublicSharePage token={params.token}&gt;
+  {passwordRequired &amp;&amp; !passwordProvided ? (
+    &lt;PasswordPrompt onSubmit={setPassword} /&gt;
+  ) : (
+    &lt;&gt;
+      &lt;FileInfo
+        name={shareInfo.name}
+        size={formatBytes(shareInfo.size)}
+        type={shareInfo.content_type}
+      /&gt;
+      &lt;DownloadButton
+        onClick={() =&gt; downloadSharedFile(token, password)}
+      /&gt;
+    &lt;/&gt;
+  )}
+&lt;/PublicSharePage&gt;
+</code></pre>
+<hr />
+<h2 id="testing-checklist">Testing Checklist</h2>
+<ul>
+<li>
+<p>[ ] Create share link with all fields</p>
+</li>
+<li>
+<p>[ ] Create share link with minimal fields (just file_path)</p>
+</li>
+<li>
+<p>[ ] Create share link with custom slug</p>
+</li>
+<li>
+<p>[ ] Create share link with password</p>
+</li>
+<li>
+<p>[ ] List share links (verify sorting newest first)</p>
+</li>
+<li>
+<p>[ ] Get share link details</p>
+</li>
+<li>
+<p>[ ] Revoke share link</p>
+</li>
+<li>
+<p>[ ] Access public share without password</p>
+</li>
+<li>
+<p>[ ] Access public share with correct password</p>
+</li>
+<li>
+<p>[ ] Access public share with wrong password (expect 401)</p>
+</li>
+<li>
+<p>[ ] Download file from public share</p>
+</li>
+<li>
+<p>[ ] Access expired share (expect 404)</p>
+</li>
+<li>
+<p>[ ] Access revoked share (expect 404)</p>
+</li>
+<li>
+<p>[ ] Verify view_count increments on info access</p>
+</li>
+<li>
+<p>[ ] Verify download_count increments on download</p>
+</li>
+<li>
+<p>[ ] Verify rate limiting on public endpoints</p>
+</li>
+</ul>
+<hr />
+<h2 id="environment-variables">Environment Variables</h2>
+<p>Your <code>.env</code> file should have:</p>
+<pre><code class="language-env"># Share Links Configuration
+STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS=True
+STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS=7
+
+# Rate Limiting
+THROTTLE_PUBLIC_SHARE_RATE=60/min
+THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE=30/min
+</code></pre>
+<hr />
+<h2 id="notes-for-frontend-dev">Notes for Frontend Dev</h2>
+<ol>
+<li>
+<p><strong>URL Format</strong>: Public share URLs use either the custom slug OR the UUID token:</p>
+</li>
+<li>
+<p>With slug: <code>/api/v1/public/my-report/</code></p>
+</li>
+<li>
+<p>Without slug: <code>/api/v1/public/a1b2c3d4-e5f6-7890-abcd-ef1234567890/</code></p>
+</li>
+<li>
+<p><strong>Password Header</strong>: Password is sent via <code>X-Share-Password</code> header, NOT in the URL or body</p>
+</li>
+<li>
+<p><strong>Analytics</strong>:</p>
+</li>
+<li>
+<p><code>view_count</code> = info endpoint calls</p>
+</li>
+<li>
+<p><code>download_count</code> = download endpoint calls</p>
+</li>
+<li>
+<p>They increment independently</p>
+</li>
+<li>
+<p><strong>Expiry vs Revoke</strong>:</p>
+</li>
+<li>
+<p>Expired links: <code>is_expired = true</code>, but still visible in list</p>
+</li>
+<li>
+<p>Revoked links: <code>is_active = false</code>, still visible in list</p>
+</li>
+<li>
+<p>Both return 404 on public access</p>
+</li>
+<li>
+<p><strong>Slug Validation</strong>: Client-side validation recommended:<br />
+<code>regex
+   ^[a-zA-Z0-9-]{3,64}$</code></p>
+</li>
+<li>
+<p><strong>Error Handling</strong>: All errors follow this format:<br />
+<code>json
+   {
+     "error": {
+       "code": "ERROR_CODE",
+       "message": "Human-readable message"
+     }
+   }</code></p>
+</li>
+</ol>
+<hr />
+<h2 id="questions">Questions?</h2>
+<p>Contact backend team or check the full API docs at <code>/api/v1/schema/swagger/</code> when the server is running.</p>
+{% endblock %}

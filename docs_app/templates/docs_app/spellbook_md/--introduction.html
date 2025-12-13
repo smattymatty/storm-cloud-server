@@ -1,0 +1,276 @@
+{% extends 'django_spellbook/bases/sidebar_left.html' %}
+
+{% block spellbook_md %}
+<h1 id="storm-cloud-server">Storm Cloud Server</h1>
+<p>Open-source cloud storage server with markdown CMS capabilities.</p>
+<hr />
+<h2 id="what-is-storm-cloud">What is Storm Cloud?</h2>
+<p>Storm Cloud Server is a <strong>self-hosted cloud storage solution</strong> designed for developers who want:</p>
+<ul>
+<li>
+<p><strong>File Storage</strong> - Upload, download, organize files via REST API</p>
+</li>
+<li>
+<p><strong>CLI-First</strong> - Designed for command-line workflows</p>
+</li>
+<li>
+<p><strong>Markdown CMS</strong> - Built-in SpellBook markdown rendering</p>
+</li>
+<li>
+<p><strong>API Keys</strong> - Simple, secure authentication for programmatic access</p>
+</li>
+<li>
+<p><strong>Public Sharing</strong> - Share files via password-protected links</p>
+</li>
+<li>
+<p><strong>Open Source</strong> - MIT licensed, modify as needed</p>
+</li>
+</ul>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<p>Storm Cloud follows a <strong>modular monolith</strong> architecture:</p>
+<ul>
+<li>
+<p><strong>Accounts</strong> - User management, authentication, API keys</p>
+</li>
+<li>
+<p><strong>Storage</strong> - File CRUD operations, share links</p>
+</li>
+<li>
+<p><strong>CMS</strong> - Markdown rendering via Django SpellBook</p>
+</li>
+<li>
+<p><strong>Core</strong> - Shared utilities, storage backends, base models</p>
+</li>
+</ul>
+<p>See <a href="../architecture/records/">Architecture Decision Records</a> for detailed design decisions.</p>
+<hr />
+<h2 id="key-features">Key Features</h2>
+<h3 id="file-storage">File Storage</h3>
+<ul>
+<li>
+<p>Upload/download files via REST API</p>
+</li>
+<li>
+<p>Directory organization with pagination</p>
+</li>
+<li>
+<p>Path traversal protection</p>
+</li>
+<li>
+<p>User-isolated storage paths</p>
+</li>
+<li>
+<p>Pluggable storage backend (local filesystem, future: S3)</p>
+</li>
+</ul>
+<h3 id="share-links">Share Links</h3>
+<ul>
+<li>
+<p>Public file sharing with unique URLs</p>
+</li>
+<li>
+<p>Optional password protection</p>
+</li>
+<li>
+<p>Configurable expiry (1, 3, 7, 30, 90 days, or unlimited)</p>
+</li>
+<li>
+<p>Custom slugs for user-friendly URLs</p>
+</li>
+<li>
+<p>Access analytics (view count, download count)</p>
+</li>
+<li>
+<p>Anonymous rate limiting</p>
+</li>
+</ul>
+<h3 id="authentication">Authentication</h3>
+<ul>
+<li>
+<p><strong>API Keys</strong> - For CLI and programmatic access</p>
+</li>
+<li>
+<p><strong>JWT Tokens</strong> - For web dashboard (coming soon)</p>
+</li>
+<li>
+<p>Email verification (optional)</p>
+</li>
+<li>
+<p>Password reset flow</p>
+</li>
+<li>
+<p>Throttling on all auth endpoints</p>
+</li>
+</ul>
+<h3 id="cms">CMS</h3>
+<ul>
+<li>
+<p>Markdown file rendering via SpellBook</p>
+</li>
+<li>
+<p>Custom SpellBlock components</p>
+</li>
+<li>
+<p>Version control ready (files are just markdown)</p>
+</li>
+</ul>
+<hr />
+<h2 id="technology-stack">Technology Stack</h2>
+<ul>
+<li>
+<p><strong>Backend</strong>: Django 5.2 + Django REST Framework</p>
+</li>
+<li>
+<p><strong>Database</strong>: PostgreSQL</p>
+</li>
+<li>
+<p><strong>Storage</strong>: Local filesystem (S3/Backblaze coming)</p>
+</li>
+<li>
+<p><strong>Authentication</strong>: API Keys + JWT (SimpleJWT)</p>
+</li>
+<li>
+<p><strong>Docs</strong>: Django SpellBook markdown renderer</p>
+</li>
+<li>
+<p><strong>Performance</strong>: Django Mercury monitoring</p>
+</li>
+<li>
+<p><strong>Deployment</strong>: Docker + Docker Compose</p>
+</li>
+</ul>
+<hr />
+<h2 id="use-cases">Use Cases</h2>
+<h3 id="personal-cloud">Personal Cloud</h3>
+<p>Replace Dropbox/Google Drive with your own infrastructure:</p>
+<pre><code class="language-bash">stormcloud upload vacation-photos/
+stormcloud share vacation-photos/sunset.jpg --expiry 30
+</code></pre>
+<h3 id="developer-workflows">Developer Workflows</h3>
+<p>Integrate cloud storage into your apps:</p>
+<pre><code class="language-python">import requests
+
+response = requests.post(
+    'https://cloud.example.com/api/v1/files/backup.zip/upload/',
+    headers={'Authorization': f'Bearer {api_key}'},
+    files={'file': open('backup.zip', 'rb')}
+)
+</code></pre>
+<h3 id="static-site-assets">Static Site Assets</h3>
+<p>Host files for your website:</p>
+<pre><code class="language-html">&lt;img src=&quot;https://cloud.example.com/api/v1/public/my-logo/download/&quot; /&gt;
+</code></pre>
+<h3 id="team-file-sharing">Team File Sharing</h3>
+<p>Share files with password protection:</p>
+<pre><code class="language-bash">stormcloud share sensitive-doc.pdf --password &quot;team2025&quot; --expiry 7
+# Share the link: https://cloud.example.com/api/v1/public/sensitive-doc/
+</code></pre>
+<hr />
+<h2 id="design-philosophy">Design Philosophy</h2>
+<ol>
+<li>
+<p><strong>CLI-First</strong> - API design optimized for command-line usage</p>
+</li>
+<li>
+<p><strong>Simple Over Clever</strong> - Straightforward code, minimal abstractions</p>
+</li>
+<li>
+<p><strong>Flat API Responses</strong> - Easy to parse in shell scripts</p>
+</li>
+<li>
+<p><strong>Type Hints Everywhere</strong> - Python 3.12+ type safety</p>
+</li>
+<li>
+<p><strong>Test Coverage</strong> - Every endpoint has comprehensive tests</p>
+</li>
+</ol>
+<hr />
+<h2 id="current-status">Current Status</h2>
+<p><strong>Version:</strong> Alpha (in active development)</p>
+<p><strong>Complete:</strong></p>
+<ul>
+<li>
+<p>✅ Authentication system (18 endpoints, full test coverage)</p>
+</li>
+<li>
+<p>✅ Storage system (7 endpoints, pagination, path security)</p>
+</li>
+<li>
+<p>✅ Share links (5 endpoints, public access, analytics)</p>
+</li>
+</ul>
+<p><strong>In Progress:</strong></p>
+<ul>
+<li>
+<p>🚧 Content management system (markdown rendering)</p>
+</li>
+<li>
+<p>🚧 CLI client</p>
+</li>
+</ul>
+<p><strong>Planned:</strong></p>
+<ul>
+<li>
+<p>📋 Web dashboard</p>
+</li>
+<li>
+<p>📋 Backblaze B2 backend</p>
+</li>
+<li>
+<p>📋 Custom SpellBlocks</p>
+</li>
+<li>
+<p>📋 Advanced permissions</p>
+</li>
+<li>
+<p>📋 File versioning</p>
+</li>
+<li>
+<p>📋 Storage quotas</p>
+</li>
+<li>
+<p>📋 Server-side encryption</p>
+</li>
+</ul>
+<hr />
+<h2 id="quick-links">Quick Links</h2>
+<ul>
+<li>
+<p><a href="setup.md">Setup Guide</a> - Get started in 5 minutes</p>
+</li>
+<li>
+<p><a href="storage/files.md">Storage API</a> - File upload/download docs</p>
+</li>
+<li>
+<p><a href="share-links-api.md">Share Links API</a> - Public sharing docs</p>
+</li>
+<li>
+<p><a href="accounts/authentication.md">Accounts API</a> - Auth endpoints</p>
+</li>
+<li>
+<p><a href="../architecture/records/">Architecture Decisions</a> - Design rationale</p>
+</li>
+</ul>
+<hr />
+<h2 id="license">License</h2>
+<p>MIT License - See <a href="../LICENSE">LICENSE</a> for details.</p>
+<hr />
+<h2 id="contributing">Contributing</h2>
+<p>This is an open-source project. Contributions welcome!</p>
+<ol>
+<li>
+<p>Fork the repository</p>
+</li>
+<li>
+<p>Create a feature branch</p>
+</li>
+<li>
+<p>Write tests for new functionality</p>
+</li>
+<li>
+<p>Submit a pull request</p>
+</li>
+</ol>
+<p>See <a href="../CONTRIBUTING.md">CONTRIBUTING.md</a> for detailed guidelines.</p>
+{% endblock %}
