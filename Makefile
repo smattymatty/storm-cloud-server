@@ -127,6 +127,31 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
+	@if ! command -v ansible-galaxy >/dev/null 2>&1; then \
+		echo "$(YELLOW)ERROR: ansible-galaxy not found$(NC)"; \
+		echo ""; \
+		echo "Ansible is required for deployment. Install it with:"; \
+		echo ""; \
+		if [ -d "venv" ]; then \
+			echo "  $(GREEN)Option 1: Install in virtual environment (recommended)$(NC)"; \
+			echo "    source venv/bin/activate"; \
+			echo "    pip install ansible"; \
+			echo ""; \
+		fi; \
+		echo "  $(GREEN)Option 2: Install globally$(NC)"; \
+		echo "    pip install ansible"; \
+		echo ""; \
+		echo "  $(GREEN)Option 3: Install via system package manager$(NC)"; \
+		echo "    # Ubuntu/Debian:"; \
+		echo "    sudo apt-get install ansible"; \
+		echo ""; \
+		echo "    # macOS:"; \
+		echo "    brew install ansible"; \
+		echo ""; \
+		echo "After installing, run 'make deploy' again."; \
+		echo ""; \
+		exit 1; \
+	fi
 	@echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"
 	@cd deploy/ansible && ansible-galaxy install -r requirements.yml --force
 	@echo ""
@@ -144,6 +169,13 @@ deploy-check: ## Dry-run deployment (shows what would change)
 		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
 		exit 1; \
 	fi
+	@if ! command -v ansible-galaxy >/dev/null 2>&1; then \
+		echo "$(YELLOW)ERROR: ansible-galaxy not found$(NC)"; \
+		echo ""; \
+		echo "Install Ansible: pip install ansible"; \
+		echo "Or activate venv: source venv/bin/activate && pip install ansible"; \
+		exit 1; \
+	fi
 	@cd deploy/ansible && ansible-galaxy install -r requirements.yml --force
 	@cd deploy/ansible && ansible-playbook playbook.yml \
 		-i inventory.yml \
@@ -154,6 +186,13 @@ deploy-app: ## Update application only (skip system setup)
 	@echo "$(GREEN)Deploying application updates...$(NC)"
 	@if [ ! -f "$(CONFIG_FILE)" ]; then \
 		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "$(YELLOW)ERROR: ansible-playbook not found$(NC)"; \
+		echo ""; \
+		echo "Install Ansible: pip install ansible"; \
+		echo "Or activate venv: source venv/bin/activate && pip install ansible"; \
 		exit 1; \
 	fi
 	@cd deploy/ansible && ansible-playbook playbook.yml \
@@ -167,6 +206,13 @@ deploy-nginx: ## Update nginx configuration only
 		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
 		exit 1; \
 	fi
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "$(YELLOW)ERROR: ansible-playbook not found$(NC)"; \
+		echo ""; \
+		echo "Install Ansible: pip install ansible"; \
+		echo "Or activate venv: source venv/bin/activate && pip install ansible"; \
+		exit 1; \
+	fi
 	@cd deploy/ansible && ansible-playbook playbook.yml \
 		-i inventory.yml \
 		--extra-vars "@../config.yml" \
@@ -176,6 +222,13 @@ deploy-ssl: ## Renew/update SSL certificates
 	@echo "$(GREEN)Updating SSL certificates...$(NC)"
 	@if [ ! -f "$(CONFIG_FILE)" ]; then \
 		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v ansible-playbook >/dev/null 2>&1; then \
+		echo "$(YELLOW)ERROR: ansible-playbook not found$(NC)"; \
+		echo ""; \
+		echo "Install Ansible: pip install ansible"; \
+		echo "Or activate venv: source venv/bin/activate && pip install ansible"; \
 		exit 1; \
 	fi
 	@cd deploy/ansible && ansible-playbook playbook.yml \
