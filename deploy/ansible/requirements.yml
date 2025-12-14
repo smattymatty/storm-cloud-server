@@ -1,0 +1,28 @@
+# =============================================================================
+# Storm Cloud Server - Ansible Galaxy Requirements
+# =============================================================================
+#
+# Install these before running the playbook:
+#   ansible-galaxy install -r requirements.yml
+#
+# Or let `make deploy` handle it automatically.
+#
+# =============================================================================
+
+roles:
+  # Docker installation - battle-tested by thousands of users
+  - name: geerlingguy.docker
+    version: "7.4.1"
+
+  # Certbot/Let's Encrypt SSL certificates
+  - name: geerlingguy.certbot
+    version: "5.1.0"
+
+collections:
+  # Community general modules (for various utilities)
+  - name: community.general
+    version: ">=8.0.0"
+
+  # PostgreSQL modules (for database management)
+  - name: community.postgresql
+    version: ">=3.0.0"

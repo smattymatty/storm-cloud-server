@@ -1,0 +1,60 @@
+# =============================================================================
+# Storm Cloud Server - Deployment Configuration
+# =============================================================================
+#
+# Copy this file to config.yml and edit with your values:
+#   cp config.example.yml config.yml
+#   micro config.yml
+#
+# Then deploy with:
+#   make deploy
+#
+# =============================================================================
+
+# === REQUIRED - You must fill these in ===
+
+# Your VPS IP address (from your hosting provider)
+server_ip: ""
+
+# Your domain name (must point to server_ip via DNS A record)
+domain: ""
+
+# Email for SSL certificate notifications (Let's Encrypt)
+admin_email: ""
+
+
+# === OPTIONAL - Sensible defaults, change if needed ===
+
+# SSH user for initial connection (usually root for fresh VPS)
+ssh_user: root
+
+# Application user (created on server, runs Docker containers)
+app_user: stormcloud
+
+# Internal port for Django (nginx proxies to this)
+web_port: 8000
+
+# Git branch to deploy
+git_branch: main
+
+
+# === FEATURES - Toggle what gets installed ===
+
+install_docker: true
+install_nginx: true
+install_certbot: true
+configure_firewall: true
+
+
+# === POSTGRES - Database configuration ===
+
+postgres_password: ""  # Leave empty to auto-generate
+
+
+# === ADVANCED - Usually don't need to change ===
+
+# Repository URL (change if you forked the project)
+repo_url: https://github.com/smattymatty/storm-cloud-server.git
+
+# Where to install on the server
+install_dir: /home/{{ app_user }}/storm-cloud-server

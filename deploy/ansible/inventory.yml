@@ -1,0 +1,18 @@
+# =============================================================================
+# Storm Cloud Server - Ansible Inventory
+# =============================================================================
+#
+# This inventory uses variables from ../config.yml
+# Users don't need to edit this file directly.
+#
+# Usage:
+#   ansible-playbook playbook.yml -i inventory.yml --extra-vars "@../config.yml"
+#
+# =============================================================================
+
+all:
+  hosts:
+    stormcloud:
+      ansible_host: "{{ server_ip }}"
+      ansible_user: "{{ ssh_user }}"
+      ansible_python_interpreter: /usr/bin/python3
