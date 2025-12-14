@@ -91,7 +91,7 @@ superuser: ## Create admin superuser
 api_key: ## Generate API key for a user
 	@echo "Enter username to generate API key for:"
 	@read -p "Username: " username; \
-	$(DOCKER_COMPOSE) exec web python manage.py create_api_key $$username
+	$(DOCKER_COMPOSE) exec web python manage.py generate_api_key $$username
 
 migrate: ## Run database migrations
 	@$(DOCKER_COMPOSE) exec web python manage.py migrate
