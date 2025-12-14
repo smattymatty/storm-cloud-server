@@ -302,7 +302,38 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@stormcloud.lo
 # CORS HEADERS
 # =============================================================================
 CORS_ALLOWED_ORIGINS = STORMCLOUD_CORS_ORIGINS
-CORS_ALLOW_CREDENTIALS = True  # Required for session auth
+
+# Allow credentials for session auth
+CORS_ALLOW_CREDENTIALS = True
+
+# Explicitly allow only the HTTP methods your API uses
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',  # Required for preflight requests
+]
+
+# Allow only necessary headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',  # Required for API key auth
+    'content-type',
+    'x-csrftoken',  # If using CSRF protection
+    'x-requested-with',
+]
+
+# Expose headers that clients might need
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'content-length',
+]
+
+# Cache preflight requests for 1 hour (reduces OPTIONS requests)
+CORS_PREFLIGHT_MAX_AGE = 3600
 
 # =============================================================================
 # DJANGO SPELLBOOK SETTINGS

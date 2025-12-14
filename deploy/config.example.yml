@@ -48,7 +48,42 @@ configure_firewall: true
 
 # === POSTGRES - Database configuration ===
 
-postgres_password: ""  # Leave empty to auto-generate
+# REQUIRED: Strong password for PostgreSQL database
+# This password is used to secure your database. Choose a strong, unique password.
+# You'll need this password for:
+#   - Database backups and restores
+#   - Direct database access (psql, pgAdmin, etc.)
+#   - External tools that connect to the database
+#
+# Example: postgres_password: "MySecureP@ssw0rd!2024"
+postgres_password: ""  # REQUIRED - Set a strong password
+
+
+# === CORS - Cross-Origin Resource Sharing ===
+#
+# CORS allows web browsers to make requests from your frontend application
+# (e.g., React, Vue, Angular) running on a different origin to your API.
+#
+# Example scenarios:
+#   - Frontend at https://app.example.com, API at https://api.example.com
+#   - Frontend at http://localhost:3000 (dev), API at https://cloud.example.com
+#
+# Format: Comma-separated list of full URLs (including protocol)
+#   - Must include protocol: http:// or https://
+#   - Must include port if non-standard: http://localhost:3000
+#   - No trailing slashes
+#
+# Examples:
+#   cors_origins: "https://app.example.com,https://dashboard.example.com"
+#   cors_origins: "http://localhost:3000,http://localhost:3001"
+#   cors_origins: "https://app.example.com,http://localhost:3000"  # Mixed dev/prod
+#
+# Security notes:
+#   - Only include origins you trust (your own frontend domains)
+#   - Never use wildcards (*) in production
+#   - Leave empty to disable CORS (most secure, but frontend won't work)
+#
+cors_origins: ""  # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
 
 
 # === ADVANCED - Usually don't need to change ===

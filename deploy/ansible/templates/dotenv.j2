@@ -28,3 +28,8 @@ SECURE_HSTS_SECONDS=31536000
 SESSION_COOKIE_SECURE=True
 CSRF_COOKIE_SECURE=True
 SECURE_SSL_REDIRECT=False  # nginx handles this
+
+# CORS - Cross-Origin Resource Sharing
+# Comma-separated list of allowed origins (e.g., "https://app.example.com,https://dashboard.example.com")
+# Leave empty to disable CORS (most secure, but frontend won't work)
+STORMCLOUD_CORS_ORIGINS={{ cors_origins | default('') }}
