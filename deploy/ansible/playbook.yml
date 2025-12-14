@@ -287,7 +287,7 @@
     - name: Generate secrets (new install)
       ansible.builtin.set_fact:
         secret_key: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') }}"
-        db_password: "{{ postgres_password | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
+        db_password: "{{ postgres_password if (postgres_password is defined and postgres_password | length > 0) else lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
       when: not env_check.stat.exists
       tags: [app, env]
 

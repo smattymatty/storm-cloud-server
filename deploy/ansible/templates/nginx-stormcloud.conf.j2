@@ -1,75 +1,56 @@
-# =============================================================================
 # Storm Cloud Server - nginx Configuration
 # Managed by Ansible - Do not edit directly
-# =============================================================================
 
-# Rate limiting: 10 requests/second with burst of 20
 limit_req_zone $binary_remote_addr zone=stormcloud_limit:10m rate=10r/s;
 
-# Upstream - Docker container
 upstream stormcloud_backend {
-    server 127.0.0.1:{{ web_port }};
+    server 127.0.0.1:{{ web_port | default('8000') }};
     keepalive 32;
 }
 
-# HTTP -> HTTPS redirect
 server {
     listen 80;
     listen [::]:80;
     server_name {{ domain }};
 
-    # Let's Encrypt ACME challenge
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
     }
 
-    # Redirect all other requests to HTTPS
     location / {
         return 301 https://$host$request_uri;
     }
 }
 
-# HTTPS server
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{ domain }};
 
-    # SSL certificates (managed by Certbot)
     ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
 
-    # SSL configuration (Mozilla Intermediate)
     ssl_session_timeout 1d;
     ssl_session_cache shared:SSL:50m;
     ssl_session_tickets off;
-
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
 
-    # HSTS (enabled after SSL is confirmed working)
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-    # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Logging
     access_log /var/log/nginx/stormcloud.access.log;
     error_log /var/log/nginx/stormcloud.error.log;
 
-    # Max upload size (match Django's setting)
     client_max_body_size 100M;
-
-    # Timeouts for large file operations
     proxy_connect_timeout 60s;
     proxy_send_timeout 300s;
     proxy_read_timeout 300s;
 
-    # Health check endpoint (no rate limiting)
     location /api/v1/health/ {
         proxy_pass http://stormcloud_backend;
         proxy_http_version 1.1;
@@ -79,25 +60,16 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # API and application
     location / {
-        # Rate limiting with burst allowance
         limit_req zone=stormcloud_limit burst=20 nodelay;
-
         proxy_pass http://stormcloud_backend;
         proxy_http_version 1.1;
-
-        # Essential headers for Django
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # WebSocket support (for potential future use)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-
-        # Disable buffering for file streaming
         proxy_buffering off;
         proxy_request_buffering off;
     }
