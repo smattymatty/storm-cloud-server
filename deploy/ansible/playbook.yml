@@ -1,0 +1,382 @@
+# =============================================================================
+# Storm Cloud Server - Deployment Playbook
+# =============================================================================
+#
+# One-command deployment for Storm Cloud Server.
+#
+# Usage:
+#   make deploy                    # From project root
+#   make deploy-check              # Dry run (no changes)
+#   make deploy-app                # Update app only
+#
+# Manual:
+#   cd deploy/ansible
+#   ansible-playbook playbook.yml -i inventory.yml --extra-vars "@../config.yml"
+#
+# =============================================================================
+
+---
+- name: Deploy Storm Cloud Server
+  hosts: all
+  become: true
+
+  vars:
+    app_user: "{{ app_user | default('stormcloud') }}"
+    install_path: "/home/{{ app_user }}/storm-cloud-server"
+    web_port: "{{ web_port | default('8000') }}"
+
+  # ===========================================================================
+  # PRE-FLIGHT
+  # ===========================================================================
+
+  pre_tasks:
+
+    - name: Validate config
+      ansible.builtin.assert:
+        that:
+          - server_ip | default('') | length > 0
+          - domain | default('') | length > 0
+          - admin_email | default('') | length > 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          Missing required config. Edit deploy/config.yml:
+
+            server_ip:   {{ server_ip | default('(empty)') }}
+            domain:      {{ domain | default('(empty)') }}
+            admin_email: {{ admin_email | default('(empty)') }}
+
+          ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+    - name: Show deployment info
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          Deploying Storm Cloud Server
+
+            Server:  {{ server_ip }}
+            Domain:  {{ domain }}
+            User:    {{ app_user }}
+          ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+  # ===========================================================================
+  # ROLES
+  # ===========================================================================
+
+  roles:
+    - role: geerlingguy.docker
+      when: install_docker | default(true)
+      vars:
+        docker_users: ["{{ app_user }}"]
+      tags: [docker]
+
+  # ===========================================================================
+  # TASKS
+  # ===========================================================================
+
+  tasks:
+
+    # -------------------------------------------------------------------------
+    # System
+    # -------------------------------------------------------------------------
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      tags: [system]
+
+    - name: Install packages
+      ansible.builtin.apt:
+        name: [git, curl, ufw, acl]
+        state: present
+      tags: [system]
+
+    - name: Create app user
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        shell: /bin/bash
+        groups: docker
+        append: true
+      tags: [system]
+
+    # -------------------------------------------------------------------------
+    # Firewall
+    # -------------------------------------------------------------------------
+
+    - name: Allow SSH
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+      when: configure_firewall | default(true)
+      tags: [firewall]
+
+    - name: Allow HTTP
+      community.general.ufw:
+        rule: allow
+        port: "80"
+      when: configure_firewall | default(true)
+      tags: [firewall]
+
+    - name: Allow HTTPS
+      community.general.ufw:
+        rule: allow
+        port: "443"
+      when: configure_firewall | default(true)
+      tags: [firewall]
+
+    - name: Enable firewall
+      community.general.ufw:
+        state: enabled
+        policy: deny
+      when: configure_firewall | default(true)
+      tags: [firewall]
+
+    # -------------------------------------------------------------------------
+    # Nginx (initial)
+    # -------------------------------------------------------------------------
+
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      when: install_nginx | default(true)
+      tags: [nginx]
+
+    - name: Create certbot webroot
+      ansible.builtin.file:
+        path: /var/www/certbot
+        state: directory
+        mode: "0755"
+      tags: [nginx]
+
+    - name: Check if SSL cert exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      register: ssl_cert
+      tags: [nginx, ssl]
+
+    - name: Deploy pre-SSL nginx config
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/stormcloud
+        mode: "0644"
+        content: |
+          server {
+              listen 80;
+              server_name {{ domain }};
+
+              location /.well-known/acme-challenge/ {
+                  root /var/www/certbot;
+              }
+
+              location / {
+                  return 200 'Storm Cloud - awaiting SSL\n';
+                  add_header Content-Type text/plain;
+              }
+          }
+      when:
+        - install_nginx | default(true)
+        - not ssl_cert.stat.exists | default(true)
+      notify: Reload nginx
+      tags: [nginx]
+
+    - name: Enable site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/stormcloud
+        dest: /etc/nginx/sites-enabled/stormcloud
+        state: link
+      when: install_nginx | default(true)
+      notify: Reload nginx
+      tags: [nginx]
+
+    - name: Remove default site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+      tags: [nginx]
+
+    - name: Start nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+      when: install_nginx | default(true)
+      tags: [nginx]
+
+    - name: Flush handlers for certbot
+      ansible.builtin.meta: flush_handlers
+      tags: [nginx, ssl]
+
+    # -------------------------------------------------------------------------
+    # SSL
+    # -------------------------------------------------------------------------
+
+    - name: Install certbot
+      ansible.builtin.apt:
+        name: [certbot, python3-certbot-nginx]
+        state: present
+      when: install_certbot | default(true)
+      tags: [ssl]
+
+    - name: Get SSL certificate
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly --webroot
+          --webroot-path=/var/www/certbot
+          --email {{ admin_email }}
+          --agree-tos --no-eff-email --non-interactive
+          -d {{ domain }}
+        creates: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      when: install_certbot | default(true)
+      tags: [ssl]
+
+    - name: Re-check SSL cert
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      register: ssl_cert_final
+      tags: [nginx, ssl]
+
+    - name: Deploy full nginx config
+      ansible.builtin.template:
+        src: templates/nginx-stormcloud.conf.j2
+        dest: /etc/nginx/sites-available/stormcloud
+        mode: "0644"
+      when:
+        - install_nginx | default(true)
+        - ssl_cert_final.stat.exists
+      notify: Reload nginx
+      tags: [nginx, ssl]
+
+    # -------------------------------------------------------------------------
+    # Application
+    # -------------------------------------------------------------------------
+
+    - name: Clone repository
+      ansible.builtin.git:
+        repo: "{{ repo_url | default('https://github.com/smattymatty/storm-cloud-server.git') }}"
+        dest: "{{ install_path }}"
+        version: "{{ git_branch | default('main') }}"
+        update: true
+      become_user: "{{ app_user }}"
+      tags: [app]
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ install_path }}/{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        mode: "0755"
+      loop: [uploads, backups]
+      tags: [app]
+
+    # -------------------------------------------------------------------------
+    # Secrets (idempotent)
+    # -------------------------------------------------------------------------
+
+    - name: Check for existing .env
+      ansible.builtin.stat:
+        path: "{{ install_path }}/.env"
+      register: env_check
+      tags: [app, env]
+
+    # First deploy: generate new secrets
+    - name: Generate secrets (new install)
+      ansible.builtin.set_fact:
+        secret_key: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') }}"
+        db_password: "{{ postgres_password | default(lookup('password', '/dev/null length=32 chars=ascii_letters,digits')) }}"
+      when: not env_check.stat.exists
+      tags: [app, env]
+
+    # Existing deploy: read and preserve secrets
+    - name: Read existing .env
+      ansible.builtin.slurp:
+        src: "{{ install_path }}/.env"
+      register: env_content
+      when: env_check.stat.exists
+      tags: [app, env]
+
+    - name: Parse existing secrets
+      ansible.builtin.set_fact:
+        secret_key: "{{ env_content.content | b64decode | regex_search('SECRET_KEY=(.+)$', '\\1', multiline=True) | first }}"
+        db_password: "{{ env_content.content | b64decode | regex_search('POSTGRES_PASSWORD=(.+)$', '\\1', multiline=True) | first }}"
+      when: env_check.stat.exists
+      tags: [app, env]
+
+    - name: Write .env
+      ansible.builtin.template:
+        src: templates/dotenv.j2
+        dest: "{{ install_path }}/.env"
+        owner: "{{ app_user }}"
+        mode: "0600"
+      tags: [app, env]
+
+    # -------------------------------------------------------------------------
+    # Docker
+    # -------------------------------------------------------------------------
+
+    - name: Build images
+      ansible.builtin.command:
+        cmd: docker compose build
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      register: build_result
+      changed_when: "'exporting' in build_result.stdout"
+      tags: [app, docker]
+
+    - name: Start containers
+      ansible.builtin.command:
+        cmd: docker compose up -d --remove-orphans
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      register: up_result
+      changed_when: "'Started' in up_result.stdout or 'Creating' in up_result.stdout"
+      tags: [app, docker]
+
+    - name: Wait for healthy
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ web_port }}/api/v1/health/ping/"
+        status_code: 200
+      register: health
+      until: health.status == 200
+      retries: 30
+      delay: 2
+      tags: [app, docker]
+
+    # -------------------------------------------------------------------------
+    # Done
+    # -------------------------------------------------------------------------
+
+    - name: Success
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ✓ Deployed!
+          ══════════════════════════════════════════════════════════════
+
+          Live at: https://{{ domain }}
+
+          Next steps:
+
+            ssh {{ ssh_user | default('root') }}@{{ server_ip }}
+            su - {{ app_user }}
+            cd {{ install_path }}
+            make superuser
+            make api_key
+
+          ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+  # ===========================================================================
+  # HANDLERS
+  # ===========================================================================
+
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
