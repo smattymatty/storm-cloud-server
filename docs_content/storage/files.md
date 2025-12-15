@@ -1,7 +1,7 @@
 ---
 title: File Storage API
 published: 2025-12-11
-modified: 2025-12-11
+modified: 2025-12-14
 tags:
   - api
   - storage
@@ -79,6 +79,55 @@ curl http://localhost:8000/api/v1/dirs/documents/ \
   "total": 2
 }
 ```
+
+---
+
+### Create Empty File
+
+**POST** `/api/v1/files/{file_path}/create/`
+
+Create an empty file at the specified path. Parent directories are automatically created if they don't exist.
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | Yes | Destination path (e.g., `documents/notes.txt`) |
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:8000/api/v1/files/documents/notes.txt/create/ \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Example Response:**
+
+```json
+{
+  "detail": "File created",
+  "path": "documents/notes.txt",
+  "name": "notes.txt",
+  "size": 0,
+  "content_type": "text/plain",
+  "is_directory": false,
+  "created_at": "2025-12-14T10:00:00Z",
+  "modified_at": "2025-12-14T10:00:00Z",
+  "encryption_method": "none"
+}
+```
+
+**Error Codes:**
+
+| Code | Description |
+|------|-------------|
+| `ALREADY_EXISTS` | File already exists at this path |
+| `INVALID_PATH` | Invalid path (e.g., `../etc/passwd`) |
+
+**Notes:**
+- Content type is auto-detected from file extension
+- Parent directories are created automatically
+- Returns 409 Conflict if file already exists
 
 ---
 
