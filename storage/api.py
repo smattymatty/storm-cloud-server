@@ -1,36 +1,37 @@
 """API views for storage app."""
 
 import uuid
-from base64 import b64encode, b64decode
+from base64 import b64decode, b64encode
 from pathlib import Path
 
 from django.db.models import F
 from django.http import FileResponse
 from django.utils import timezone
-from rest_framework.response import Response
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser, FileUploadParser
-from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
+from rest_framework.parsers import FileUploadParser, MultiPartParser
+from rest_framework.response import Response
 
-from core.views import StormCloudBaseAPIView
 from core.storage.local import LocalStorageBackend
-from core.utils import normalize_path, PathValidationError
 from core.throttling import (
-    UploadRateThrottle,
     DownloadRateThrottle,
-    PublicShareRateThrottle,
     PublicShareDownloadRateThrottle,
+    PublicShareRateThrottle,
+    UploadRateThrottle,
 )
-from .models import StoredFile, ShareLink
+from core.utils import PathValidationError, normalize_path
+from core.views import StormCloudBaseAPIView
+
+from .models import ShareLink, StoredFile
 from .serializers import (
     DirectoryListResponseSerializer,
+    FileInfoResponseSerializer,
     FileListItemSerializer,
     FileUploadSerializer,
-    FileInfoResponseSerializer,
-    StoredFileSerializer,
+    PublicShareInfoSerializer,
     ShareLinkCreateSerializer,
     ShareLinkResponseSerializer,
-    PublicShareInfoSerializer,
+    StoredFileSerializer,
 )
 from .utils import get_share_link_by_token
 
@@ -60,7 +61,7 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                         "path": dir_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Construct full storage path
@@ -80,10 +81,10 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                             "code": "DIRECTORY_NOT_FOUND",
                             "message": f"Directory '{dir_path}' does not exist.",
                             "path": dir_path,
-                            "recovery": "Check the path and try again."
+                            "recovery": "Check the path and try again.",
                         }
                     },
-                    status=status.HTTP_404_NOT_FOUND
+                    status=status.HTTP_404_NOT_FOUND,
                 )
         except NotADirectoryError:
             return Response(
@@ -92,10 +93,10 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                         "code": "PATH_IS_FILE",
                         "message": f"Path '{dir_path}' is a file, not a directory.",
                         "path": dir_path,
-                        "recovery": f"Use GET /api/v1/files/{dir_path}/ for file metadata."
+                        "recovery": f"Use GET /api/v1/files/{dir_path}/ for file metadata.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Sort: directories first, then files alphabetically
@@ -111,23 +112,23 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
 
         entry_data = [
             {
-                'name': entry.name,
-                'path': entry.path.replace(f"{user_prefix}/", ""),  # Strip user prefix
-                'size': entry.size,
-                'is_directory': entry.is_directory,
-                'content_type': entry.content_type,
-                'modified_at': entry.modified_at,
-                'encryption_method': db_files.get(
+                "name": entry.name,
+                "path": entry.path.replace(f"{user_prefix}/", ""),  # Strip user prefix
+                "size": entry.size,
+                "is_directory": entry.is_directory,
+                "content_type": entry.content_type,
+                "modified_at": entry.modified_at,
+                "encryption_method": db_files.get(
                     entry.path.replace(f"{user_prefix}/", ""),
-                    StoredFile.ENCRYPTION_NONE
+                    StoredFile.ENCRYPTION_NONE,
                 ),
             }
             for entry in entries
         ]
 
         # Pagination
-        limit = min(int(request.query_params.get('limit', 50)), 200)
-        cursor = request.query_params.get('cursor')
+        limit = min(int(request.query_params.get("limit", 50)), 200)
+        cursor = request.query_params.get("cursor")
 
         start_idx = 0
         if cursor:
@@ -145,11 +146,11 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
             next_cursor = b64encode(str(end_idx).encode()).decode()
 
         response_data = {
-            'path': dir_path,
-            'entries': page_entries,
-            'count': len(page_entries),
-            'total': len(entry_data),
-            'next_cursor': next_cursor,
+            "path": dir_path,
+            "entries": page_entries,
+            "count": len(page_entries),
+            "total": len(entry_data),
+            "next_cursor": next_cursor,
         }
 
         return Response(response_data)
@@ -159,17 +160,19 @@ class DirectoryListRootView(DirectoryListBaseView):
     """List root directory contents."""
 
     @extend_schema(
-        operation_id='v1_dirs_list_root',
+        operation_id="v1_dirs_list_root",
         summary="List root directory",
         description="List contents of the root directory. Returns files and subdirectories.",
         parameters=[
-            OpenApiParameter('limit', int, description='Items per page (default 50, max 200)'),
-            OpenApiParameter('cursor', str, description='Pagination cursor'),
+            OpenApiParameter(
+                "limit", int, description="Items per page (default 50, max 200)"
+            ),
+            OpenApiParameter("cursor", str, description="Pagination cursor"),
         ],
         responses={
             200: DirectoryListResponseSerializer,
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def get(self, request):
         """List root directory."""
@@ -180,18 +183,20 @@ class DirectoryListView(DirectoryListBaseView):
     """List directory contents."""
 
     @extend_schema(
-        operation_id='v1_dirs_list',
+        operation_id="v1_dirs_list",
         summary="List directory",
         description="List contents of a specific directory. Returns files and subdirectories.",
         parameters=[
-            OpenApiParameter('limit', int, description='Items per page (default 50, max 200)'),
-            OpenApiParameter('cursor', str, description='Pagination cursor'),
+            OpenApiParameter(
+                "limit", int, description="Items per page (default 50, max 200)"
+            ),
+            OpenApiParameter("cursor", str, description="Pagination cursor"),
         ],
         responses={
             200: DirectoryListResponseSerializer,
             404: OpenApiResponse(description="Directory not found"),
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def get(self, request, dir_path):
         """List directory contents."""
@@ -208,7 +213,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
         responses={
             201: FileInfoResponseSerializer,
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def post(self, request, dir_path):
         """Create directory."""
@@ -227,12 +232,12 @@ class DirectoryCreateView(StormCloudBaseAPIView):
                         "path": dir_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         full_path = f"{user_prefix}/{dir_path}"
 
-        #Check if directory already exists
+        # Check if directory already exists
         if backend.exists(full_path):
             return Response(
                 {
@@ -242,7 +247,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
                         "path": dir_path,
                     }
                 },
-                status=status.HTTP_409_CONFLICT
+                status=status.HTTP_409_CONFLICT,
             )
 
         file_info = backend.mkdir(full_path)
@@ -253,24 +258,24 @@ class DirectoryCreateView(StormCloudBaseAPIView):
             owner=request.user,
             path=dir_path,
             defaults={
-                'name': file_info.name,
-                'size': 0,
-                'content_type': '',
-                'is_directory': True,
-                'parent_path': parent_path,
-                'encryption_method': StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
-            }
+                "name": file_info.name,
+                "size": 0,
+                "content_type": "",
+                "is_directory": True,
+                "parent_path": parent_path,
+                "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
+            },
         )
 
         response_data = {
-            'path': dir_path,
-            'name': file_info.name,
-            'size': 0,
-            'content_type': None,
-            'is_directory': True,
-            'created_at': file_info.modified_at,
-            'modified_at': file_info.modified_at,
-            'encryption_method': StoredFile.ENCRYPTION_NONE,
+            "path": dir_path,
+            "name": file_info.name,
+            "size": 0,
+            "content_type": None,
+            "is_directory": True,
+            "created_at": file_info.modified_at,
+            "modified_at": file_info.modified_at,
+            "encryption_method": StoredFile.ENCRYPTION_NONE,
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -286,7 +291,7 @@ class FileDetailView(StormCloudBaseAPIView):
             200: FileInfoResponseSerializer,
             404: OpenApiResponse(description="File not found"),
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def get(self, request, file_path):
         """Get file metadata."""
@@ -305,7 +310,7 @@ class FileDetailView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         full_path = f"{user_prefix}/{file_path}"
@@ -319,10 +324,10 @@ class FileDetailView(StormCloudBaseAPIView):
                         "code": "FILE_NOT_FOUND",
                         "message": f"File '{file_path}' does not exist.",
                         "path": file_path,
-                        "recovery": "Check the path and try again."
+                        "recovery": "Check the path and try again.",
                     }
                 },
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         if file_info.is_directory:
@@ -332,10 +337,10 @@ class FileDetailView(StormCloudBaseAPIView):
                         "code": "PATH_IS_DIRECTORY",
                         "message": f"Path '{file_path}' is a directory, not a file.",
                         "path": file_path,
-                        "recovery": f"Use GET /api/v1/dirs/{file_path}/ to list directory contents."
+                        "recovery": f"Use GET /api/v1/dirs/{file_path}/ to list directory contents.",
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Try to get from database
@@ -348,49 +353,34 @@ class FileDetailView(StormCloudBaseAPIView):
             encryption_method = StoredFile.ENCRYPTION_NONE
 
         response_data = {
-            'path': file_path,
-            'name': file_info.name,
-            'size': file_info.size,
-            'content_type': file_info.content_type,
-            'is_directory': False,
-            'created_at': created_at,
-            'modified_at': file_info.modified_at,
-            'encryption_method': encryption_method,
+            "path": file_path,
+            "name": file_info.name,
+            "size": file_info.size,
+            "content_type": file_info.content_type,
+            "is_directory": False,
+            "created_at": created_at,
+            "modified_at": file_info.modified_at,
+            "encryption_method": encryption_method,
         }
 
         return Response(response_data)
 
 
-class FileUploadView(StormCloudBaseAPIView):
-    """Upload file."""
-
-    parser_classes = [MultiPartParser, FileUploadParser]
-    throttle_classes = [UploadRateThrottle]
+class FileCreateView(StormCloudBaseAPIView):
+    """Create empty file."""
 
     @extend_schema(
-        summary="Upload file",
-        description="Upload or overwrite a file at the specified path.",
-        request=FileUploadSerializer,
+        summary="Create empty file",
+        description="Create an empty file at the specified path. Parent directories are created automatically.",
+        request=None,
         responses={
             201: FileInfoResponseSerializer,
+            409: OpenApiResponse(description="File already exists"),
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def post(self, request, file_path):
-        """Upload file."""
-        if 'file' not in request.FILES:
-            return Response(
-                {
-                    "error": {
-                        "code": "VALIDATION_ERROR",
-                        "message": "No file provided in request.",
-                        "recovery": "Include a file in the request body with key 'file'."
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        uploaded_file = request.FILES['file']
+        """Create empty file."""
         backend = LocalStorageBackend()
         user_prefix = get_user_storage_path(request.user)
 
@@ -406,7 +396,115 @@ class FileUploadView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full_path = f"{user_prefix}/{file_path}"
+
+        # Check if file already exists
+        if backend.exists(full_path):
+            return Response(
+                {
+                    "error": {
+                        "code": "ALREADY_EXISTS",
+                        "message": f"File '{file_path}' already exists.",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Ensure parent directory exists
+        parent_path = str(Path(full_path).parent)
+        if not backend.exists(parent_path):
+            backend.mkdir(parent_path)
+
+        # Create empty file
+        from io import BytesIO
+
+        empty_file = BytesIO(b"")
+        file_info = backend.save(full_path, empty_file)
+
+        # Detect content type from extension
+        import mimetypes
+
+        content_type = mimetypes.guess_type(file_path)[0] or ""
+
+        # Create database record
+        db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
+        stored_file, created = StoredFile.objects.update_or_create(
+            owner=request.user,
+            path=file_path,
+            defaults={
+                "name": file_info.name,
+                "size": 0,
+                "content_type": content_type,
+                "is_directory": False,
+                "parent_path": db_parent_path,
+                "encryption_method": StoredFile.ENCRYPTION_NONE,
+            },
+        )
+
+        response_data = {
+            "path": file_path,
+            "name": file_info.name,
+            "size": 0,
+            "content_type": content_type,
+            "is_directory": False,
+            "created_at": stored_file.created_at,
+            "modified_at": file_info.modified_at,
+            "encryption_method": stored_file.encryption_method,
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class FileUploadView(StormCloudBaseAPIView):
+    """Upload file."""
+
+    parser_classes = [MultiPartParser, FileUploadParser]
+    throttle_classes = [UploadRateThrottle]
+
+    @extend_schema(
+        summary="Upload file",
+        description="Upload or overwrite a file at the specified path.",
+        request=FileUploadSerializer,
+        responses={
+            201: FileInfoResponseSerializer,
+        },
+        tags=["Files"],
+    )
+    def post(self, request, file_path):
+        """Upload file."""
+        if "file" not in request.FILES:
+            return Response(
+                {
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "No file provided in request.",
+                        "recovery": "Include a file in the request body with key 'file'.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file = request.FILES["file"]
+        backend = LocalStorageBackend()
+        user_prefix = get_user_storage_path(request.user)
+
+        # Normalize and validate path
+        try:
+            file_path = normalize_path(file_path)
+        except PathValidationError as e:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         full_path = f"{user_prefix}/{file_path}"
@@ -425,24 +523,24 @@ class FileUploadView(StormCloudBaseAPIView):
             owner=request.user,
             path=file_path,
             defaults={
-                'name': file_info.name,
-                'size': file_info.size,
-                'content_type': file_info.content_type or '',
-                'is_directory': False,
-                'parent_path': db_parent_path,
-                'encryption_method': StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
-            }
+                "name": file_info.name,
+                "size": file_info.size,
+                "content_type": file_info.content_type or "",
+                "is_directory": False,
+                "parent_path": db_parent_path,
+                "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
+            },
         )
 
         response_data = {
-            'path': file_path,
-            'name': file_info.name,
-            'size': file_info.size,
-            'content_type': file_info.content_type,
-            'is_directory': False,
-            'created_at': stored_file.created_at,
-            'modified_at': file_info.modified_at,
-            'encryption_method': stored_file.encryption_method,
+            "path": file_path,
+            "name": file_info.name,
+            "size": file_info.size,
+            "content_type": file_info.content_type,
+            "is_directory": False,
+            "created_at": stored_file.created_at,
+            "modified_at": file_info.modified_at,
+            "encryption_method": stored_file.encryption_method,
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -460,7 +558,7 @@ class FileDownloadView(StormCloudBaseAPIView):
             200: OpenApiResponse(description="File content"),
             404: OpenApiResponse(description="File not found"),
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def get(self, request, file_path):
         """Download file."""
@@ -479,7 +577,7 @@ class FileDownloadView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         full_path = f"{user_prefix}/{file_path}"
@@ -496,7 +594,7 @@ class FileDownloadView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
         except IsADirectoryError:
             return Response(
@@ -507,13 +605,13 @@ class FileDownloadView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         response = FileResponse(file_handle)
         if file_info.content_type:
-            response['Content-Type'] = file_info.content_type
-        response['Content-Disposition'] = f'attachment; filename="{file_info.name}"'
+            response["Content-Type"] = file_info.content_type
+        response["Content-Disposition"] = f'attachment; filename="{file_info.name}"'
 
         return response
 
@@ -528,7 +626,7 @@ class FileDeleteView(StormCloudBaseAPIView):
             200: OpenApiResponse(description="File deleted successfully"),
             404: OpenApiResponse(description="File not found"),
         },
-        tags=['Files']
+        tags=["Files"],
     )
     def delete(self, request, file_path):
         """Delete file."""
@@ -547,7 +645,7 @@ class FileDeleteView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         full_path = f"{user_prefix}/{file_path}"
@@ -563,16 +661,13 @@ class FileDeleteView(StormCloudBaseAPIView):
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         # Delete from database
         StoredFile.objects.filter(owner=request.user, path=file_path).delete()
 
-        return Response({
-            "message": "File deleted successfully",
-            "path": file_path
-        })
+        return Response({"message": "File deleted successfully", "path": file_path})
 
 
 class IndexRebuildView(StormCloudBaseAPIView):
@@ -585,7 +680,7 @@ class IndexRebuildView(StormCloudBaseAPIView):
         responses={
             501: OpenApiResponse(description="Not implemented"),
         },
-        tags=['Administration']
+        tags=["Administration"],
     )
     def post(self, request):
         """Rebuild index."""
@@ -596,13 +691,14 @@ class IndexRebuildView(StormCloudBaseAPIView):
                     "message": "Index rebuild not implemented in Phase 1.",
                 }
             },
-            status=status.HTTP_501_NOT_IMPLEMENTED
+            status=status.HTTP_501_NOT_IMPLEMENTED,
         )
 
 
 # =============================================================================
 # Share Link Views
 # =============================================================================
+
 
 class ShareLinkListCreateView(StormCloudBaseAPIView):
     """List and create share links."""
@@ -613,13 +709,15 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         responses={
             200: ShareLinkResponseSerializer(many=True),
         },
-        tags=['Share Links']
+        tags=["Share Links"],
     )
     def get(self, request):
         """List all share links for user."""
-        links = ShareLink.objects.filter(
-            owner=request.user
-        ).select_related('stored_file').order_by('-created_at')
+        links = (
+            ShareLink.objects.filter(owner=request.user)
+            .select_related("stored_file")
+            .order_by("-created_at")
+        )
         serializer = ShareLinkResponseSerializer(links, many=True)
         return Response(serializer.data)
 
@@ -632,7 +730,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
             404: OpenApiResponse(description="File not found"),
             400: OpenApiResponse(description="Invalid data"),
         },
-        tags=['Share Links']
+        tags=["Share Links"],
     )
     def post(self, request):
         """Create new share link."""
@@ -641,44 +739,52 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         serializer = ShareLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        file_path = serializer.validated_data['file_path']
-        expiry_days = serializer.validated_data.get('expiry_days')
-        password = serializer.validated_data.get('password')
-        custom_slug = serializer.validated_data.get('custom_slug')
+        file_path = serializer.validated_data["file_path"]
+        expiry_days = serializer.validated_data.get("expiry_days")
+        password = serializer.validated_data.get("password")
+        custom_slug = serializer.validated_data.get("custom_slug")
 
         # Default expiry from settings if not provided
         if expiry_days is None:
-            expiry_days = getattr(settings, 'STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS', 7)
+            expiry_days = getattr(settings, "STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS", 7)
 
         # Check if unlimited links are allowed
         if expiry_days == 0:
-            allow_unlimited = getattr(settings, 'STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS', True)
+            allow_unlimited = getattr(
+                settings, "STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS", True
+            )
             if not allow_unlimited:
-                return Response({
-                    "error": {
-                        "code": "UNLIMITED_NOT_ALLOWED",
-                        "message": "Unlimited share links are not enabled"
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "error": {
+                            "code": "UNLIMITED_NOT_ALLOWED",
+                            "message": "Unlimited share links are not enabled",
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # Check if file exists
         try:
             stored_file = StoredFile.objects.get(owner=request.user, path=file_path)
         except StoredFile.DoesNotExist:
-            return Response({
-                "error": {
-                    "code": "FILE_NOT_FOUND",
-                    "message": "File not found",
-                    "path": file_path
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File not found",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Create share link
         share_link = ShareLink.objects.create(
             owner=request.user,
             stored_file=stored_file,
             expiry_days=expiry_days,
-            custom_slug=custom_slug or None
+            custom_slug=custom_slug or None,
         )
 
         # Set password if provided
@@ -700,19 +806,22 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
             200: ShareLinkResponseSerializer,
             404: OpenApiResponse(description="Share link not found"),
         },
-        tags=['Share Links']
+        tags=["Share Links"],
     )
     def get(self, request, share_id):
         """Get share link details."""
         try:
             link = ShareLink.objects.get(id=share_id, owner=request.user)
         except ShareLink.DoesNotExist:
-            return Response({
-                "error": {
-                    "code": "LINK_NOT_FOUND",
-                    "message": "Share link not found"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "LINK_NOT_FOUND",
+                        "message": "Share link not found",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         serializer = ShareLinkResponseSerializer(link)
         return Response(serializer.data)
@@ -724,32 +833,33 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
             200: OpenApiResponse(description="Link revoked"),
             404: OpenApiResponse(description="Share link not found"),
         },
-        tags=['Share Links']
+        tags=["Share Links"],
     )
     def delete(self, request, share_id):
         """Revoke share link."""
         try:
             link = ShareLink.objects.get(id=share_id, owner=request.user)
         except ShareLink.DoesNotExist:
-            return Response({
-                "error": {
-                    "code": "LINK_NOT_FOUND",
-                    "message": "Share link not found"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "LINK_NOT_FOUND",
+                        "message": "Share link not found",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Soft delete - set is_active=False
         link.is_active = False
-        link.save(update_fields=['is_active'])
+        link.save(update_fields=["is_active"])
 
-        return Response({
-            "message": "Share link revoked",
-            "id": str(link.id)
-        })
+        return Response({"message": "Share link revoked", "id": str(link.id)})
 
 
 class PublicShareInfoView(StormCloudBaseAPIView):
     """Get info about a public share link (no auth required)."""
+
     permission_classes = []  # No authentication required
     throttle_classes = [PublicShareRateThrottle]
 
@@ -758,11 +868,11 @@ class PublicShareInfoView(StormCloudBaseAPIView):
         description="Get information about a shared file (public, no auth required)",
         parameters=[
             OpenApiParameter(
-                name='X-Share-Password',
+                name="X-Share-Password",
                 type=str,
                 location=OpenApiParameter.HEADER,
-                description='Password for protected links',
-                required=False
+                description="Password for protected links",
+                required=False,
             )
         ],
         responses={
@@ -770,46 +880,58 @@ class PublicShareInfoView(StormCloudBaseAPIView):
             401: OpenApiResponse(description="Password required or incorrect"),
             404: OpenApiResponse(description="Link not found or expired"),
         },
-        tags=['Public Share']
+        tags=["Public Share"],
     )
     def get(self, request, token):
         """Get shared file info."""
         # Lookup by token (UUID) or custom slug
         link = get_share_link_by_token(token)
         if not link:
-            return Response({
-                "error": {
-                    "code": "SHARE_NOT_FOUND",
-                    "message": "Share link not found or expired"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "SHARE_NOT_FOUND",
+                        "message": "Share link not found or expired",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Check if link is valid
         if not link.is_valid():
-            return Response({
-                "error": {
-                    "code": "SHARE_NOT_FOUND",
-                    "message": "Share link not found or expired"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "SHARE_NOT_FOUND",
+                        "message": "Share link not found or expired",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Check password if required
-        password = request.headers.get('X-Share-Password', '')
+        password = request.headers.get("X-Share-Password", "")
         if not link.check_password(password):
-            return Response({
-                "error": {
-                    "code": "PASSWORD_REQUIRED" if not password else "INVALID_PASSWORD",
-                    "message": "This link requires a password" if not password else "Invalid password"
-                }
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {
+                    "error": {
+                        "code": "PASSWORD_REQUIRED"
+                        if not password
+                        else "INVALID_PASSWORD",
+                        "message": "This link requires a password"
+                        if not password
+                        else "Invalid password",
+                    }
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         # Get file info from FK (should always exist due to CASCADE)
         stored_file = link.stored_file
 
         # Increment view count
         ShareLink.objects.filter(id=link.id).update(
-            view_count=F('view_count') + 1,
-            last_accessed_at=timezone.now()
+            view_count=F("view_count") + 1, last_accessed_at=timezone.now()
         )
 
         # Build response
@@ -818,7 +940,7 @@ class PublicShareInfoView(StormCloudBaseAPIView):
             "size": stored_file.size,
             "content_type": stored_file.content_type,
             "requires_password": False,  # They passed auth already
-            "download_url": f"/api/v1/public/{token}/download/"
+            "download_url": f"/api/v1/public/{token}/download/",
         }
 
         serializer = PublicShareInfoSerializer(response_data)
@@ -827,6 +949,7 @@ class PublicShareInfoView(StormCloudBaseAPIView):
 
 class PublicShareDownloadView(StormCloudBaseAPIView):
     """Download a shared file (no auth required)."""
+
     permission_classes = []  # No authentication required
     throttle_classes = [PublicShareDownloadRateThrottle]
 
@@ -835,11 +958,11 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
         description="Download a shared file (public, no auth required)",
         parameters=[
             OpenApiParameter(
-                name='X-Share-Password',
+                name="X-Share-Password",
                 type=str,
                 location=OpenApiParameter.HEADER,
-                description='Password for protected links',
-                required=False
+                description="Password for protected links",
+                required=False,
             )
         ],
         responses={
@@ -847,47 +970,63 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
             401: OpenApiResponse(description="Password required or incorrect"),
             404: OpenApiResponse(description="Link not found or expired"),
         },
-        tags=['Public Share']
+        tags=["Public Share"],
     )
     def get(self, request, token):
         """Download shared file."""
         # Lookup by token (UUID) or custom slug
         link = get_share_link_by_token(token)
         if not link:
-            return Response({
-                "error": {
-                    "code": "SHARE_NOT_FOUND",
-                    "message": "Share link not found or expired"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "SHARE_NOT_FOUND",
+                        "message": "Share link not found or expired",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Check if link is valid
         if not link.is_valid():
-            return Response({
-                "error": {
-                    "code": "SHARE_NOT_FOUND",
-                    "message": "Share link not found or expired"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "SHARE_NOT_FOUND",
+                        "message": "Share link not found or expired",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Check password if required
-        password = request.headers.get('X-Share-Password', '')
+        password = request.headers.get("X-Share-Password", "")
         if not link.check_password(password):
-            return Response({
-                "error": {
-                    "code": "PASSWORD_REQUIRED" if not password else "INVALID_PASSWORD",
-                    "message": "This link requires a password" if not password else "Invalid password"
-                }
-            }, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {
+                    "error": {
+                        "code": "PASSWORD_REQUIRED"
+                        if not password
+                        else "INVALID_PASSWORD",
+                        "message": "This link requires a password"
+                        if not password
+                        else "Invalid password",
+                    }
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
         # Check if downloads are allowed
         if not link.allow_download:
-            return Response({
-                "error": {
-                    "code": "DOWNLOAD_DISABLED",
-                    "message": "Downloads are disabled for this link"
-                }
-            }, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {
+                    "error": {
+                        "code": "DOWNLOAD_DISABLED",
+                        "message": "Downloads are disabled for this link",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Get file info from FK
         stored_file = link.stored_file
@@ -900,22 +1039,24 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
         try:
             file_handle = backend.open(full_path)
         except FileNotFoundError:
-            return Response({
-                "error": {
-                    "code": "FILE_NOT_FOUND",
-                    "message": "File no longer exists"
-                }
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": "File no longer exists",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Increment download count
         ShareLink.objects.filter(id=link.id).update(
-            download_count=F('download_count') + 1,
-            last_accessed_at=timezone.now()
+            download_count=F("download_count") + 1, last_accessed_at=timezone.now()
         )
 
         # Return file response
-        content_type = stored_file.content_type or 'application/octet-stream'
+        content_type = stored_file.content_type or "application/octet-stream"
         filename = stored_file.name
         response = FileResponse(file_handle, content_type=content_type)
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
