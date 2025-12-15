@@ -162,6 +162,36 @@
       register: ssl_cert
       tags: [nginx, ssl]
 
+    # #region agent log
+    - name: Debug - SSL cert check result
+      ansible.builtin.debug:
+        msg: "SSL cert exists: {{ ssl_cert.stat.exists | default(false) }}, path: /etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      tags: [nginx, ssl, debug]
+    - name: Log SSL cert check to debug file
+      ansible.builtin.shell: |
+        echo '{"timestamp":'$(date +%s000)',"location":"playbook.yml:162","message":"SSL cert check","data":{"exists":{{ ssl_cert.stat.exists | default(false) | to_json }},"path":"/etc/letsencrypt/live/{{ domain }}/fullchain.pem","hypothesisId":"A"},"sessionId":"debug-session","runId":"run1"}' >> /home/{{ app_user }}/storm-cloud-server/.cursor/debug.log
+      tags: [nginx, ssl, debug]
+      ignore_errors: true
+    # #endregion
+
+    - name: Check if nginx config file exists before deployment
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-available/stormcloud
+      register: nginx_config_before
+      tags: [nginx, debug]
+
+    # #region agent log
+    - name: Debug - Nginx config file exists before deployment
+      ansible.builtin.debug:
+        msg: "Nginx config file exists before: {{ nginx_config_before.stat.exists | default(false) }}"
+      tags: [nginx, debug]
+    - name: Log nginx config before deployment
+      ansible.builtin.shell: |
+        echo '{"timestamp":'$(date +%s000)',"location":"playbook.yml:165","message":"Nginx config before deployment","data":{"exists":{{ nginx_config_before.stat.exists | default(false) | to_json }},"hypothesisId":"B"},"sessionId":"debug-session","runId":"run1"}' >> /home/{{ app_user }}/storm-cloud-server/.cursor/debug.log
+      tags: [nginx, debug]
+      ignore_errors: true
+    # #endregion
+
     - name: Deploy pre-SSL nginx config
       ansible.builtin.copy:
         dest: /etc/nginx/sites-available/stormcloud
@@ -186,12 +216,44 @@
       notify: Reload nginx
       tags: [nginx]
 
+    # #region agent log
+    - name: Debug - Pre-SSL config task result
+      ansible.builtin.debug:
+        msg: "Pre-SSL config task would run: {{ install_nginx | default(true) and (not ssl_cert.stat.exists | default(true)) }}"
+      tags: [nginx, debug]
+    - name: Log pre-SSL config task decision
+      ansible.builtin.shell: |
+        echo '{"timestamp":'$(date +%s000)',"location":"playbook.yml:186","message":"Pre-SSL config task decision","data":{"will_run":{{ (install_nginx | default(true) and (not ssl_cert.stat.exists | default(true))) | to_json }},"ssl_cert_exists":{{ ssl_cert.stat.exists | default(false) | to_json }},"hypothesisId":"A"},"sessionId":"debug-session","runId":"run1"}' >> /home/{{ app_user }}/storm-cloud-server/.cursor/debug.log
+      tags: [nginx, debug]
+      ignore_errors: true
+    # #endregion
+
+    - name: Check if nginx config file exists before enabling
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-available/stormcloud
+      register: nginx_config_before_enable
+      tags: [nginx, debug]
+
+    # #region agent log
+    - name: Debug - Nginx config exists before enable task
+      ansible.builtin.debug:
+        msg: "Config file exists before enable: {{ nginx_config_before_enable.stat.exists | default(false) }}, SSL cert exists: {{ ssl_cert.stat.exists | default(false) }}"
+      tags: [nginx, debug]
+    - name: Log nginx config before enable task
+      ansible.builtin.shell: |
+        echo '{"timestamp":'$(date +%s000)',"location":"playbook.yml:196","message":"Nginx config before enable","data":{"config_exists":{{ nginx_config_before_enable.stat.exists | default(false) | to_json }},"ssl_cert_exists":{{ ssl_cert.stat.exists | default(false) | to_json }},"hypothesisId":"B,E"},"sessionId":"debug-session","runId":"run1"}' >> /home/{{ app_user }}/storm-cloud-server/.cursor/debug.log
+      tags: [nginx, debug]
+      ignore_errors: true
+    # #endregion
+
     - name: Enable site
       ansible.builtin.file:
         src: /etc/nginx/sites-available/stormcloud
         dest: /etc/nginx/sites-enabled/stormcloud
         state: link
-      when: install_nginx | default(true)
+      when:
+        - install_nginx | default(true)
+        - nginx_config_before_enable.stat.exists | default(false)
       notify: Reload nginx
       tags: [nginx]
 
@@ -248,6 +310,17 @@
         src: templates/nginx-stormcloud.conf.j2
         dest: /etc/nginx/sites-available/stormcloud
         mode: "0644"
+      when:
+        - install_nginx | default(true)
+        - ssl_cert_final.stat.exists
+      notify: Reload nginx
+      tags: [nginx, ssl]
+
+    - name: Enable site (after full config deployed)
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/stormcloud
+        dest: /etc/nginx/sites-enabled/stormcloud
+        state: link
       when:
         - install_nginx | default(true)
         - ssl_cert_final.stat.exists

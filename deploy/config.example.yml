@@ -22,6 +22,16 @@ domain: ""
 # Email for SSL certificate notifications (Let's Encrypt)
 admin_email: ""
 
+# REQUIRED: Strong password for PostgreSQL database
+# This password is used to secure your database. Choose a strong, unique password.
+# You'll need this password for:
+#   - Database backups and restores
+#   - Direct database access (psql, pgAdmin, etc.)
+#   - External tools that connect to the database
+#
+# Example: postgres_password: "MySecureP@ssw0rd!2024"
+postgres_password: ""  # REQUIRED - Set a strong password
+
 
 # === OPTIONAL - Sensible defaults, change if needed ===
 
@@ -46,23 +56,19 @@ install_certbot: true
 configure_firewall: true
 
 
-# === POSTGRES - Database configuration ===
-
-# REQUIRED: Strong password for PostgreSQL database
-# This password is used to secure your database. Choose a strong, unique password.
-# You'll need this password for:
-#   - Database backups and restores
-#   - Direct database access (psql, pgAdmin, etc.)
-#   - External tools that connect to the database
-#
-# Example: postgres_password: "MySecureP@ssw0rd!2024"
-postgres_password: ""  # REQUIRED - Set a strong password
-
-
 # === CORS - Cross-Origin Resource Sharing ===
 #
-# CORS allows web browsers to make requests from your frontend application
-# (e.g., React, Vue, Angular) running on a different origin to your API.
+# OPTIONAL: Only needed if you have a web frontend on a different origin.
+#
+# CORS is NOT required for:
+#   - API key authentication (curl, Postman, CLI tools)
+#   - Server-to-server requests
+#   - Mobile apps
+#   - Same-origin requests (frontend and API on same domain)
+#
+# CORS IS required for:
+#   - Web frontend (React, Vue, Angular) on different domain/port than API
+#   - Browser-based requests from a different origin
 #
 # Example scenarios:
 #   - Frontend at https://app.example.com, API at https://api.example.com
@@ -81,9 +87,9 @@ postgres_password: ""  # REQUIRED - Set a strong password
 # Security notes:
 #   - Only include origins you trust (your own frontend domains)
 #   - Never use wildcards (*) in production
-#   - Leave empty to disable CORS (most secure, but frontend won't work)
+#   - Leave empty if you don't have a web frontend (most secure)
 #
-cors_origins: ""  # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
+cors_origins: ""  # Optional - Only needed for web frontends on different origins
 
 
 # === ADVANCED - Usually don't need to change ===

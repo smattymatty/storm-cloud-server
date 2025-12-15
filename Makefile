@@ -127,6 +127,52 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
+	@echo "$(GREEN)Validating configuration...$(NC)"
+	@VALIDATION_FAILED=0; \
+	server_ip=$$(grep -E "^server_ip:" "$(CONFIG_FILE)" | sed -E 's/^server_ip:[[:space:]]*["'\'']?([^"'\''#]*)["'\'']?.*$$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//'); \
+	domain=$$(grep -E "^domain:" "$(CONFIG_FILE)" | sed -E 's/^domain:[[:space:]]*["'\'']?([^"'\''#]*)["'\'']?.*$$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//'); \
+	admin_email=$$(grep -E "^admin_email:" "$(CONFIG_FILE)" | sed -E 's/^admin_email:[[:space:]]*["'\'']?([^"'\''#]*)["'\'']?.*$$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//'); \
+	postgres_password=$$(grep -E "^postgres_password:" "$(CONFIG_FILE)" | sed -E 's/^postgres_password:[[:space:]]*["'\'']?([^"'\''#]*)["'\'']?.*$$/\1/' | sed 's/^[[:space:]]*//;s/[[:space:]]*$$//'); \
+	if [ -z "$$server_ip" ] || [ "$$server_ip" = "" ]; then \
+		echo "$(YELLOW)✗ server_ip is missing or empty$(NC)"; \
+		VALIDATION_FAILED=1; \
+	fi; \
+	if [ -z "$$domain" ] || [ "$$domain" = "" ]; then \
+		echo "$(YELLOW)✗ domain is missing or empty$(NC)"; \
+		VALIDATION_FAILED=1; \
+	fi; \
+	if [ -z "$$admin_email" ] || [ "$$admin_email" = "" ]; then \
+		echo "$(YELLOW)✗ admin_email is missing or empty$(NC)"; \
+		VALIDATION_FAILED=1; \
+	fi; \
+	if [ -z "$$postgres_password" ] || [ "$$postgres_password" = "" ]; then \
+		echo "$(YELLOW)✗ postgres_password is missing or empty$(NC)"; \
+		VALIDATION_FAILED=1; \
+	fi; \
+	if [ $$VALIDATION_FAILED -eq 1 ]; then \
+		echo ""; \
+		echo "$(YELLOW)═══════════════════════════════════════════════════$(NC)"; \
+		echo "$(YELLOW)  Missing required configuration$(NC)"; \
+		echo "$(YELLOW)═══════════════════════════════════════════════════$(NC)"; \
+		echo ""; \
+		echo "Edit $(CONFIG_FILE) and set:"; \
+		echo ""; \
+		if [ -z "$$server_ip" ] || [ "$$server_ip" = "" ]; then \
+			echo "  $(YELLOW)server_ip:$(NC)       \"your-vps-ip-address\""; \
+		fi; \
+		if [ -z "$$domain" ] || [ "$$domain" = "" ]; then \
+			echo "  $(YELLOW)domain:$(NC)          \"your-domain.com\""; \
+		fi; \
+		if [ -z "$$admin_email" ] || [ "$$admin_email" = "" ]; then \
+			echo "  $(YELLOW)admin_email:$(NC)      \"you@example.com\""; \
+		fi; \
+		if [ -z "$$postgres_password" ] || [ "$$postgres_password" = "" ]; then \
+			echo "  $(YELLOW)postgres_password:$(NC) \"your-secure-password\""; \
+		fi; \
+		echo ""; \
+		exit 1; \
+	fi; \
+	echo "$(GREEN)✓ Configuration valid$(NC)"
 	@if ! command -v ansible-galaxy >/dev/null 2>&1; then \
 		echo "$(YELLOW)ERROR: ansible-galaxy not found$(NC)"; \
 		echo ""; \
