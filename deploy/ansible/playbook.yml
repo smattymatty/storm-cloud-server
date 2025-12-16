@@ -32,17 +32,17 @@
 
   vars_prompt:
     - name: gotosocial_username
-      prompt: "GoToSocial username (leave blank to skip account creation)"
+      prompt: "GoToSocial username (press ENTER to skip GoToSocial account setup)"
       private: false
       default: ""
 
     - name: gotosocial_email
-      prompt: "GoToSocial email"
+      prompt: "GoToSocial email (required if username provided)"
       private: false
       default: ""
 
     - name: gotosocial_password
-      prompt: "GoToSocial password"
+      prompt: "GoToSocial password (required if username provided)"
       private: true
       default: ""
 
@@ -87,6 +87,28 @@
       when: install_gotosocial | default(false)
       tags: [always]
 
+    - name: Show GoToSocial account skip message
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ℹ️  GoToSocial Account Setup Skipped
+          ══════════════════════════════════════════════════════════════
+          
+          GoToSocial server will be installed but no account will be created.
+          
+          To create an account after deployment:
+            ssh {{ ssh_user | default('root') }}@{{ server_ip }}
+            su - {{ app_user }}
+            make gotosocial-user
+            make gotosocial-token
+          
+          ══════════════════════════════════════════════════════════════
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length == 0
+      tags: [always]
+
     - name: Validate GoToSocial account info
       ansible.builtin.assert:
         that:
@@ -95,14 +117,19 @@
         fail_msg: |
 
           ══════════════════════════════════════════════════════════════
-          GoToSocial username provided but email or password is missing.
+          ❌ GoToSocial Account Setup Incomplete
+          ══════════════════════════════════════════════════════════════
           
-          When creating a GoToSocial account, you must provide:
+          You provided username "{{ gotosocial_username }}" but email or password is missing.
+          
+          To create a GoToSocial account during deployment, provide ALL of:
             - username (you provided: {{ gotosocial_username }})
-            - email (required)
-            - password (required)
+            - email (missing or empty)
+            - password (missing or empty)
 
           The account will automatically be promoted to admin.
+          
+          Or press Ctrl+C then 'A' to abort and skip account creation.
           ══════════════════════════════════════════════════════════════
       when:
         - install_gotosocial | default(false)
@@ -477,8 +504,8 @@
         path: "{{ install_path }}"
         state: absent
       when:
-        - install_dir.stat.exists
-        - not git_dir.stat.exists
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
       tags: [app]
 
     - name: Clone repository
@@ -692,7 +719,9 @@
               make gotosocial-token
           {% else %}
 
-            To create a user account:
+            ⚠️  No account created during deployment.
+            
+            To create your first user account:
               make gotosocial-user   (interactive)
               make gotosocial-token  (after creating user)
           {% endif %}
