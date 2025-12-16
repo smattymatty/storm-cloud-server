@@ -517,8 +517,8 @@
         recurse: true
       become: true
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
         - install_dir.stat.pw_name is defined and install_dir.stat.pw_name == 'root'
       tags: [app, git-recovery]
 
@@ -528,8 +528,8 @@
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
       register: git_init_result
       changed_when: "'Initialized' in git_init_result.stdout or 'Reinitialized' in git_init_result.stdout"
       tags: [app, git-recovery]
@@ -540,8 +540,8 @@
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
       register: git_remote_result
       failed_when: false  # Ignore error if remote already exists
       changed_when: git_remote_result.rc == 0
@@ -553,8 +553,8 @@
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
         - git_remote_result is defined and git_remote_result.rc != 0
       tags: [app, git-recovery]
 
@@ -564,8 +564,8 @@
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
       register: git_fetch_result
       changed_when: true
       tags: [app, git-recovery]
@@ -576,8 +576,8 @@
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
       register: git_reset_result
       changed_when: true
       tags: [app, git-recovery]
@@ -588,8 +588,8 @@
           changed: true
           failed: false
       when:
-        - install_dir.stat.exists is defined and install_dir.stat.exists
-        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - install_dir.stat.exists | default(false)
+        - not (git_dir.stat.exists | default(false))
         - git_reset_result is succeeded
       tags: [app, git-recovery]
 
@@ -606,7 +606,7 @@
       become_user: "{{ app_user }}"
       register: git_result
       when:
-        - not (install_dir.stat.exists is defined and install_dir.stat.exists and (git_dir.stat.exists is not defined or not git_dir.stat.exists))
+        - not (install_dir.stat.exists | default(false) and not (git_dir.stat.exists | default(false)))
       tags: [app]
 
     - name: Create directories
