@@ -109,6 +109,54 @@
         - gotosocial_username | default('') | length > 0
       tags: [always]
 
+    - name: Check if nginx is already installed
+      ansible.builtin.command: which nginx
+      register: nginx_preinstalled
+      failed_when: false
+      changed_when: false
+      tags: [always]
+
+    - name: Detect existing nginx configurations
+      ansible.builtin.find:
+        paths: /etc/nginx/sites-enabled
+        file_type: any
+      register: existing_nginx_configs
+      when: nginx_preinstalled.rc == 0
+      tags: [always]
+
+    - name: Warn about existing nginx installation
+      ansible.builtin.pause:
+        prompt: |
+          
+          ══════════════════════════════════════════════════════════════
+          ⚠️  EXISTING NGINX INSTALLATION DETECTED
+          ══════════════════════════════════════════════════════════════
+          
+          Found {{ existing_nginx_configs.matched | default(0) }} existing config(s) in /etc/nginx/sites-enabled/
+          
+          Storm Cloud will:
+          1. Remove /etc/nginx/sites-enabled/default (if exists)
+          2. Remove /etc/nginx/sites-enabled/stormcloud (old symlink without .conf)
+          3. Create /etc/nginx/sites-enabled/stormcloud.conf
+          {% if install_gotosocial | default(false) %}
+          4. Create /etc/nginx/sites-enabled/gotosocial.conf (for GoToSocial)
+          {% endif %}
+          
+          ⚠️  Other existing configs will NOT be removed automatically.
+          ⚠️  If you have CloudPanel or other control panels, conflicts may occur.
+          
+          The following configs currently exist:
+          {% for item in existing_nginx_configs.files %}
+            - {{ item.path }}
+          {% endfor %}
+          
+          Press ENTER to continue or Ctrl+C then 'A' to abort...
+          
+      when:
+        - nginx_preinstalled.rc == 0
+        - existing_nginx_configs.matched | default(0) > 0
+      tags: [always]
+
     - name: Show deployment info
       ansible.builtin.debug:
         msg: |
@@ -306,6 +354,21 @@
       notify: Reload nginx
       tags: [nginx]
 
+    - name: Remove old stormcloud symlink (without .conf extension)
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/stormcloud
+        state: absent
+      notify: Reload nginx
+      tags: [nginx]
+
+    - name: Remove old gotosocial symlink (without .conf extension)
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/gotosocial
+        state: absent
+      when: install_gotosocial | default(false)
+      notify: Reload nginx
+      tags: [nginx, gotosocial]
+
     - name: Start nginx
       ansible.builtin.service:
         name: nginx
@@ -396,6 +459,27 @@
     # -------------------------------------------------------------------------
     # Application
     # -------------------------------------------------------------------------
+
+    - name: Check if git repo exists
+      ansible.builtin.stat:
+        path: "{{ install_path }}/.git"
+      register: git_dir
+      tags: [app]
+
+    - name: Check if install directory exists
+      ansible.builtin.stat:
+        path: "{{ install_path }}"
+      register: install_dir
+      tags: [app]
+
+    - name: Remove invalid directory (failed previous deployment)
+      ansible.builtin.file:
+        path: "{{ install_path }}"
+        state: absent
+      when:
+        - install_dir.stat.exists
+        - not git_dir.stat.exists
+      tags: [app]
 
     - name: Clone repository
       ansible.builtin.git:
