@@ -189,10 +189,13 @@ deploy-ssl: ## Renew/update SSL certificates
 
 GOTOSOCIAL_CONTAINER := stormcloud_gotosocial
 
-gotosocial-user: ## Create a GoToSocial user account (interactive)
+gotosocial-user: ## Create a GoToSocial user account (optional - deployment creates automatically)
 	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
 	@echo "$(CYAN)  GoToSocial - Create User Account$(NC)"
 	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)NOTE: make deploy now creates accounts automatically$(NC)"
+	@echo "$(YELLOW)This command is for manual account creation only$(NC)"
 	@echo ""
 	@# Check if container is running
 	@if ! docker ps --format '{{.Names}}' | grep -q "^$(GOTOSOCIAL_CONTAINER)$$"; then \

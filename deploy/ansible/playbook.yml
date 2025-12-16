@@ -27,6 +27,31 @@
     cors_origins: "{{ cors_origins | default('') }}" # CORS origins from config.yml
 
   # ===========================================================================
+  # PROMPTS
+  # ===========================================================================
+
+  vars_prompt:
+    - name: gotosocial_username
+      prompt: "GoToSocial username (leave blank to skip account creation)"
+      private: false
+      default: ""
+
+    - name: gotosocial_email
+      prompt: "GoToSocial email (leave blank to skip)"
+      private: false
+      default: ""
+
+    - name: gotosocial_password
+      prompt: "GoToSocial password (leave blank to skip)"
+      private: true
+      default: ""
+
+    - name: gotosocial_make_admin
+      prompt: "Make GoToSocial user an admin? (yes/no)"
+      private: false
+      default: "yes"
+
+  # ===========================================================================
   # PRE-FLIGHT
   # ===========================================================================
 
@@ -455,6 +480,84 @@
       tags: [app, docker]
 
     # -------------------------------------------------------------------------
+    # GoToSocial Account Setup
+    # -------------------------------------------------------------------------
+
+    - name: Wait for GoToSocial healthy
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 8081
+        delay: 5
+        timeout: 60
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length > 0
+      tags: [app, gotosocial]
+
+    - name: Create GoToSocial account
+      ansible.builtin.command:
+        cmd: >-
+          docker exec stormcloud_gotosocial
+          /gotosocial/gotosocial admin account create
+          --username {{ gotosocial_username }}
+          --email {{ gotosocial_email }}
+          --password {{ gotosocial_password }}
+      become_user: "{{ app_user }}"
+      register: gts_create
+      failed_when: false
+      changed_when: "'created' in gts_create.stdout.lower() or 'Created' in gts_create.stdout"
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length > 0
+        - gotosocial_email | default('') | length > 0
+        - gotosocial_password | default('') | length > 0
+      tags: [app, gotosocial]
+
+    - name: Confirm GoToSocial account
+      ansible.builtin.command:
+        cmd: >-
+          docker exec stormcloud_gotosocial
+          /gotosocial/gotosocial admin account confirm
+          --username {{ gotosocial_username }}
+      become_user: "{{ app_user }}"
+      register: gts_confirm
+      failed_when: false
+      changed_when: "'confirmed' in gts_confirm.stdout.lower() or 'Confirmed' in gts_confirm.stdout"
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length > 0
+        - gts_create is defined
+      tags: [app, gotosocial]
+
+    - name: Promote GoToSocial account to admin
+      ansible.builtin.command:
+        cmd: >-
+          docker exec stormcloud_gotosocial
+          /gotosocial/gotosocial admin account promote
+          --username {{ gotosocial_username }}
+      become_user: "{{ app_user }}"
+      register: gts_promote
+      failed_when: false
+      changed_when: "'promoted' in gts_promote.stdout.lower() or 'Promoted' in gts_promote.stdout"
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length > 0
+        - gotosocial_make_admin | default('yes') in ['yes', 'y', 'Y', 'YES', 'Yes']
+        - gts_confirm is defined
+      tags: [app, gotosocial]
+
+    - name: Restart GoToSocial for admin changes
+      ansible.builtin.command:
+        cmd: docker restart stormcloud_gotosocial
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_gotosocial | default(false)
+        - gts_promote is defined
+        - gts_promote is changed
+      tags: [app, gotosocial]
+
+    # -------------------------------------------------------------------------
     # Done
     # -------------------------------------------------------------------------
 
@@ -479,9 +582,21 @@
 
           ──────────────────────────────────────────────────────────────
           GoToSocial: https://{{ gotosocial_domain }}
+          {% if gotosocial_username | default('') | length > 0 %}
 
-            make gotosocial-user   Create a user account
-            make gotosocial-token  Generate API token for Django
+            ✓ Account created: {{ gotosocial_username }}
+            {% if gotosocial_make_admin | default('yes') in ['yes', 'y', 'Y', 'YES', 'Yes'] %}
+            ✓ Admin privileges granted
+            {% endif %}
+
+            Next: Generate API token for Django integration
+              make gotosocial-token
+          {% else %}
+
+            To create a user account:
+              make gotosocial-user   (interactive)
+              make gotosocial-token  (after creating user)
+          {% endif %}
           {% endif %}
 
           ══════════════════════════════════════════════════════════════

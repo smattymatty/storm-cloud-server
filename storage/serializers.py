@@ -129,6 +129,8 @@ class ShareLinkResponseSerializer(serializers.ModelSerializer):
             "last_accessed_at",
             "is_active",
             "is_expired",
+            "posted_to_social",
+            "social_post_url",
         ]
         read_only_fields = fields
 

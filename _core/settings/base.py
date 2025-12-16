@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'core',
     'accounts',
     'storage',
+    'social',
     'cms',
     'docs_app',
 ]
@@ -52,6 +53,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'core.middleware.SentryContextMiddleware',  # Add user context to Sentry errors
+    'social.middleware.SocialWarningMiddleware',  # Track social posting warnings
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -349,3 +351,14 @@ SPELLBOOK_MD_PATH = [
 SPELLBOOK_MD_URL_PREFIX = [
     'docs',
 ]
+
+# =============================================================================
+# GOTOSOCIAL INTEGRATION
+# =============================================================================
+GOTOSOCIAL_DOMAIN = config('GOTOSOCIAL_DOMAIN', default='')
+GOTOSOCIAL_TOKEN = config('GOTOSOCIAL_TOKEN', default='')
+GOTOSOCIAL_AUTO_POST_ENABLED = config('GOTOSOCIAL_AUTO_POST_ENABLED', default=False, cast=bool)
+GOTOSOCIAL_POST_VISIBILITY = config('GOTOSOCIAL_POST_VISIBILITY', default='public')
+GOTOSOCIAL_DELETE_ON_REVOKE = config('GOTOSOCIAL_DELETE_ON_REVOKE', default=True, cast=bool)
+GOTOSOCIAL_SHARE_TEMPLATE = config('GOTOSOCIAL_SHARE_TEMPLATE', default=None)
+STORMCLOUD_BASE_URL = config('STORMCLOUD_BASE_URL', default='http://localhost:8000')

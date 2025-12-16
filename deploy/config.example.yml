@@ -52,11 +52,9 @@ configure_firewall: true
 #   - A separate domain/subdomain (e.g., social.example.com)
 #   - DNS A record pointing to your server_ip
 #
-# After deployment, create your user with:
-#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account create \
-#     --username yourname --email you@example.com --password yourpassword
-#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account confirm --username yourname
-#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account promote --username yourname
+# After deployment:
+#   make gotosocial-user   Create a user account
+#   make gotosocial-token  Generate API token for Django
 #
 install_gotosocial: false
 gotosocial_domain: "" # e.g., social.example.com
