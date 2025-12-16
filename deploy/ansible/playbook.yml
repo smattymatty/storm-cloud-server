@@ -490,23 +490,112 @@
     - name: Check if git repo exists
       ansible.builtin.stat:
         path: "{{ install_path }}/.git"
+      become: true  # Need elevated permissions to check ownership
       register: git_dir
       tags: [app]
 
     - name: Check if install directory exists
       ansible.builtin.stat:
         path: "{{ install_path }}"
+      become: true  # Need elevated permissions to check ownership
       register: install_dir
       tags: [app]
 
-    - name: Remove invalid directory (failed previous deployment)
+    # =========================================================================
+    # Git Recovery - Handle broken deployment states
+    # =========================================================================
+    # If directory exists but .git is missing, we have a partial deployment.
+    # Instead of nuking the directory (losing .env, uploads/, gotosocial_data/),
+    # we initialize git in-place and hard reset to the target branch.
+    # =========================================================================
+
+    - name: Fix directory ownership (if owned by root)
       ansible.builtin.file:
         path: "{{ install_path }}"
-        state: absent
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        recurse: true
+      become: true
       when:
         - install_dir.stat.exists is defined and install_dir.stat.exists
         - git_dir.stat.exists is not defined or not git_dir.stat.exists
-      tags: [app]
+        - install_dir.stat.pw_name is defined and install_dir.stat.pw_name == 'root'
+      tags: [app, git-recovery]
+
+    - name: Initialize git repository (recovery mode)
+      ansible.builtin.command:
+        cmd: git init
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+      register: git_init_result
+      changed_when: "'Initialized' in git_init_result.stdout or 'Reinitialized' in git_init_result.stdout"
+      tags: [app, git-recovery]
+
+    - name: Add remote origin (recovery mode)
+      ansible.builtin.command:
+        cmd: "git remote add origin {{ repo_url | default('https://github.com/smattymatty/storm-cloud-server.git') }}"
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+      register: git_remote_result
+      failed_when: false  # Ignore error if remote already exists
+      changed_when: git_remote_result.rc == 0
+      tags: [app, git-recovery]
+
+    - name: Set remote URL (if remote already existed)
+      ansible.builtin.command:
+        cmd: "git remote set-url origin {{ repo_url | default('https://github.com/smattymatty/storm-cloud-server.git') }}"
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - git_remote_result is defined and git_remote_result.rc != 0
+      tags: [app, git-recovery]
+
+    - name: Fetch from remote (recovery mode)
+      ansible.builtin.command:
+        cmd: "git fetch origin {{ git_branch | default('main') }}"
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+      register: git_fetch_result
+      changed_when: true
+      tags: [app, git-recovery]
+
+    - name: Hard reset to target branch (recovery mode)
+      ansible.builtin.command:
+        cmd: "git reset --hard origin/{{ git_branch | default('main') }}"
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+      register: git_reset_result
+      changed_when: true
+      tags: [app, git-recovery]
+
+    - name: Set git_result for recovery path
+      ansible.builtin.set_fact:
+        git_result:
+          changed: true
+          failed: false
+      when:
+        - install_dir.stat.exists is defined and install_dir.stat.exists
+        - git_dir.stat.exists is not defined or not git_dir.stat.exists
+        - git_reset_result is succeeded
+      tags: [app, git-recovery]
+
+    # =========================================================================
+    # Normal Git Clone/Update - Runs when directory doesn't exist OR .git exists
+    # =========================================================================
 
     - name: Clone repository
       ansible.builtin.git:
@@ -516,6 +605,8 @@
         update: true
       become_user: "{{ app_user }}"
       register: git_result
+      when:
+        - not (install_dir.stat.exists is defined and install_dir.stat.exists and (git_dir.stat.exists is not defined or not git_dir.stat.exists))
       tags: [app]
 
     - name: Create directories
@@ -523,8 +614,9 @@
         path: "{{ install_path }}/{{ item }}"
         state: directory
         owner: "{{ app_user }}"
-        mode: "0755"
+        mode: "0750"  # More secure: no world-read access
       loop: [uploads, backups]
+      when: git_result is succeeded  # Only create if git clone succeeded
       tags: [app]
 
     - name: Create GoToSocial data directory
@@ -533,7 +625,9 @@
         state: directory
         owner: "{{ app_user }}"
         mode: "0755"
-      when: install_gotosocial | default(false)
+      when:
+        - install_gotosocial | default(false)
+        - git_result is succeeded  # Only create if git clone succeeded
       tags: [app, gotosocial]
 
     # -------------------------------------------------------------------------
@@ -564,8 +658,30 @@
 
     - name: Parse existing secrets
       ansible.builtin.set_fact:
-        secret_key: "{{ env_content.content | b64decode | regex_search('SECRET_KEY=(.+)$', '\\1', multiline=True) | first }}"
-        db_password: "{{ env_content.content | b64decode | regex_search('POSTGRES_PASSWORD=(.+)$', '\\1', multiline=True) | first }}"
+        secret_key: "{{ env_content.content | b64decode | regex_search('SECRET_KEY=([^\\s#]+)', '\\1', multiline=True) | default([''], true) | first }}"
+        db_password: "{{ env_content.content | b64decode | regex_search('POSTGRES_PASSWORD=([^\\s#]+)', '\\1', multiline=True) | default([''], true) | first }}"
+      when: env_check.stat.exists
+      tags: [app, env]
+
+    - name: Validate parsed secrets
+      ansible.builtin.assert:
+        that:
+          - secret_key | default('') | length > 0
+          - db_password | default('') | length > 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ❌ Failed to parse secrets from existing .env file
+          ══════════════════════════════════════════════════════════════
+          
+          The existing .env file at {{ install_path }}/.env appears to be
+          corrupted or missing required SECRET_KEY and POSTGRES_PASSWORD values.
+          
+          Please either:
+          1. Fix the .env file manually on the server
+          2. Remove the .env file to generate new secrets (WARNING: will break existing data)
+          
+          ══════════════════════════════════════════════════════════════
       when: env_check.stat.exists
       tags: [app, env]
 
@@ -575,6 +691,7 @@
         dest: "{{ install_path }}/.env"
         owner: "{{ app_user }}"
         mode: "0600"
+      no_log: true  # Prevent secrets from appearing in logs
       tags: [app, env]
 
     # -------------------------------------------------------------------------
