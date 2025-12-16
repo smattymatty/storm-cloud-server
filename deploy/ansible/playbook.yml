@@ -249,7 +249,7 @@
     - name: Enable site
       ansible.builtin.file:
         src: /etc/nginx/sites-available/stormcloud
-        dest: /etc/nginx/sites-enabled/stormcloud
+        dest: /etc/nginx/sites-enabled/stormcloud.conf
         state: link
       when: install_nginx | default(true)
       notify: Reload nginx
@@ -290,7 +290,7 @@
     - name: Enable GoToSocial site (pre-SSL only)
       ansible.builtin.file:
         src: /etc/nginx/sites-available/gotosocial
-        dest: /etc/nginx/sites-enabled/gotosocial
+        dest: /etc/nginx/sites-enabled/gotosocial.conf
         state: link
       when:
         - install_gotosocial | default(false)
@@ -385,7 +385,7 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - /etc/nginx/sites-enabled/gotosocial
+        - /etc/nginx/sites-enabled/gotosocial.conf
         - /etc/nginx/sites-available/gotosocial
       when:
         - install_gotosocial | default(false)
