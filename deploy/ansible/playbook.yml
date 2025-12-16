@@ -37,19 +37,14 @@
       default: ""
 
     - name: gotosocial_email
-      prompt: "GoToSocial email (leave blank to skip)"
+      prompt: "GoToSocial email"
       private: false
       default: ""
 
     - name: gotosocial_password
-      prompt: "GoToSocial password (leave blank to skip)"
+      prompt: "GoToSocial password"
       private: true
       default: ""
-
-    - name: gotosocial_make_admin
-      prompt: "Make GoToSocial user an admin? (yes/no)"
-      private: false
-      default: "yes"
 
   # ===========================================================================
   # PRE-FLIGHT
@@ -90,6 +85,28 @@
 
           ══════════════════════════════════════════════════════════════
       when: install_gotosocial | default(false)
+      tags: [always]
+
+    - name: Validate GoToSocial account info
+      ansible.builtin.assert:
+        that:
+          - gotosocial_email | default('') | length > 0
+          - gotosocial_password | default('') | length > 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          GoToSocial username provided but email or password is missing.
+          
+          When creating a GoToSocial account, you must provide:
+            - username (you provided: {{ gotosocial_username }})
+            - email (required)
+            - password (required)
+
+          The account will automatically be promoted to admin.
+          ══════════════════════════════════════════════════════════════
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_username | default('') | length > 0
       tags: [always]
 
     - name: Show deployment info
@@ -270,7 +287,7 @@
       notify: Reload nginx
       tags: [nginx, gotosocial]
 
-    - name: Enable GoToSocial site
+    - name: Enable GoToSocial site (pre-SSL only)
       ansible.builtin.file:
         src: /etc/nginx/sites-available/gotosocial
         dest: /etc/nginx/sites-enabled/gotosocial
@@ -278,6 +295,7 @@
       when:
         - install_gotosocial | default(false)
         - install_nginx | default(true)
+        - not (gotosocial_ssl_cert_initial.stat.exists | default(false))
       notify: Reload nginx
       tags: [nginx, gotosocial]
 
@@ -542,7 +560,6 @@
       when:
         - install_gotosocial | default(false)
         - gotosocial_username | default('') | length > 0
-        - gotosocial_make_admin | default('yes') in ['yes', 'y', 'Y', 'YES', 'Yes']
         - gts_confirm is defined
       tags: [app, gotosocial]
 
@@ -585,9 +602,7 @@
           {% if gotosocial_username | default('') | length > 0 %}
 
             ✓ Account created: {{ gotosocial_username }}
-            {% if gotosocial_make_admin | default('yes') in ['yes', 'y', 'Y', 'YES', 'Yes'] %}
             ✓ Admin privileges granted
-            {% endif %}
 
             Next: Generate API token for Django integration
               make gotosocial-token

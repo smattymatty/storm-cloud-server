@@ -57,7 +57,14 @@ gotosocial_domain: "social.example.com"  # Your social subdomain
 make deploy
 ```
 
-This will:
+During deployment, you'll be prompted for GoToSocial account credentials:
+- **Username** - Leave blank to skip account creation, or provide a username
+- **Email** - Required if username provided
+- **Password** - Required if username provided
+
+The account will automatically be promoted to admin (single-user instance).
+
+Deployment will:
 - Obtain SSL certificate for your social domain
 - Configure nginx reverse proxy
 - Start GoToSocial container
@@ -89,7 +96,10 @@ Account created successfully!
 ═══════════════════════════════════════════════════
 ```
 
-Note: The account is automatically promoted to admin since GoToSocial is configured as a single-user instance for organizational use.
+**Important:**
+- The account is **automatically promoted to admin** (no prompt)
+- This is a single-user instance for organizational use
+- All three fields (username, email, password) are required
 
 ### 4. Generate API Token (Optional)
 
