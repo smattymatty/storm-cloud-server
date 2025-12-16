@@ -81,8 +81,6 @@ Password: ********
 
 Creating account... done
 Confirming account... done
-
-Make this user an admin? [y/N]: y
 Promoting to admin... done
 Restarting GoToSocial for admin changes to take effect...
 
@@ -90,6 +88,8 @@ Restarting GoToSocial for admin changes to take effect...
 Account created successfully!
 ═══════════════════════════════════════════════════
 ```
+
+Note: The account is automatically promoted to admin since GoToSocial is configured as a single-user instance for organizational use.
 
 ### 4. Generate API Token (Optional)
 

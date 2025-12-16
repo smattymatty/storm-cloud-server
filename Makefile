@@ -250,19 +250,17 @@ gotosocial-user: ## Create a GoToSocial user account (optional - deployment crea
 	fi; \
 	\
 	echo ""; \
-	read -p "Make this user an admin? [y/N]: " make_admin; \
-	if [ "$$make_admin" = "y" ] || [ "$$make_admin" = "Y" ]; then \
-		echo "$(GREEN)Promoting to admin...$(NC)"; \
-		if ! docker exec -it $(GOTOSOCIAL_CONTAINER) \
-			/gotosocial/gotosocial admin account promote \
-			--username "$$username"; then \
-			echo "$(YELLOW)ERROR: Failed to promote account$(NC)"; \
-			exit 1; \
-		fi; \
-		echo ""; \
-		echo "$(GREEN)Restarting GoToSocial for admin changes to take effect...$(NC)"; \
-		docker restart $(GOTOSOCIAL_CONTAINER); \
+	echo "$(GREEN)Promoting to admin...$(NC)"; \
+	if ! docker exec -it $(GOTOSOCIAL_CONTAINER) \
+		/gotosocial/gotosocial admin account promote \
+		--username "$$username"; then \
+		echo "$(YELLOW)ERROR: Failed to promote account$(NC)"; \
+		exit 1; \
 	fi; \
+	\
+	echo ""; \
+	echo "$(GREEN)Restarting GoToSocial for admin changes to take effect...$(NC)"; \
+	docker restart $(GOTOSOCIAL_CONTAINER); \
 	\
 	echo ""; \
 	echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"; \
