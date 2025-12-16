@@ -24,14 +24,13 @@
     app_user: "{{ app_user | default('stormcloud') }}"
     install_path: "/home/{{ app_user }}/storm-cloud-server"
     web_port: "{{ web_port | default('8000') }}"
-    cors_origins: "{{ cors_origins | default('') }}"  # CORS origins from config.yml
+    cors_origins: "{{ cors_origins | default('') }}" # CORS origins from config.yml
 
   # ===========================================================================
   # PRE-FLIGHT
   # ===========================================================================
 
   pre_tasks:
-
     - name: Validate config
       ansible.builtin.assert:
         that:
@@ -52,6 +51,22 @@
           ══════════════════════════════════════════════════════════════
       tags: [always]
 
+    - name: Validate GoToSocial config
+      ansible.builtin.assert:
+        that:
+          - gotosocial_domain | default('') | length > 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          GoToSocial is enabled but gotosocial_domain is not set.
+          Edit deploy/config.yml and set:
+
+            gotosocial_domain: "social.example.com"
+
+          ══════════════════════════════════════════════════════════════
+      when: install_gotosocial | default(false)
+      tags: [always]
+
     - name: Show deployment info
       ansible.builtin.debug:
         msg: |
@@ -62,6 +77,10 @@
             Server:  {{ server_ip }}
             Domain:  {{ domain }}
             User:    {{ app_user }}
+          {% if install_gotosocial | default(false) %}
+
+            GoToSocial: {{ gotosocial_domain }}
+          {% endif %}
           ══════════════════════════════════════════════════════════════
       tags: [always]
 
@@ -81,7 +100,6 @@
   # ===========================================================================
 
   tasks:
-
     # -------------------------------------------------------------------------
     # System
     # -------------------------------------------------------------------------
@@ -195,6 +213,49 @@
       notify: Reload nginx
       tags: [nginx]
 
+    - name: Check if GoToSocial SSL cert exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+      register: gotosocial_ssl_cert_initial
+      when: install_gotosocial | default(false)
+      tags: [nginx, ssl, gotosocial]
+
+    - name: Deploy pre-SSL nginx config for GoToSocial
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/gotosocial
+        mode: "0644"
+        content: |
+          server {
+              listen 80;
+              server_name {{ gotosocial_domain }};
+
+              location /.well-known/acme-challenge/ {
+                  root /var/www/certbot;
+              }
+
+              location / {
+                  return 200 'GoToSocial - awaiting SSL\n';
+                  add_header Content-Type text/plain;
+              }
+          }
+      when:
+        - install_gotosocial | default(false)
+        - install_nginx | default(true)
+        - not (gotosocial_ssl_cert_initial.stat.exists | default(false))
+      notify: Reload nginx
+      tags: [nginx, gotosocial]
+
+    - name: Enable GoToSocial site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/gotosocial
+        dest: /etc/nginx/sites-enabled/gotosocial
+        state: link
+      when:
+        - install_gotosocial | default(false)
+        - install_nginx | default(true)
+      notify: Reload nginx
+      tags: [nginx, gotosocial]
+
     - name: Remove default site
       ansible.builtin.file:
         path: /etc/nginx/sites-enabled/default
@@ -237,11 +298,32 @@
       when: install_certbot | default(true)
       tags: [ssl]
 
+    - name: Get SSL certificate for GoToSocial
+      ansible.builtin.command:
+        cmd: >-
+          certbot certonly --webroot
+          --webroot-path=/var/www/certbot
+          --email {{ admin_email }}
+          --agree-tos --no-eff-email --non-interactive
+          -d {{ gotosocial_domain }}
+        creates: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+      when:
+        - install_gotosocial | default(false)
+        - install_certbot | default(true)
+      tags: [ssl, gotosocial]
+
     - name: Re-check SSL cert
       ansible.builtin.stat:
         path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
       register: ssl_cert_final
       tags: [nginx, ssl]
+
+    - name: Re-check GoToSocial SSL cert
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+      register: gotosocial_ssl_cert
+      when: install_gotosocial | default(false)
+      tags: [nginx, ssl, gotosocial]
 
     - name: Deploy full nginx config
       ansible.builtin.template:
@@ -251,8 +333,22 @@
       when:
         - install_nginx | default(true)
         - ssl_cert_final.stat.exists
+        - (not install_gotosocial | default(false)) or (gotosocial_ssl_cert.stat.exists | default(false))
       notify: Reload nginx
       tags: [nginx, ssl]
+
+    - name: Remove temporary GoToSocial nginx config
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx/sites-enabled/gotosocial
+        - /etc/nginx/sites-available/gotosocial
+      when:
+        - install_gotosocial | default(false)
+        - gotosocial_ssl_cert.stat.exists | default(false)
+      notify: Reload nginx
+      tags: [nginx, ssl, gotosocial]
 
     # -------------------------------------------------------------------------
     # Application
@@ -265,6 +361,7 @@
         version: "{{ git_branch | default('main') }}"
         update: true
       become_user: "{{ app_user }}"
+      register: git_result
       tags: [app]
 
     - name: Create directories
@@ -275,6 +372,15 @@
         mode: "0755"
       loop: [uploads, backups]
       tags: [app]
+
+    - name: Create GoToSocial data directory
+      ansible.builtin.file:
+        path: "{{ install_path }}/gotosocial_data"
+        state: directory
+        owner: "{{ app_user }}"
+        mode: "0755"
+      when: install_gotosocial | default(false)
+      tags: [app, gotosocial]
 
     # -------------------------------------------------------------------------
     # Secrets (idempotent)
@@ -321,18 +427,17 @@
     # Docker
     # -------------------------------------------------------------------------
 
-    - name: Build images
+    - name: Build images (fresh rebuild)
       ansible.builtin.command:
-        cmd: docker compose build
+        cmd: docker compose build --no-cache
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
-      register: build_result
-      changed_when: "'exporting' in build_result.stdout"
+      when: git_result.changed
       tags: [app, docker]
 
     - name: Start containers
       ansible.builtin.command:
-        cmd: docker compose up -d --remove-orphans
+        cmd: "docker compose {{ '--profile gotosocial' if install_gotosocial | default(false) else '' }} up -d --remove-orphans"
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
       register: up_result
@@ -370,6 +475,14 @@
             cd {{ install_path }}
             make superuser
             make api_key
+          {% if install_gotosocial | default(false) %}
+
+          ──────────────────────────────────────────────────────────────
+          GoToSocial: https://{{ gotosocial_domain }}
+
+            make gotosocial-user   Create a user account
+            make gotosocial-token  Generate API token for Django
+          {% endif %}
 
           ══════════════════════════════════════════════════════════════
       tags: [always]

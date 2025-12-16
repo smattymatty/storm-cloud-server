@@ -45,6 +45,8 @@ from storage.api import (
     DirectoryCreateView,
     DirectoryListRootView,
     DirectoryListView,
+    DirectoryReorderView,
+    DirectoryResetOrderView,
     FileCreateView,
     FileDeleteView,
     FileDetailView,
@@ -180,10 +182,32 @@ urlpatterns = [
     # =========================================================================
     # Directories (ls operations)
     path("dirs/", DirectoryListRootView.as_view(), name="dir-list-root"),
+    # Root directory reorder/reset (must come before <path:> routes)
+    path("dirs/reorder/", DirectoryReorderView.as_view(), name="dir-reorder-root"),
+    path(
+        "dirs/reset-order/",
+        DirectoryResetOrderView.as_view(),
+        name="dir-reset-order-root",
+    ),
+    # Path-based directory operations
     path(
         "dirs/<path:dir_path>/create/", DirectoryCreateView.as_view(), name="dir-create"
     ),
-    path("dirs/<path:dir_path>/", DirectoryListView.as_view(), name="dir-list"),
+    path(
+        "dirs/<path:dir_path>/reorder/",
+        DirectoryReorderView.as_view(),
+        name="dir-reorder",
+    ),
+    path(
+        "dirs/<path:dir_path>/reset-order/",
+        DirectoryResetOrderView.as_view(),
+        name="dir-reset-order",
+    ),
+    path(
+        "dirs/<path:dir_path>/",
+        DirectoryListView.as_view(),
+        name="dir-list",
+    ),
     # Files (file operations)
     path(
         "files/<path:file_path>/create/", FileCreateView.as_view(), name="file-create"

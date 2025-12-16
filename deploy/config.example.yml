@@ -22,7 +22,6 @@ domain: ""
 # Email for SSL certificate notifications (Let's Encrypt)
 admin_email: ""
 
-
 # === OPTIONAL - Sensible defaults, change if needed ===
 
 # SSH user for initial connection (usually root for fresh VPS)
@@ -37,7 +36,6 @@ web_port: 8000
 # Git branch to deploy
 git_branch: main
 
-
 # === FEATURES - Toggle what gets installed ===
 
 install_docker: true
@@ -45,6 +43,23 @@ install_nginx: true
 install_certbot: true
 configure_firewall: true
 
+# === GOTOSOCIAL - Optional Fediverse Server ===
+#
+# GoToSocial is a lightweight, single-user Mastodon-compatible server.
+# Enable this to run your own Fediverse instance alongside Storm Cloud.
+#
+# Requirements:
+#   - A separate domain/subdomain (e.g., social.example.com)
+#   - DNS A record pointing to your server_ip
+#
+# After deployment, create your user with:
+#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account create \
+#     --username yourname --email you@example.com --password yourpassword
+#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account confirm --username yourname
+#   docker exec -it stormcloud_gotosocial /gotosocial/gotosocial admin account promote --username yourname
+#
+install_gotosocial: false
+gotosocial_domain: "" # e.g., social.example.com
 
 # === POSTGRES - Database configuration ===
 
@@ -56,8 +71,7 @@ configure_firewall: true
 #   - External tools that connect to the database
 #
 # Example: postgres_password: "MySecureP@ssw0rd!2024"
-postgres_password: ""  # REQUIRED - Set a strong password
-
+postgres_password: "" # REQUIRED - Set a strong password
 
 # === CORS - Cross-Origin Resource Sharing ===
 #
@@ -83,8 +97,7 @@ postgres_password: ""  # REQUIRED - Set a strong password
 #   - Never use wildcards (*) in production
 #   - Leave empty to disable CORS (most secure, but frontend won't work)
 #
-cors_origins: ""  # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
-
+cors_origins: "" # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
 
 # === ADVANCED - Usually don't need to change ===
 

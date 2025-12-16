@@ -1,7 +1,7 @@
 ---
 title: File Storage API
 published: 2025-12-11
-modified: 2025-12-14
+modified: 2025-12-15
 tags:
   - api
   - storage
@@ -278,6 +278,124 @@ curl -X DELETE http://localhost:8000/api/v1/files/documents/old-report.pdf/delet
 ```
 
 **Note:** Deleting a file also deletes all associated share links (CASCADE).
+
+---
+
+## Custom Sort Order
+
+Storm Cloud supports drag-and-drop custom file ordering per directory. New files automatically appear at the top.
+
+### How It Works
+
+- Each file has a `sort_position` field (returned in directory listings)
+- Lower numbers appear first
+- `null` means "use alphabetical order"
+- New files/folders get `sort_position=0` and push existing items down
+
+### Reorder Files
+
+**POST** `/api/v1/dirs/reorder/` or **POST** `/api/v1/dirs/{dir_path}/reorder/`
+
+Set custom sort order for files in a directory. Supports partial reorder - only send the files you want to reposition.
+
+**Request Body:**
+
+```json
+{
+  "order": ["file3.txt", "file1.txt", "file2.txt"]
+}
+```
+
+**Example Request:**
+
+```bash
+# Reorder files in root directory
+curl -X POST http://localhost:8000/api/v1/dirs/reorder/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"order": ["important.txt", "readme.md", "notes.txt"]}'
+
+# Reorder files in subdirectory
+curl -X POST http://localhost:8000/api/v1/dirs/documents/reorder/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"order": ["report.pdf", "draft.pdf"]}'
+```
+
+**Example Response:**
+
+```json
+{
+  "message": "Order updated",
+  "path": "documents",
+  "count": 2
+}
+```
+
+**Notes:**
+- Files in the `order` array get positions 0, 1, 2... in the order specified
+- Files NOT in the array keep their existing position
+- This allows partial reorder (just drag one file without sending the whole list)
+
+### Reset to Alphabetical
+
+**POST** `/api/v1/dirs/reset-order/` or **POST** `/api/v1/dirs/{dir_path}/reset-order/`
+
+Reset sort order to alphabetical (default) for all files in a directory.
+
+**Example Request:**
+
+```bash
+# Reset root directory order
+curl -X POST http://localhost:8000/api/v1/dirs/reset-order/ \
+  -H "Authorization: Bearer YOUR_API_KEY"
+
+# Reset subdirectory order
+curl -X POST http://localhost:8000/api/v1/dirs/documents/reset-order/ \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Example Response:**
+
+```json
+{
+  "message": "Order reset to alphabetical",
+  "path": "documents",
+  "count": 5
+}
+```
+
+### Sort Order in Directory Listings
+
+Directory listings now include `sort_position` for each entry:
+
+```json
+{
+  "path": "",
+  "entries": [
+    {
+      "name": "important.txt",
+      "path": "important.txt",
+      "size": 1024,
+      "is_directory": false,
+      "sort_position": 0
+    },
+    {
+      "name": "readme.md",
+      "path": "readme.md", 
+      "size": 512,
+      "is_directory": false,
+      "sort_position": 1
+    }
+  ],
+  "total": 2
+}
+```
+
+**Sorting Rules:**
+1. Directories always appear before files
+2. Within each group, items are sorted by `sort_position` (lower first)
+3. Items with `null` sort_position appear last, sorted alphabetically
 
 ---
 

@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -6,7 +6,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups  # For easy database backups
+      - ./backups:/backups # For easy database backups
     environment:
       POSTGRES_DB: stormcloud
       POSTGRES_USER: stormcloud
@@ -50,6 +50,29 @@ services:
     #   - "traefik.http.routers.stormcloud.entrypoints=websecure"
     #   - "traefik.http.routers.stormcloud.tls.certresolver=letsencrypt"
     #   - "traefik.http.services.stormcloud.loadbalancer.server.port=8000"
+
+  # GoToSocial - Optional Fediverse Server
+  # Enabled via: docker compose --profile gotosocial up -d
+  # Or automatically by Ansible when install_gotosocial: true
+  gotosocial:
+    image: docker.io/superseriousbusiness/gotosocial:0.17.3
+    container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_gotosocial
+    profiles: ["gotosocial"]
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      GTS_HOST: ${GOTOSOCIAL_DOMAIN:-social.localhost}
+      GTS_DB_TYPE: sqlite
+      GTS_DB_ADDRESS: /gotosocial/storage/sqlite.db
+      GTS_LETSENCRYPT_ENABLED: "false"
+      GTS_TRUSTED_PROXIES: "172.17.0.0/16,127.0.0.1"
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./gotosocial_data:/gotosocial/storage
+    restart: unless-stopped
+    networks:
+      - stormcloud_network
 
 volumes:
   postgres_data:

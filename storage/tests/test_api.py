@@ -114,6 +114,193 @@ class FileCreateTest(StormCloudAPITestCase):
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
 
 
+class DirectoryReorderTest(StormCloudAPITestCase):
+    """POST /api/v1/dirs/{path}/reorder/"""
+
+    def test_reorder_files_succeeds(self):
+        """Reordering files should update sort_position."""
+        self.authenticate()
+        import uuid
+
+        from storage.models import StoredFile
+
+        # Create some files
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-c.txt/create/")
+
+        # Reorder them
+        response = self.client.post(
+            "/api/v1/dirs/reorder/",
+            {"order": [f"{prefix}-c.txt", f"{prefix}-a.txt", f"{prefix}-b.txt"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 3)
+
+        # Verify positions
+        c_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-c.txt")
+        a_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-a.txt")
+        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        self.assertEqual(c_file.sort_position, 0)
+        self.assertEqual(a_file.sort_position, 1)
+        self.assertEqual(b_file.sort_position, 2)
+
+    def test_partial_reorder_only_updates_specified(self):
+        """Partial reorder should only update specified files."""
+        self.authenticate()
+        import uuid
+
+        from storage.models import StoredFile
+
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+
+        # Only reorder one file
+        response = self.client.post(
+            "/api/v1/dirs/reorder/",
+            {"order": [f"{prefix}-b.txt"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+
+        # b should be position 0, a unchanged (still 0 from creation)
+        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        self.assertEqual(b_file.sort_position, 0)
+
+    def test_reorder_in_subdirectory(self):
+        """Reordering should work in subdirectories."""
+        self.authenticate()
+        import uuid
+
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/dirs/{prefix}/create/")
+        self.client.post(f"/api/v1/files/{prefix}/a.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}/b.txt/create/")
+
+        response = self.client.post(
+            f"/api/v1/dirs/{prefix}/reorder/",
+            {"order": ["b.txt", "a.txt"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+
+
+class DirectoryResetOrderTest(StormCloudAPITestCase):
+    """POST /api/v1/dirs/{path}/reset-order/"""
+
+    def test_reset_order_clears_positions(self):
+        """Reset order should set all sort_positions to null."""
+        self.authenticate()
+        import uuid
+
+        from storage.models import StoredFile
+
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+
+        # Files have sort_position=0 from creation, verify
+        a_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-a.txt")
+        self.assertIsNotNone(a_file.sort_position)
+
+        # Reset order
+        response = self.client.post("/api/v1/dirs/reset-order/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Verify positions are null
+        a_file.refresh_from_db()
+        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        self.assertIsNone(a_file.sort_position)
+        self.assertIsNone(b_file.sort_position)
+
+    def test_reset_order_in_subdirectory(self):
+        """Reset order should only affect specified directory."""
+        self.authenticate()
+        import uuid
+
+        from storage.models import StoredFile
+
+        prefix = uuid.uuid4().hex[:8]
+        # File in root
+        self.client.post(f"/api/v1/files/{prefix}-root.txt/create/")
+        # File in subdir
+        self.client.post(f"/api/v1/dirs/{prefix}/create/")
+        self.client.post(f"/api/v1/files/{prefix}/sub.txt/create/")
+
+        # Reset only subdir
+        response = self.client.post(f"/api/v1/dirs/{prefix}/reset-order/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Root file should still have position
+        root_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-root.txt")
+        self.assertIsNotNone(root_file.sort_position)
+
+        # Subdir file should be null
+        sub_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}/sub.txt")
+        self.assertIsNone(sub_file.sort_position)
+
+
+class SortPositionTest(StormCloudAPITestCase):
+    """Test sort_position behavior in directory listings."""
+
+    def test_new_files_appear_at_top(self):
+        """Newly created files should have sort_position=0."""
+        self.authenticate()
+        import uuid
+
+        from storage.models import StoredFile
+
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/files/{prefix}-first.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-second.txt/create/")
+
+        first = StoredFile.objects.get(owner=self.user, path=f"{prefix}-first.txt")
+        second = StoredFile.objects.get(owner=self.user, path=f"{prefix}-second.txt")
+
+        # Second file pushes first down
+        self.assertEqual(second.sort_position, 0)
+        self.assertEqual(first.sort_position, 1)
+
+    def test_directory_listing_respects_sort_position(self):
+        """Directory listing should sort by sort_position."""
+        self.authenticate()
+        import uuid
+
+        prefix = uuid.uuid4().hex[:8]
+        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/files/{prefix}-c.txt/create/")
+
+        # Reorder: c, a, b
+        self.client.post(
+            "/api/v1/dirs/reorder/",
+            {"order": [f"{prefix}-c.txt", f"{prefix}-a.txt", f"{prefix}-b.txt"]},
+            format="json",
+        )
+
+        # List directory
+        response = self.client.get("/api/v1/dirs/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Find our files in the response
+        our_files = [
+            e
+            for e in response.data["entries"]
+            if e["name"].startswith(prefix) and not e["is_directory"]
+        ]
+
+        # Should be ordered c, a, b
+        self.assertEqual(len(our_files), 3)
+        self.assertEqual(our_files[0]["name"], f"{prefix}-c.txt")
+        self.assertEqual(our_files[1]["name"], f"{prefix}-a.txt")
+        self.assertEqual(our_files[2]["name"], f"{prefix}-b.txt")
+
+
 class FileUploadTest(StormCloudAPITestCase):
     """POST /api/v1/files/{path}/upload/"""
 

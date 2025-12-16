@@ -1,8 +1,10 @@
 """Serializers for storage app."""
 
 import re
+
 from rest_framework import serializers
-from .models import StoredFile, ShareLink
+
+from .models import ShareLink, StoredFile
 
 
 class StoredFileSerializer(serializers.ModelSerializer):
@@ -11,18 +13,18 @@ class StoredFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoredFile
         fields = [
-            'id',
-            'path',
-            'name',
-            'size',
-            'content_type',
-            'is_directory',
-            'parent_path',
-            'created_at',
-            'updated_at',
-            'encryption_method',
-            'key_id',
-            'encrypted_filename',
+            "id",
+            "path",
+            "name",
+            "size",
+            "content_type",
+            "is_directory",
+            "parent_path",
+            "created_at",
+            "updated_at",
+            "encryption_method",
+            "key_id",
+            "encrypted_filename",
         ]
         read_only_fields = fields
 
@@ -36,7 +38,8 @@ class FileListItemSerializer(serializers.Serializer):
     is_directory = serializers.BooleanField()
     content_type = serializers.CharField(allow_null=True)
     modified_at = serializers.DateTimeField()
-    encryption_method = serializers.CharField(required=False, default='none')
+    encryption_method = serializers.CharField(required=False, default="none")
+    sort_position = serializers.IntegerField(allow_null=True, required=False)
 
 
 class DirectoryListResponseSerializer(serializers.Serializer):
@@ -63,33 +66,25 @@ class FileInfoResponseSerializer(serializers.Serializer):
     is_directory = serializers.BooleanField()
     created_at = serializers.DateTimeField()
     modified_at = serializers.DateTimeField()
-    encryption_method = serializers.CharField(required=False, default='none')
+    encryption_method = serializers.CharField(required=False, default="none")
 
 
 # =============================================================================
 # Share Link Serializers
 # =============================================================================
 
+
 class ShareLinkCreateSerializer(serializers.Serializer):
     """Serializer for creating share links."""
 
     file_path = serializers.CharField(max_length=1024)
     expiry_days = serializers.ChoiceField(
-        choices=[0, 1, 3, 7, 30, 90],
-        required=False,
-        allow_null=True
+        choices=[0, 1, 3, 7, 30, 90], required=False, allow_null=True
     )
     password = serializers.CharField(
-        max_length=128,
-        required=False,
-        allow_blank=True,
-        write_only=True
+        max_length=128, required=False, allow_blank=True, write_only=True
     )
-    custom_slug = serializers.CharField(
-        max_length=64,
-        required=False,
-        allow_blank=True
-    )
+    custom_slug = serializers.CharField(max_length=64, required=False, allow_blank=True)
 
     def validate_custom_slug(self, value):
         """Validate custom slug format and uniqueness."""
@@ -97,7 +92,7 @@ class ShareLinkCreateSerializer(serializers.Serializer):
             return None
 
         # Alphanumeric and hyphens only, 3-64 chars
-        if not re.match(r'^[a-zA-Z0-9-]{3,64}$', value):
+        if not re.match(r"^[a-zA-Z0-9-]{3,64}$", value):
             raise serializers.ValidationError(
                 "Slug must be 3-64 characters, alphanumeric and hyphens only"
             )
@@ -119,21 +114,21 @@ class ShareLinkResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShareLink
         fields = [
-            'id',
-            'owner',
-            'file_path',
-            'token',
-            'custom_slug',
-            'url',
-            'has_password',
-            'expiry_days',
-            'expires_at',
-            'created_at',
-            'view_count',
-            'download_count',
-            'last_accessed_at',
-            'is_active',
-            'is_expired',
+            "id",
+            "owner",
+            "file_path",
+            "token",
+            "custom_slug",
+            "url",
+            "has_password",
+            "expiry_days",
+            "expires_at",
+            "created_at",
+            "view_count",
+            "download_count",
+            "last_accessed_at",
+            "is_active",
+            "is_expired",
         ]
         read_only_fields = fields
 
@@ -159,3 +154,18 @@ class PublicShareInfoSerializer(serializers.Serializer):
     content_type = serializers.CharField()
     requires_password = serializers.BooleanField()
     download_url = serializers.CharField()
+
+
+# =============================================================================
+# Directory Reorder Serializers
+# =============================================================================
+
+
+class DirectoryReorderSerializer(serializers.Serializer):
+    """Serializer for reordering files in a directory."""
+
+    order = serializers.ListField(
+        child=serializers.CharField(max_length=255),
+        min_length=1,
+        help_text="List of filenames in desired order (partial list allowed)",
+    )

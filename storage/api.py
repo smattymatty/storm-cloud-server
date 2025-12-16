@@ -99,32 +99,45 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Sort: directories first, then files alphabetically
-        entries = sorted(entries, key=lambda x: (not x.is_directory, x.name))
-
-        # Convert FileInfo objects to serializer format
-        # Fetch encryption metadata from database for entries
+        # Fetch metadata from database for entries (encryption_method + sort_position)
         entry_paths = [entry.path.replace(f"{user_prefix}/", "") for entry in entries]
         db_files = {
-            f.path: f.encryption_method
+            f.path: {
+                "encryption_method": f.encryption_method,
+                "sort_position": f.sort_position,
+            }
             for f in StoredFile.objects.filter(owner=request.user, path__in=entry_paths)
         }
 
-        entry_data = [
-            {
-                "name": entry.name,
-                "path": entry.path.replace(f"{user_prefix}/", ""),  # Strip user prefix
-                "size": entry.size,
-                "is_directory": entry.is_directory,
-                "content_type": entry.content_type,
-                "modified_at": entry.modified_at,
-                "encryption_method": db_files.get(
-                    entry.path.replace(f"{user_prefix}/", ""),
-                    StoredFile.ENCRYPTION_NONE,
-                ),
-            }
-            for entry in entries
-        ]
+        # Build entry data with sort_position for sorting
+        entry_data = []
+        for entry in entries:
+            rel_path = entry.path.replace(f"{user_prefix}/", "")
+            db_info = db_files.get(rel_path, {})
+            entry_data.append(
+                {
+                    "name": entry.name,
+                    "path": rel_path,
+                    "size": entry.size,
+                    "is_directory": entry.is_directory,
+                    "content_type": entry.content_type,
+                    "modified_at": entry.modified_at,
+                    "encryption_method": db_info.get(
+                        "encryption_method", StoredFile.ENCRYPTION_NONE
+                    ),
+                    "sort_position": db_info.get("sort_position"),
+                }
+            )
+
+        # Sort: directories first, then by sort_position (nulls last), then alphabetically
+        entry_data = sorted(
+            entry_data,
+            key=lambda x: (
+                not x["is_directory"],
+                x["sort_position"] if x["sort_position"] is not None else float("inf"),
+                x["name"],
+            ),
+        )
 
         # Pagination
         limit = min(int(request.query_params.get("limit", 50)), 200)
@@ -254,6 +267,14 @@ class DirectoryCreateView(StormCloudBaseAPIView):
 
         # Create database record
         parent_path = str(Path(dir_path).parent) if dir_path != "." else ""
+
+        # Shift existing files down to make room at position 0
+        StoredFile.objects.filter(
+            owner=request.user,
+            parent_path=parent_path,
+            sort_position__isnull=False,
+        ).update(sort_position=F("sort_position") + 1)
+
         StoredFile.objects.update_or_create(
             owner=request.user,
             path=dir_path,
@@ -264,6 +285,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
                 "is_directory": True,
                 "parent_path": parent_path,
                 "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
+                "sort_position": 0,  # New directories go to top
             },
         )
 
@@ -279,6 +301,110 @@ class DirectoryCreateView(StormCloudBaseAPIView):
         }
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+class DirectoryReorderView(StormCloudBaseAPIView):
+    """Reorder files in a directory."""
+
+    @extend_schema(
+        summary="Reorder files",
+        description="Set custom sort order for files in a directory. Partial list allowed.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"order": {"type": "array", "items": {"type": "string"}}},
+            }
+        },
+        responses={
+            200: OpenApiResponse(description="Order updated"),
+            404: OpenApiResponse(description="Directory not found"),
+        },
+        tags=["Files"],
+    )
+    def post(self, request, dir_path=""):
+        """Reorder files in directory."""
+        from .serializers import DirectoryReorderSerializer
+
+        serializer = DirectoryReorderSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = serializer.validated_data["order"]
+
+        # Normalize path
+        try:
+            dir_path = normalize_path(dir_path) if dir_path else ""
+        except PathValidationError as e:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": dir_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Update sort_position for each file in the order list
+        updated_count = 0
+        for position, filename in enumerate(order):
+            file_path = f"{dir_path}/{filename}" if dir_path else filename
+            updated = StoredFile.objects.filter(
+                owner=request.user,
+                path=file_path,
+            ).update(sort_position=position)
+            updated_count += updated
+
+        return Response(
+            {
+                "message": "Order updated",
+                "path": dir_path,
+                "count": updated_count,
+            }
+        )
+
+
+class DirectoryResetOrderView(StormCloudBaseAPIView):
+    """Reset file order in a directory to alphabetical."""
+
+    @extend_schema(
+        summary="Reset file order",
+        description="Reset sort order to alphabetical (default) for all files in a directory.",
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Order reset"),
+        },
+        tags=["Files"],
+    )
+    def post(self, request, dir_path=""):
+        """Reset file order to alphabetical."""
+        # Normalize path
+        try:
+            dir_path = normalize_path(dir_path) if dir_path else ""
+        except PathValidationError as e:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": dir_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Set sort_position to null for all files in directory
+        updated = StoredFile.objects.filter(
+            owner=request.user,
+            parent_path=dir_path,
+        ).update(sort_position=None)
+
+        return Response(
+            {
+                "message": "Order reset to alphabetical",
+                "path": dir_path,
+                "count": updated,
+            }
+        )
 
 
 class FileDetailView(StormCloudBaseAPIView):
@@ -432,6 +558,14 @@ class FileCreateView(StormCloudBaseAPIView):
 
         # Create database record
         db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
+
+        # Shift existing files down to make room at position 0
+        StoredFile.objects.filter(
+            owner=request.user,
+            parent_path=db_parent_path,
+            sort_position__isnull=False,
+        ).update(sort_position=F("sort_position") + 1)
+
         stored_file, created = StoredFile.objects.update_or_create(
             owner=request.user,
             path=file_path,
@@ -442,6 +576,7 @@ class FileCreateView(StormCloudBaseAPIView):
                 "is_directory": False,
                 "parent_path": db_parent_path,
                 "encryption_method": StoredFile.ENCRYPTION_NONE,
+                "sort_position": 0,  # New files go to top
             },
         )
 
@@ -519,6 +654,14 @@ class FileUploadView(StormCloudBaseAPIView):
 
         # Create/update database record
         db_parent_path = str(Path(file_path).parent) if file_path != "." else ""
+
+        # Shift existing files down to make room at position 0
+        StoredFile.objects.filter(
+            owner=request.user,
+            parent_path=db_parent_path,
+            sort_position__isnull=False,
+        ).update(sort_position=F("sort_position") + 1)
+
         stored_file, created = StoredFile.objects.update_or_create(
             owner=request.user,
             path=file_path,
@@ -529,6 +672,7 @@ class FileUploadView(StormCloudBaseAPIView):
                 "is_directory": False,
                 "parent_path": db_parent_path,
                 "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
+                "sort_position": 0,  # New files go to top
             },
         )
 

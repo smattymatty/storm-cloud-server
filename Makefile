@@ -11,7 +11,7 @@
 # =============================================================================
 
 .PHONY: help setup build up down restart logs shell superuser api_key migrate backup clean \
-        deploy deploy-check deploy-app deploy-nginx deploy-ssl
+        deploy deploy-check deploy-app deploy-nginx deploy-ssl gotosocial-user gotosocial-token
 
 # Colors
 GREEN := \033[0;32m
@@ -182,3 +182,156 @@ deploy-ssl: ## Renew/update SSL certificates
 		-i inventory.yml \
 		--extra-vars "@../config.yml" \
 		--tags ssl -K
+
+# =============================================================================
+# GOTOSOCIAL
+# =============================================================================
+
+GOTOSOCIAL_CONTAINER := stormcloud_gotosocial
+
+gotosocial-user: ## Create a GoToSocial user account (interactive)
+	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
+	@echo "$(CYAN)  GoToSocial - Create User Account$(NC)"
+	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@# Check if container is running
+	@if ! docker ps --format '{{.Names}}' | grep -q "^$(GOTOSOCIAL_CONTAINER)$$"; then \
+		echo "$(YELLOW)ERROR: GoToSocial container is not running$(NC)"; \
+		echo ""; \
+		echo "Make sure GoToSocial is enabled and deployed:"; \
+		echo "  1. Set install_gotosocial: true in deploy/config.yml"; \
+		echo "  2. Run: make deploy"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@# Prompt for username
+	@read -p "Username: " username; \
+	if [ -z "$$username" ]; then \
+		echo "$(YELLOW)ERROR: Username is required$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	read -p "Email: " email; \
+	if [ -z "$$email" ]; then \
+		echo "$(YELLOW)ERROR: Email is required$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	stty -echo; \
+	read -p "Password: " password; \
+	stty echo; \
+	echo ""; \
+	if [ -z "$$password" ]; then \
+		echo "$(YELLOW)ERROR: Password is required$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	echo ""; \
+	echo "$(GREEN)Creating account...$(NC)"; \
+	if ! docker exec -it $(GOTOSOCIAL_CONTAINER) \
+		/gotosocial/gotosocial admin account create \
+		--username "$$username" \
+		--email "$$email" \
+		--password "$$password"; then \
+		echo "$(YELLOW)ERROR: Failed to create account$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	echo ""; \
+	echo "$(GREEN)Confirming account...$(NC)"; \
+	if ! docker exec -it $(GOTOSOCIAL_CONTAINER) \
+		/gotosocial/gotosocial admin account confirm \
+		--username "$$username"; then \
+		echo "$(YELLOW)ERROR: Failed to confirm account$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	echo ""; \
+	read -p "Make this user an admin? [y/N]: " make_admin; \
+	if [ "$$make_admin" = "y" ] || [ "$$make_admin" = "Y" ]; then \
+		echo "$(GREEN)Promoting to admin...$(NC)"; \
+		if ! docker exec -it $(GOTOSOCIAL_CONTAINER) \
+			/gotosocial/gotosocial admin account promote \
+			--username "$$username"; then \
+			echo "$(YELLOW)ERROR: Failed to promote account$(NC)"; \
+			exit 1; \
+		fi; \
+		echo ""; \
+		echo "$(GREEN)Restarting GoToSocial for admin changes to take effect...$(NC)"; \
+		docker restart $(GOTOSOCIAL_CONTAINER); \
+	fi; \
+	\
+	echo ""; \
+	echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"; \
+	echo "$(GREEN)Account created successfully!$(NC)"; \
+	echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"; \
+	echo ""; \
+	echo "You can now log in at your GoToSocial instance."
+
+gotosocial-token: ## Generate GoToSocial API token for Django integration
+	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
+	@echo "$(CYAN)  GoToSocial - Generate API Token$(NC)"
+	@echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@read -p "GoToSocial domain (e.g., social.example.com): " domain; \
+	if [ -z "$$domain" ]; then \
+		echo "$(YELLOW)ERROR: Domain is required$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	echo ""; \
+	echo "$(GREEN)Step 1: Creating application...$(NC)"; \
+	response=$$(curl -s -X POST "https://$$domain/api/v1/apps" \
+		-H "Content-Type: application/json" \
+		-d '{"client_name":"stormcloud","redirect_uris":"urn:ietf:wg:oauth:2.0:oob","scopes":"read write"}'); \
+	\
+	client_id=$$(echo "$$response" | grep -o '"client_id":"[^"]*"' | cut -d'"' -f4); \
+	client_secret=$$(echo "$$response" | grep -o '"client_secret":"[^"]*"' | cut -d'"' -f4); \
+	\
+	if [ -z "$$client_id" ] || [ -z "$$client_secret" ]; then \
+		echo "$(YELLOW)ERROR: Failed to create application$(NC)"; \
+		echo "Response: $$response"; \
+		exit 1; \
+	fi; \
+	echo "done"; \
+	\
+	echo ""; \
+	echo "$(GREEN)Step 2: Open this URL in your browser:$(NC)"; \
+	echo ""; \
+	echo "  https://$$domain/oauth/authorize?client_id=$$client_id&redirect_uri=urn:ietf:wg:oauth:2.0:oob&response_type=code&scope=read+write"; \
+	echo ""; \
+	echo "  1. Log in with your GoToSocial account"; \
+	echo "  2. Click \"Allow\""; \
+	echo "  3. Copy the code shown"; \
+	echo ""; \
+	read -p "Paste authorization code: " auth_code; \
+	if [ -z "$$auth_code" ]; then \
+		echo "$(YELLOW)ERROR: Authorization code is required$(NC)"; \
+		exit 1; \
+	fi; \
+	\
+	echo ""; \
+	echo "$(GREEN)Step 3: Exchanging for token...$(NC)"; \
+	token_response=$$(curl -s -X POST "https://$$domain/oauth/token" \
+		-H "Content-Type: application/json" \
+		-d "{\"redirect_uri\":\"urn:ietf:wg:oauth:2.0:oob\",\"client_id\":\"$$client_id\",\"client_secret\":\"$$client_secret\",\"grant_type\":\"authorization_code\",\"code\":\"$$auth_code\"}"); \
+	\
+	access_token=$$(echo "$$token_response" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4); \
+	\
+	if [ -z "$$access_token" ]; then \
+		echo "$(YELLOW)ERROR: Failed to get access token$(NC)"; \
+		echo "Response: $$token_response"; \
+		exit 1; \
+	fi; \
+	echo "done"; \
+	\
+	echo ""; \
+	echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"; \
+	echo "$(GREEN)  Success! Add these to your .env file:$(NC)"; \
+	echo "$(CYAN)═══════════════════════════════════════════════════$(NC)"; \
+	echo ""; \
+	echo "  GOTOSOCIAL_DOMAIN=$$domain"; \
+	echo "  GOTOSOCIAL_TOKEN=$$access_token"; \
+	echo ""; \
+	echo "  Then restart Django: make restart"; \
+	echo ""
