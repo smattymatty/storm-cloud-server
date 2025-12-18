@@ -629,7 +629,8 @@
       ansible.builtin.file:
         path: "{{ install_path }}/gotosocial_data"
         state: directory
-        owner: "{{ app_user }}"
+        owner: "{{ gotosocial_uid | default('1000') }}"
+        group: "{{ gotosocial_uid | default('1000') }}"
         mode: "0755"
       when:
         - install_gotosocial | default(false)

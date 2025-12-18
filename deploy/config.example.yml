@@ -59,6 +59,9 @@ configure_firewall: true
 install_gotosocial: false
 gotosocial_domain: "" # e.g., social.example.com
 
+# GoToSocial container runs as UID 1000 by default. Only change if using a custom image.
+gotosocial_uid: 1000
+
 # === POSTGRES - Database configuration ===
 
 # REQUIRED: Strong password for PostgreSQL database
