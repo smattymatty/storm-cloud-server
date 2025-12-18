@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from typing import Optional
 from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -52,7 +53,6 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
-    'core.middleware.SentryContextMiddleware',  # Add user context to Sentry errors
     'social.middleware.SocialWarningMiddleware',  # Track social posting warnings
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -242,7 +242,7 @@ STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS = config(
 # None = direct API link (/api/v1/auth/verify-email/?token=xxx)
 # String = custom URL template, use {token} placeholder
 # Example: "https://myapp.com/verify?token={token}"
-STORMCLOUD_EMAIL_VERIFICATION_LINK = None
+STORMCLOUD_EMAIL_VERIFICATION_LINK: Optional[str] = None
 
 # API keys
 STORMCLOUD_MAX_API_KEYS_PER_USER = config(

@@ -258,39 +258,6 @@ urlpatterns = [
 ]
 
 # =============================================================================
-# Development-only Sentry test endpoint
+# Development Debug Endpoints
 # =============================================================================
-if settings.DEBUG:
-
-    def sentry_test_error(request):
-        """
-        Test endpoint for Sentry integration.
-        Raises deliberate errors to verify Sentry is working.
-
-        Only available when DEBUG=True.
-        """
-        error_type = request.GET.get("type", "division")
-
-        if error_type == "division":
-            # Test basic exception
-            division_by_zero = 1 / 0
-            return JsonResponse({"error": "This should never be reached"})
-        elif error_type == "value":
-            # Test value error
-            raise ValueError("Test error from Storm Cloud - this is intentional!")
-        elif error_type == "api_key":
-            # Test sensitive data filtering
-            fake_key = "test_api_key_1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-"
-            raise Exception(f"Error with API key: {fake_key}")
-        else:
-            return JsonResponse(
-                {
-                    "message": "Sentry test endpoint",
-                    "usage": "Add ?type=division, ?type=value, or ?type=api_key to trigger errors",
-                    "available_types": ["division", "value", "api_key"],
-                }
-            )
-
-    urlpatterns += [
-        path("debug/sentry-test/", sentry_test_error, name="sentry-test"),
-    ]
+# Additional debug endpoints can be added here when DEBUG=True

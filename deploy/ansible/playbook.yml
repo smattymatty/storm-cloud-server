@@ -42,7 +42,7 @@
       default: ""
 
     - name: gotosocial_password
-      prompt: "GoToSocial password (required if username provided)"
+      prompt: "GoToSocial password (minimum 16 characters, required if username provided)"
       private: true
       default: ""
 
@@ -113,19 +113,19 @@
       ansible.builtin.assert:
         that:
           - gotosocial_email | default('') | length > 0
-          - gotosocial_password | default('') | length > 0
+          - gotosocial_password | default('') | length >= 16
         fail_msg: |
 
           ══════════════════════════════════════════════════════════════
           ❌ GoToSocial Account Setup Incomplete
           ══════════════════════════════════════════════════════════════
           
-          You provided username "{{ gotosocial_username }}" but email or password is missing.
+          You provided username "{{ gotosocial_username }}" but email or password is invalid.
           
           To create a GoToSocial account during deployment, provide ALL of:
             - username (you provided: {{ gotosocial_username }})
             - email (missing or empty)
-            - password (missing or empty)
+            - password (minimum 16 characters required)
 
           The account will automatically be promoted to admin.
           

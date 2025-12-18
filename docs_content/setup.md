@@ -305,7 +305,6 @@ python manage.py runserver
 - **API Documentation:** Visit `http://localhost:8000/api/docs/` (Swagger UI)
 - **Upload Files:** [Storage API Guide](storage/files.md)
 - **Share Links:** [Share Links API](share-links-api.md)
-- **Monitoring:** [Production Monitoring](production/monitoring.md)
 - **Architecture:** [Design Decisions](../architecture/records/)
 
 ---
@@ -316,14 +315,12 @@ For production deployments, see:
 
 - [DOCKER.md](../DOCKER.md) - Production Docker configuration
 - [SECURITY.md](../SECURITY.md) - Security best practices
-- [Production Monitoring](production/monitoring.md) - Error tracking with Sentry
 
 Key production requirements:
 - HTTPS via reverse proxy (nginx/Caddy)
 - Secure `SECRET_KEY` and `POSTGRES_PASSWORD`
 - Set `DEBUG=False`
 - Configure SMTP for emails
-- Set up monitoring (Sentry)
 - Configure automated backups
 
 ---

@@ -484,7 +484,6 @@ Features:
 - [Authentication Guide](accounts/authentication.md) - Detailed auth docs
 - [File Storage API](storage/files.md) - File operations reference
 - [Share Links API](share-links-api.md) - Share link reference
-- [Production Monitoring](production/monitoring.md) - Sentry integration
 
 ---
 

@@ -75,7 +75,15 @@ class GoToSocialClient:
         try:
             response = self.session.post(endpoint, json=payload, timeout=10)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            
+            # Validate response is a dict (GoToSocial should always return dict)
+            if not isinstance(data, dict):
+                raise GoToSocialError(
+                    f"Expected dict response from GoToSocial, got {type(data).__name__}"
+                )
+            
+            return data
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to post status to GoToSocial: {e}")
             raise GoToSocialError(f"Failed to post status: {e}") from e
@@ -107,7 +115,15 @@ class GoToSocialClient:
         try:
             response = self.session.get(endpoint, timeout=10)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            
+            # Validate response is a dict
+            if not isinstance(data, dict):
+                raise GoToSocialError(
+                    f"Expected dict response from GoToSocial, got {type(data).__name__}"
+                )
+            
+            return data
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to verify GoToSocial credentials: {e}")
             raise GoToSocialError(f"Failed to verify credentials: {e}") from e

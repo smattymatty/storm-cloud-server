@@ -3,13 +3,16 @@
 import uuid
 from base64 import b64decode, b64encode
 from pathlib import Path
+from typing import Any, Union, cast
 
+from django.contrib.auth.models import User
 from django.db.models import F
 from django.http import FileResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import FileUploadParser, MultiPartParser
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from core.storage.local import LocalStorageBackend
@@ -36,7 +39,7 @@ from .serializers import (
 from .utils import get_share_link_by_token
 
 
-def get_user_storage_path(user) -> str:
+def get_user_storage_path(user: User) -> str:
     """Get storage path prefix for user."""
     return f"{user.id}"
 
@@ -44,10 +47,10 @@ def get_user_storage_path(user) -> str:
 class DirectoryListBaseView(StormCloudBaseAPIView):
     """Base view for listing directory contents with pagination."""
 
-    def list_directory(self, request, dir_path=""):
+    def list_directory(self, request: Request, dir_path: str = "") -> Response:
         """List directory contents with pagination."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -187,7 +190,7 @@ class DirectoryListRootView(DirectoryListBaseView):
         },
         tags=["Files"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         """List root directory."""
         return self.list_directory(request, dir_path="")
 
@@ -211,7 +214,7 @@ class DirectoryListView(DirectoryListBaseView):
         },
         tags=["Files"],
     )
-    def get(self, request, dir_path):
+    def get(self, request: Request, dir_path: str) -> Response:
         """List directory contents."""
         return self.list_directory(request, dir_path)
 
@@ -228,10 +231,10 @@ class DirectoryCreateView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def post(self, request, dir_path):
+    def post(self, request: Request, dir_path: str) -> Response:
         """Create directory."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -321,7 +324,7 @@ class DirectoryReorderView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def post(self, request, dir_path=""):
+    def post(self, request: Request, dir_path: str = "") -> Response:
         """Reorder files in directory."""
         from .serializers import DirectoryReorderSerializer
 
@@ -375,7 +378,7 @@ class DirectoryResetOrderView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def post(self, request, dir_path=""):
+    def post(self, request: Request, dir_path: str = "") -> Response:
         """Reset file order to alphabetical."""
         # Normalize path
         try:
@@ -419,10 +422,10 @@ class FileDetailView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def get(self, request, file_path):
+    def get(self, request: Request, file_path: str) -> Response:
         """Get file metadata."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -505,10 +508,10 @@ class FileCreateView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def post(self, request, file_path):
+    def post(self, request: Request, file_path: str) -> Response:
         """Create empty file."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -609,7 +612,7 @@ class FileUploadView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def post(self, request, file_path):
+    def post(self, request: Request, file_path: str) -> Response:
         """Upload file."""
         if "file" not in request.FILES:
             return Response(
@@ -625,7 +628,7 @@ class FileUploadView(StormCloudBaseAPIView):
 
         uploaded_file = request.FILES["file"]
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -704,10 +707,10 @@ class FileDownloadView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def get(self, request, file_path):
+    def get(self, request: Request, file_path: str) -> Union[Response, FileResponse]:
         """Download file."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -772,10 +775,10 @@ class FileDeleteView(StormCloudBaseAPIView):
         },
         tags=["Files"],
     )
-    def delete(self, request, file_path):
+    def delete(self, request: Request, file_path: str) -> Response:
         """Delete file."""
         backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(request.user)
+        user_prefix = get_user_storage_path(cast(User, request.user))
 
         # Normalize and validate path
         try:
@@ -826,7 +829,7 @@ class IndexRebuildView(StormCloudBaseAPIView):
         },
         tags=["Administration"],
     )
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         """Rebuild index."""
         return Response(
             {
@@ -855,7 +858,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         },
         tags=["Share Links"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         """List all share links for user."""
         links = (
             ShareLink.objects.filter(owner=request.user)
@@ -876,7 +879,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         },
         tags=["Share Links"],
     )
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         """Create new share link."""
         from django.conf import settings
 
@@ -961,7 +964,7 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
         },
         tags=["Share Links"],
     )
-    def get(self, request, share_id):
+    def get(self, request: Request, share_id: str) -> Response:
         """Get share link details."""
         try:
             link = ShareLink.objects.get(id=share_id, owner=request.user)
@@ -988,7 +991,7 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
         },
         tags=["Share Links"],
     )
-    def delete(self, request, share_id):
+    def delete(self, request: Request, share_id: str) -> Response:
         """Revoke share link."""
         try:
             link = ShareLink.objects.get(id=share_id, owner=request.user)
@@ -1035,7 +1038,7 @@ class PublicShareInfoView(StormCloudBaseAPIView):
         },
         tags=["Public Share"],
     )
-    def get(self, request, token):
+    def get(self, request: Request, token: str) -> Response:
         """Get shared file info."""
         # Lookup by token (UUID) or custom slug
         link = get_share_link_by_token(token)
@@ -1125,7 +1128,7 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
         },
         tags=["Public Share"],
     )
-    def get(self, request, token):
+    def get(self, request: Request, token: str) -> Union[Response, FileResponse]:
         """Download shared file."""
         # Lookup by token (UUID) or custom slug
         link = get_share_link_by_token(token)

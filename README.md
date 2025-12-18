@@ -316,47 +316,6 @@ coverage html  # Open htmlcov/index.html
 
 ---
 
-## Monitoring (Optional)
-
-Storm Cloud supports optional error tracking and performance monitoring via [Sentry](https://sentry.io/).
-
-### Enable Sentry
-
-1. Create free Sentry account: https://sentry.io/signup/
-2. Create new Python/Django project
-3. Copy your DSN from Project Settings > Client Keys (DSN)
-4. Add to `.env`:
-   ```bash
-   SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
-   ```
-5. Restart application
-
-Sentry is **completely optional** - if `SENTRY_DSN` is not set, the application runs normally with existing logging.
-
-### Test Integration (Development)
-
-Visit `http://127.0.0.1:8000/api/v1/debug/sentry-test/?type=division` to trigger a test error.
-
-Check your Sentry dashboard to verify the error was captured.
-
-### What's Tracked
-
-- **Errors**: Unhandled exceptions, 500 errors, crashes
-- **Performance**: Slow endpoints, database queries, cache hits/misses (10% sampling)
-- **Context**: User info (user_id, username, is_staff), request path, storage backend
-- **Privacy**: API keys, passwords, and tokens are automatically filtered
-
-### Free Tier Limits
-
-Sentry free tier includes:
-- 5,000 errors per month
-- 10,000 performance transactions per month
-- 30 day event retention
-
-Perfect for small-to-medium deployments.
-
----
-
 ## Architecture
 
 ### Design Principles

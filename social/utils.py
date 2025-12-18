@@ -55,8 +55,9 @@ def format_share_link_post(share_link: "ShareLink") -> str:
 
 def _format_file_size(size_bytes: int) -> str:
     """Format file size in human-readable format."""
+    size = float(size_bytes)  # Convert to float for calculations
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} PB"
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PB"

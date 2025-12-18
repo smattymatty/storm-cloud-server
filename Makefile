@@ -127,8 +127,12 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"
-	@cd deploy/ansible && ansible-galaxy install -r requirements.yml --force
+	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
+	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \
+		echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"; \
+		cd deploy/ansible && ansible-galaxy install -r requirements.yml --force && \
+		touch ~/.ansible/.stormcloud_galaxy_timestamp; \
+	fi
 	@echo ""
 	@echo "$(GREEN)Running deployment playbook...$(NC)"
 	@cd deploy/ansible && ansible-playbook playbook.yml \
@@ -144,7 +148,12 @@ deploy-check: ## Dry-run deployment (shows what would change)
 		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
 		exit 1; \
 	fi
-	@cd deploy/ansible && ansible-galaxy install -r requirements.yml --force
+	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
+	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \
+		echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"; \
+		cd deploy/ansible && ansible-galaxy install -r requirements.yml --force && \
+		touch ~/.ansible/.stormcloud_galaxy_timestamp; \
+	fi
 	@cd deploy/ansible && ansible-playbook playbook.yml \
 		-i inventory.yml \
 		--extra-vars "@../config.yml" \
@@ -221,11 +230,15 @@ gotosocial-user: ## Create a GoToSocial user account (optional - deployment crea
 	fi; \
 	\
 	stty -echo; \
-	read -p "Password: " password; \
+	read -p "Password (minimum 16 characters): " password; \
 	stty echo; \
 	echo ""; \
 	if [ -z "$$password" ]; then \
 		echo "$(YELLOW)ERROR: Password is required$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ $${#password} -lt 16 ]; then \
+		echo "$(YELLOW)ERROR: Password must be at least 16 characters$(NC)"; \
 		exit 1; \
 	fi; \
 	\
