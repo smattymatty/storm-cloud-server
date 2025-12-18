@@ -501,6 +501,12 @@
       register: install_dir
       tags: [app]
 
+    # ADD THIS RIGHT HERE
+    - name: DEBUG stat results
+      ansible.builtin.debug:
+        var: install_dir
+      tags: [app]
+
     # =========================================================================
     # Git Recovery - Handle broken deployment states
     # =========================================================================

@@ -102,5 +102,3 @@ cors_origins: "" # Comma-separated list, e.g., "https://app.example.com,https://
 # Repository URL (change if you forked the project)
 repo_url: https://github.com/smattymatty/storm-cloud-server.git
 
-# Where to install on the server
-install_dir: /home/{{ app_user }}/storm-cloud-server
