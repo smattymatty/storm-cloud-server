@@ -11,7 +11,7 @@ ALLOWED_HOSTS={{ domain }},localhost,127.0.0.1
 
 # Docker Compose
 COMPOSE_PROJECT_NAME=stormcloud
-WEB_PORT={{ web_port }}
+WEB_PORT={{ _web_port }}
 
 # PostgreSQL
 POSTGRES_DB=stormcloud
@@ -32,11 +32,11 @@ SECURE_SSL_REDIRECT=False  # nginx handles this
 # CORS - Cross-Origin Resource Sharing
 # Comma-separated list of allowed origins (e.g., "https://app.example.com,https://dashboard.example.com")
 # Leave empty to disable CORS (most secure, but frontend won't work)
-STORMCLOUD_CORS_ORIGINS={{ cors_origins | default('') }}
+STORMCLOUD_CORS_ORIGINS={{ _cors_origins }}
 
 # File Upload Limits (P0-3 Security Fix)
 # Maximum file size in MB (set in deploy/config.yml)
-STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ max_upload_size_mb | default('100') }}
+STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ _max_upload_size_mb }}
 
 # GoToSocial (optional Fediverse server)
-GOTOSOCIAL_DOMAIN={{ gotosocial_domain | default('') }}
+GOTOSOCIAL_DOMAIN={{ _gotosocial_domain }}

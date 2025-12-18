@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.conf import settings
 from rest_framework.test import APIClient
 from rest_framework import status
+from django_mercury import monitor
 
 from accounts.tests.factories import UserWithProfileFactory
 from storage.models import StoredFile
@@ -179,10 +180,12 @@ class BulkOperationAPITestCase(TestCase):
         self._create_file('file1.txt')
         self._create_file('file2.txt')
         
-        response = self.client.post('/api/v1/bulk/', {
-            'operation': 'delete',
-            'paths': ['file1.txt', 'file2.txt']
-        })
+        with monitor(response_time_ms=100, query_count=10) as result:
+            response = self.client.post('/api/v1/bulk/', {
+                'operation': 'delete',
+                'paths': ['file1.txt', 'file2.txt']
+            })
+        result.explain()
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['operation'], 'delete')
@@ -215,11 +218,13 @@ class BulkOperationAPITestCase(TestCase):
         self._create_file('source.txt')
         self._create_directory('dest')
         
-        response = self.client.post('/api/v1/bulk/', {
-            'operation': 'move',
-            'paths': ['source.txt'],
-            'options': {'destination': 'dest'}
-        }, format='json')
+        with monitor(response_time_ms=100, query_count=10) as result:
+            response = self.client.post('/api/v1/bulk/', {
+                'operation': 'move',
+                'paths': ['source.txt'],
+                'options': {'destination': 'dest'}
+            }, format='json')
+        result.explain()
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['succeeded'], 1)
@@ -238,11 +243,13 @@ class BulkOperationAPITestCase(TestCase):
         self._create_file('source.txt', 'content')
         self._create_directory('dest')
         
-        response = self.client.post('/api/v1/bulk/', {
-            'operation': 'copy',
-            'paths': ['source.txt'],
-            'options': {'destination': 'dest'}
-        }, format='json')
+        with monitor(response_time_ms=150, query_count=15) as result:
+            response = self.client.post('/api/v1/bulk/', {
+                'operation': 'copy',
+                'paths': ['source.txt'],
+                'options': {'destination': 'dest'}
+            }, format='json')
+        result.explain()
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['succeeded'], 1)
@@ -286,10 +293,13 @@ class BulkOperationAPITestCase(TestCase):
         
         paths = [f'file{i}.txt' for i in range(51)]
         
-        response = self.client.post('/api/v1/bulk/', {
-            'operation': 'delete',
-            'paths': paths
-        })
+        # Monitor large batch performance (relaxed limits for 51 items)
+        with monitor(response_time_ms=1000, query_count=200) as result:
+            response = self.client.post('/api/v1/bulk/', {
+                'operation': 'delete',
+                'paths': paths
+            })
+        result.explain()
         
         # Could be 200 (fallback) or 202 (async) depending on Django Tasks availability
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_202_ACCEPTED])

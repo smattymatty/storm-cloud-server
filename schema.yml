@@ -1,0 +1,1824 @@
+openapi: 3.0.3
+info:
+  title: Storm Cloud API
+  version: 0.1.0
+  description: Self-hostable cloud storage with markdown CMS capabilities.
+paths:
+  /api/v1/admin/keys/:
+    get:
+      operationId: v1_admin_keys_retrieve
+      description: 'Get list of all API keys across all users. Note: Pagination deferred
+        to Phase 3.'
+      summary: 'Admin: List all API keys'
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: List of API keys
+  /api/v1/admin/keys/{key_id}/revoke/:
+    post:
+      operationId: v1_admin_keys_revoke_create
+      description: Revoke any user's API key.
+      summary: 'Admin: Revoke API key'
+      parameters:
+      - in: path
+        name: key_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Key revoked
+        '404':
+          description: Key not found
+        '400':
+          description: Key already revoked
+  /api/v1/admin/users/:
+    get:
+      operationId: v1_admin_users_list
+      description: 'Get list of all users with filtering options. Note: Pagination
+        deferred to Phase 3.'
+      summary: 'Admin: List users'
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: List of users
+    post:
+      operationId: v1_admin_users_create
+      description: Create a new user (admin only). Bypasses registration settings.
+      summary: 'Admin: Create user'
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminUserCreate'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          description: User created
+  /api/v1/admin/users/{user_id}/:
+    get:
+      operationId: v1_admin_users_detail
+      description: Get detailed information about a specific user.
+      summary: 'Admin: Get user details'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: User details with API keys
+        '404':
+          description: User not found
+    patch:
+      operationId: v1_admin_users_update
+      description: Update user details. Username cannot be changed.
+      summary: 'Admin: Update user'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserUpdate'
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: User updated successfully
+        '404':
+          description: User not found
+        '400':
+          description: Invalid data
+    delete:
+      operationId: v1_admin_users_delete
+      description: Permanently delete a user account. Cannot delete yourself or the
+        last superuser.
+      summary: 'Admin: Delete user'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: User deleted successfully
+        '404':
+          description: User not found
+        '403':
+          description: Cannot delete yourself or last superuser
+  /api/v1/admin/users/{user_id}/activate/:
+    post:
+      operationId: v1_admin_users_activate_create
+      description: Reactivate a deactivated user account.
+      summary: 'Admin: Activate user'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: User activated
+        '404':
+          description: User not found
+  /api/v1/admin/users/{user_id}/deactivate/:
+    post:
+      operationId: v1_admin_users_deactivate_create
+      description: Deactivate a user's account and revoke all their API keys.
+      summary: 'Admin: Deactivate user'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: User deactivated
+        '404':
+          description: User not found
+  /api/v1/admin/users/{user_id}/quota/:
+    patch:
+      operationId: v1_admin_users_quota_partial_update
+      description: Set storage quota for a user in MB. Null means unlimited. P0-3
+        Security Fix.
+      summary: 'Admin: Update user storage quota'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserQuotaUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserQuotaUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminUserQuotaUpdate'
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Quota updated
+        '404':
+          description: User not found
+  /api/v1/admin/users/{user_id}/reset-password/:
+    post:
+      operationId: v1_admin_users_reset_password_create
+      description: Reset a user's password. Requires email configuration to be implemented.
+      summary: 'Admin: Reset user password'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminPasswordReset'
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: Not implemented - email required
+        '404':
+          description: User not found
+  /api/v1/admin/users/{user_id}/verify/:
+    post:
+      operationId: v1_admin_users_verify_create
+      description: Manually verify a user's email address.
+      summary: 'Admin: Verify user email'
+      parameters:
+      - in: path
+        name: user_id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - Administration
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Email verified
+        '404':
+          description: User not found
+  /api/v1/auth/deactivate/:
+    post:
+      operationId: v1_auth_deactivate_create
+      description: Deactivate the current user's account. All API keys will be revoked.
+      summary: Deactivate account
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeactivateAccount'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeactivateAccount'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeactivateAccount'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Account deactivated
+        '400':
+          description: Invalid password
+  /api/v1/auth/delete/:
+    delete:
+      operationId: v1_auth_delete_destroy
+      description: Permanently delete the current user's account. This action cannot
+        be undone.
+      summary: Delete account
+      tags:
+      - Authentication
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Account deleted
+        '400':
+          description: Invalid password
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      description: Create a session cookie for Swagger UI and web testing.
+      summary: Login with session
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      - {}
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+        '403':
+          description: Account disabled or email not verified
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: Invalidate the current session cookie.
+      summary: Logout session
+      tags:
+      - Authentication
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      - {}
+      responses:
+        '200':
+          description: Logged out successfully
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      description: Returns information about the currently authenticated user.
+      summary: Get current user
+      tags:
+      - Authentication
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMeResponse'
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: v1_auth_register_create
+      description: Create a new user account. Registration may be disabled via settings.
+      summary: Register new user
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Registration'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Registration'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Registration'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      - {}
+      responses:
+        '201':
+          description: User created successfully
+        '403':
+          description: Registration disabled
+        '409':
+          description: Username or email already exists
+  /api/v1/auth/resend-verification/:
+    post:
+      operationId: v1_auth_resend_verification_create
+      description: Request a new verification email. Always returns success to prevent
+        email enumeration.
+      summary: Resend verification email
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ResendVerification'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      - {}
+      responses:
+        '200':
+          description: Verification email sent (if account exists)
+  /api/v1/auth/tokens/:
+    get:
+      operationId: v1_auth_tokens_retrieve
+      description: Get all API keys for the authenticated user (keys themselves not
+        included).
+      summary: List API keys
+      tags:
+      - Authentication
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: List of API keys
+    post:
+      operationId: v1_auth_tokens_create
+      description: Create a new API key for CLI/programmatic access. Requires verified
+        email unless admin.
+      summary: Generate API key
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/APIKeyCreate'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKey'
+          description: ''
+        '403':
+          description: Email not verified or max keys exceeded
+  /api/v1/auth/tokens/{key_id}/revoke/:
+    post:
+      operationId: v1_auth_tokens_revoke_create
+      description: Revoke an API key by ID. The key will no longer be usable.
+      summary: Revoke API key
+      parameters:
+      - in: path
+        name: key_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Authentication
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Key revoked successfully
+        '404':
+          description: Key not found
+        '400':
+          description: Key already revoked
+  /api/v1/auth/verify-email/:
+    post:
+      operationId: v1_auth_verify_email_create
+      description: Verify user email using token sent via email.
+      summary: Verify email address
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EmailVerification'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      - {}
+      responses:
+        '200':
+          description: Email verified successfully
+        '400':
+          description: Invalid or expired token
+  /api/v1/bulk/:
+    post:
+      operationId: v1_bulk_create
+      description: 'Perform bulk operations on multiple files/folders. Operations
+        >50 items run asynchronously. Supports: delete, move, copy. Partial success
+        enabled - individual failures don''t abort batch.'
+      summary: Execute bulk operation
+      tags:
+      - Files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operation:
+                  type: string
+                  enum:
+                  - delete
+                  - move
+                  - copy
+                  description: Operation to perform
+                paths:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  maxItems: 250
+                  description: List of file/directory paths
+                options:
+                  type: object
+                  properties:
+                    destination:
+                      type: string
+                      description: Destination directory for move/copy
+                  description: Operation-specific options
+              required:
+              - operation
+              - paths
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Operation completed (sync)
+        '202':
+          description: Operation queued (async)
+        '400':
+          description: Validation error
+  /api/v1/bulk/status/{task_id}/:
+    get:
+      operationId: v1_bulk_status_retrieve
+      description: Get status of an asynchronous bulk operation task
+      summary: Check bulk operation status
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Task status
+        '403':
+          description: Not authorized to view this task
+        '404':
+          description: Task not found
+  /api/v1/cms/:
+    get:
+      operationId: v1_cms_retrieve
+      description: List all files under CMS management. NOT IMPLEMENTED in Phase 1.
+      summary: List managed content
+      tags:
+      - CMS
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: No response body
+  /api/v1/cms/{content_id}/remove/:
+    delete:
+      operationId: v1_cms_remove_destroy
+      description: Remove file from CMS management. NOT IMPLEMENTED in Phase 1.
+      summary: Remove from CMS
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - CMS
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: No response body
+  /api/v1/cms/{content_id}/render/:
+    post:
+      operationId: v1_cms_render_single
+      description: Render a specific markdown content item with Spellbook. NOT IMPLEMENTED
+        in Phase 1.
+      summary: Render content by ID
+      parameters:
+      - in: path
+        name: content_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - CMS
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: No response body
+  /api/v1/cms/add/:
+    post:
+      operationId: v1_cms_add_create
+      description: Mark files for CMS management. NOT IMPLEMENTED in Phase 1.
+      summary: Add to CMS
+      tags:
+      - CMS
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: No response body
+  /api/v1/cms/render/:
+    post:
+      operationId: v1_cms_render_bulk
+      description: Render multiple content items or arbitrary markdown. NOT IMPLEMENTED
+        in Phase 1.
+      summary: Bulk render content
+      tags:
+      - CMS
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '501':
+          description: No response body
+  /api/v1/dirs/:
+    get:
+      operationId: v1_dirs_list_root
+      description: List contents of the root directory. Returns files and subdirectories.
+      summary: List root directory
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Pagination cursor
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Items per page (default 50, max 200)
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectoryListResponse'
+          description: ''
+  /api/v1/dirs/{dir_path}/:
+    get:
+      operationId: v1_dirs_list
+      description: List contents of a specific directory. Returns files and subdirectories.
+      summary: List directory
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Pagination cursor
+      - in: path
+        name: dir_path
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Items per page (default 50, max 200)
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectoryListResponse'
+          description: ''
+        '404':
+          description: Directory not found
+  /api/v1/dirs/{dir_path}/create/:
+    post:
+      operationId: v1_dirs_create_create
+      description: Create a new directory. Parent directories are created as needed.
+      summary: Create directory
+      parameters:
+      - in: path
+        name: dir_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfoResponse'
+          description: ''
+  /api/v1/dirs/{dir_path}/reorder/:
+    post:
+      operationId: v1_dirs_reorder_create_2
+      description: Set custom sort order for files in a directory. Partial list allowed.
+      summary: Reorder files
+      parameters:
+      - in: path
+        name: dir_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:
+                  type: array
+                  items:
+                    type: string
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Order updated
+        '404':
+          description: Directory not found
+  /api/v1/dirs/{dir_path}/reset-order/:
+    post:
+      operationId: v1_dirs_reset_order_create_2
+      description: Reset sort order to alphabetical (default) for all files in a directory.
+      summary: Reset file order
+      parameters:
+      - in: path
+        name: dir_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Order reset
+  /api/v1/dirs/reorder/:
+    post:
+      operationId: v1_dirs_reorder_create
+      description: Set custom sort order for files in a directory. Partial list allowed.
+      summary: Reorder files
+      tags:
+      - Files
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order:
+                  type: array
+                  items:
+                    type: string
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Order updated
+        '404':
+          description: Directory not found
+  /api/v1/dirs/reset-order/:
+    post:
+      operationId: v1_dirs_reset_order_create
+      description: Reset sort order to alphabetical (default) for all files in a directory.
+      summary: Reset file order
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Order reset
+  /api/v1/files/{file_path}/:
+    get:
+      operationId: v1_files_retrieve
+      description: Returns metadata for a file. Returns 404 if path is a directory.
+      summary: Get file metadata
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfoResponse'
+          description: ''
+        '404':
+          description: File not found
+  /api/v1/files/{file_path}/create/:
+    post:
+      operationId: v1_files_create_create
+      description: Create an empty file at the specified path. Parent directories
+        are created automatically.
+      summary: Create empty file
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfoResponse'
+          description: ''
+        '409':
+          description: File already exists
+  /api/v1/files/{file_path}/delete/:
+    delete:
+      operationId: v1_files_delete_destroy
+      description: Delete a file. Use directory endpoints for directory deletion.
+      summary: Delete file
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: File deleted successfully
+        '404':
+          description: File not found
+  /api/v1/files/{file_path}/download/:
+    get:
+      operationId: v1_files_download_retrieve
+      description: Download file bytes.
+      summary: Download file
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: File content
+        '404':
+          description: File not found
+  /api/v1/files/{file_path}/upload/:
+    post:
+      operationId: v1_files_upload_create
+      description: Upload or overwrite a file at the specified path.
+      summary: Upload file
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileUpload'
+          '*/*':
+            schema:
+              $ref: '#/components/schemas/FileUpload'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfoResponse'
+          description: ''
+  /api/v1/index/rebuild/:
+    post:
+      operationId: v1_index_rebuild_create
+      description: Reconcile database with filesystem. Admin only. Filesystem wins
+        policy (ADR 000).
+      summary: Rebuild file index
+      tags:
+      - Administration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum:
+                  - audit
+                  - sync
+                  - clean
+                  - full
+                  default: audit
+                  description: Sync mode
+                user_id:
+                  type: integer
+                  nullable: true
+                  description: Specific user ID or null for all users
+                dry_run:
+                  type: boolean
+                  default: false
+                  description: Preview changes without applying
+                force:
+                  type: boolean
+                  default: false
+                  description: Required for clean/full modes
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Task completed
+        '400':
+          description: Invalid parameters
+  /api/v1/public/{token}/:
+    get:
+      operationId: v1_public_retrieve
+      description: Get information about a shared file (public, no auth required)
+      summary: Get shared file info
+      parameters:
+      - in: header
+        name: X-Share-Password
+        schema:
+          type: string
+        description: Password for protected links
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - Public Share
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicShareInfo'
+          description: ''
+        '401':
+          description: Password required or incorrect
+        '404':
+          description: Link not found or expired
+  /api/v1/public/{token}/download/:
+    get:
+      operationId: v1_public_download_retrieve
+      description: Download a shared file (public, no auth required)
+      summary: Download shared file
+      parameters:
+      - in: header
+        name: X-Share-Password
+        schema:
+          type: string
+        description: Password for protected links
+      - in: path
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - Public Share
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: File download
+        '401':
+          description: Password required or incorrect
+        '404':
+          description: Link not found or expired
+  /api/v1/shares/:
+    get:
+      operationId: v1_shares_list
+      description: Get all share links for the authenticated user
+      summary: List share links
+      tags:
+      - Share Links
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShareLinkResponse'
+          description: ''
+    post:
+      operationId: v1_shares_create
+      description: Create a new public share link for a file
+      summary: Create share link
+      tags:
+      - Share Links
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareLinkCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShareLinkCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShareLinkCreate'
+        required: true
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkResponse'
+          description: ''
+        '404':
+          description: File not found
+        '400':
+          description: Invalid data
+  /api/v1/shares/{share_id}/:
+    get:
+      operationId: v1_shares_retrieve
+      description: Get details of a specific share link
+      summary: Get share link details
+      parameters:
+      - in: path
+        name: share_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Share Links
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkResponse'
+          description: ''
+        '404':
+          description: Share link not found
+    delete:
+      operationId: v1_shares_destroy
+      description: Revoke (deactivate) a share link
+      summary: Revoke share link
+      parameters:
+      - in: path
+        name: share_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Share Links
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Link revoked
+        '404':
+          description: Share link not found
+components:
+  schemas:
+    APIKey:
+      type: object
+      description: API key serializer.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        key:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        last_used_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_active:
+          type: boolean
+      required:
+      - created_at
+      - id
+      - key
+      - last_used_at
+      - name
+    APIKeyCreate:
+      type: object
+      description: Serializer for creating API keys.
+      properties:
+        name:
+          type: string
+          maxLength: 100
+      required:
+      - name
+    AdminPasswordReset:
+      type: object
+      description: Serializer for admin password reset.
+      properties:
+        new_password:
+          type: string
+          writeOnly: true
+        send_email:
+          type: boolean
+          default: false
+    AdminUserCreate:
+      type: object
+      description: Serializer for admin user creation.
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        is_email_verified:
+          type: boolean
+          default: false
+        is_staff:
+          type: boolean
+          default: false
+      required:
+      - email
+      - password
+      - username
+    AuthMeResponse:
+      type: object
+      description: Response serializer for /auth/me/ endpoint.
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        profile:
+          $ref: '#/components/schemas/UserProfile'
+        api_key:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            last_used_at:
+              type: string
+              format: date-time
+              nullable: true
+          nullable: true
+          readOnly: true
+      required:
+      - api_key
+      - profile
+      - user
+    DeactivateAccount:
+      type: object
+      description: Serializer for account deactivation.
+      properties:
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+    DirectoryListResponse:
+      type: object
+      description: Response for directory listing.
+      properties:
+        path:
+          type: string
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileListItem'
+        total:
+          type: integer
+      required:
+      - entries
+      - path
+      - total
+    EmailVerification:
+      type: object
+      description: Serializer for email verification.
+      properties:
+        token:
+          type: string
+      required:
+      - token
+    FileInfoResponse:
+      type: object
+      description: Response for file info endpoint.
+      properties:
+        path:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+        content_type:
+          type: string
+          nullable: true
+        is_directory:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        modified_at:
+          type: string
+          format: date-time
+        encryption_method:
+          type: string
+          default: none
+      required:
+      - content_type
+      - created_at
+      - is_directory
+      - modified_at
+      - name
+      - path
+      - size
+    FileListItem:
+      type: object
+      description: CLI-friendly file list item.
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        size:
+          type: integer
+        is_directory:
+          type: boolean
+        content_type:
+          type: string
+          nullable: true
+        modified_at:
+          type: string
+          format: date-time
+        encryption_method:
+          type: string
+          default: none
+        sort_position:
+          type: integer
+          nullable: true
+      required:
+      - content_type
+      - is_directory
+      - modified_at
+      - name
+      - path
+      - size
+    FileUpload:
+      type: object
+      description: Serializer for file upload.
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+    Login:
+      type: object
+      description: Serializer for session login.
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    NullEnum:
+      enum:
+      - null
+    PatchedAdminUserQuotaUpdate:
+      type: object
+      description: Serializer for updating user storage quota (P0-3 Security Fix).
+      properties:
+        storage_quota_mb:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Storage quota in MB, or null for unlimited
+    PatchedAdminUserUpdate:
+      type: object
+      description: Serializer for admin user update.
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        is_staff:
+          type: boolean
+        password:
+          type: string
+          writeOnly: true
+    PublicShareInfo:
+      type: object
+      description: Serializer for public share file info.
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        content_type:
+          type: string
+        requires_password:
+          type: boolean
+        download_url:
+          type: string
+      required:
+      - content_type
+      - download_url
+      - name
+      - requires_password
+      - size
+    Registration:
+      type: object
+      description: Serializer for user registration.
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+      - username
+    ResendVerification:
+      type: object
+      description: Serializer for resending verification email.
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    ShareLinkCreate:
+      type: object
+      description: Serializer for creating share links.
+      properties:
+        file_path:
+          type: string
+          maxLength: 1024
+        expiry_days:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ShareLinkCreateExpiryDaysEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+        custom_slug:
+          type: string
+          maxLength: 64
+      required:
+      - file_path
+    ShareLinkCreateExpiryDaysEnum:
+      enum:
+      - 0
+      - 1
+      - 3
+      - 7
+      - 30
+      - 90
+      type: integer
+      description: |-
+        * `0` - 0
+        * `1` - 1
+        * `3` - 3
+        * `7` - 7
+        * `30` - 30
+        * `90` - 90
+    ShareLinkResponse:
+      type: object
+      description: Serializer for share link responses.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+        file_path:
+          type: string
+          readOnly: true
+          description: Auto-populated from stored_file.path
+        token:
+          type: string
+          format: uuid
+          readOnly: true
+        custom_slug:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Custom URL slug (alphanumeric and hyphens, 3-64 chars)
+        url:
+          type: string
+          readOnly: true
+        has_password:
+          type: string
+          readOnly: true
+        expiry_days:
+          allOf:
+          - $ref: '#/components/schemas/ShareLinkResponseExpiryDaysEnum'
+          readOnly: true
+          description: |-
+            Number of days until link expires (0 = never)
+
+            * `1` - 1 day
+            * `3` - 3 days
+            * `7` - 7 days
+            * `30` - 30 days
+            * `90` - 90 days
+            * `0` - Never
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Calculated expiration timestamp
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        view_count:
+          type: integer
+          readOnly: true
+          description: Number of times this link's info was viewed
+        download_count:
+          type: integer
+          readOnly: true
+          description: Number of times the file was downloaded
+        last_accessed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Last time this link was viewed or downloaded
+        is_active:
+          type: boolean
+          readOnly: true
+          description: Whether this link is active (false = revoked)
+        is_expired:
+          type: string
+          readOnly: true
+        posted_to_social:
+          type: boolean
+          readOnly: true
+          description: Whether this link was posted to GoToSocial
+        social_post_url:
+          type: string
+          format: uri
+          readOnly: true
+          nullable: true
+          description: Public URL of the social post
+      required:
+      - created_at
+      - custom_slug
+      - download_count
+      - expires_at
+      - expiry_days
+      - file_path
+      - has_password
+      - id
+      - is_active
+      - is_expired
+      - last_accessed_at
+      - owner
+      - posted_to_social
+      - social_post_url
+      - token
+      - url
+      - view_count
+    ShareLinkResponseExpiryDaysEnum:
+      enum:
+      - 1
+      - 3
+      - 7
+      - 30
+      - 90
+      - 0
+      type: integer
+      description: |-
+        * `1` - 1 day
+        * `3` - 3 days
+        * `7` - 7 days
+        * `30` - 30 days
+        * `90` - 90 days
+        * `0` - Never
+    User:
+      type: object
+      description: Basic user serializer.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        date_joined:
+          type: string
+          format: date-time
+          readOnly: true
+        is_staff:
+          type: boolean
+          title: Staff status
+          description: Designates whether the user can log into this admin site.
+        is_superuser:
+          type: boolean
+          title: Superuser status
+          description: Designates that this user has all permissions without explicitly
+            assigning them.
+        is_active:
+          type: boolean
+          title: Active
+          description: Designates whether this user should be treated as active. Unselect
+            this instead of deleting accounts.
+      required:
+      - date_joined
+      - id
+      - username
+    UserProfile:
+      type: object
+      description: User profile serializer.
+      properties:
+        is_email_verified:
+          type: boolean
+  securitySchemes:
+    APIKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: 'API key authentication using Bearer token. Format: `Authorization:
+        Bearer <api_key>`'
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+tags:
+- name: Authentication
+  description: Login, registration, and API key management
+- name: Files
+  description: File and directory operations
+- name: CMS
+  description: Content management (coming soon)
+- name: Administration
+  description: Admin-only user and key management

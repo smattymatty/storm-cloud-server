@@ -23,9 +23,6 @@
   vars:
     app_user: "{{ app_user | default('stormcloud') }}"
     install_path: "/home/{{ app_user }}/storm-cloud-server"
-    web_port: "{{ web_port | default('8000') }}"
-    cors_origins: "{{ cors_origins | default('') }}" # CORS origins from config.yml
-    max_upload_size_mb: "{{ max_upload_size_mb | default('100') }}" # P0-3: File upload limit
 
   # ===========================================================================
   # PROMPTS
@@ -52,6 +49,16 @@
   # ===========================================================================
 
   pre_tasks:
+    # Set default values for optional configuration variables
+    # This prevents recursive template loops and makes defaults explicit
+    - name: Set default values for optional variables
+      ansible.builtin.set_fact:
+        _web_port: "{{ web_port | default('8000') }}"
+        _cors_origins: "{{ cors_origins | default('') }}"
+        _max_upload_size_mb: "{{ max_upload_size_mb | default('100') }}"
+        _gotosocial_domain: "{{ gotosocial_domain | default('') }}"
+      tags: [always]
+
     - name: Validate config
       ansible.builtin.assert:
         that:
@@ -197,7 +204,7 @@
             User:    {{ app_user }}
           {% if install_gotosocial | default(false) %}
 
-            GoToSocial: {{ gotosocial_domain }}
+            GoToSocial: {{ _gotosocial_domain }}
           {% endif %}
           ══════════════════════════════════════════════════════════════
       tags: [always]
@@ -333,7 +340,7 @@
 
     - name: Check if GoToSocial SSL cert exists
       ansible.builtin.stat:
-        path: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+        path: "/etc/letsencrypt/live/{{ _gotosocial_domain }}/fullchain.pem"
       register: gotosocial_ssl_cert_initial
       when: install_gotosocial | default(false)
       tags: [nginx, ssl, gotosocial]
@@ -345,7 +352,7 @@
         content: |
           server {
               listen 80;
-              server_name {{ gotosocial_domain }};
+              server_name {{ _gotosocial_domain }};
 
               location /.well-known/acme-challenge/ {
                   root /var/www/certbot;
@@ -439,8 +446,8 @@
           --webroot-path=/var/www/certbot
           --email {{ admin_email }}
           --agree-tos --no-eff-email --non-interactive
-          -d {{ gotosocial_domain }}
-        creates: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+          -d {{ _gotosocial_domain }}
+        creates: "/etc/letsencrypt/live/{{ _gotosocial_domain }}/fullchain.pem"
       when:
         - install_gotosocial | default(false)
         - install_certbot | default(true)
@@ -454,7 +461,7 @@
 
     - name: Re-check GoToSocial SSL cert
       ansible.builtin.stat:
-        path: "/etc/letsencrypt/live/{{ gotosocial_domain }}/fullchain.pem"
+        path: "/etc/letsencrypt/live/{{ _gotosocial_domain }}/fullchain.pem"
       register: gotosocial_ssl_cert
       when: install_gotosocial | default(false)
       tags: [nginx, ssl, gotosocial]
@@ -725,7 +732,7 @@
 
     - name: Wait for healthy
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ web_port }}/api/v1/health/ping/"
+        url: "http://127.0.0.1:{{ _web_port }}/api/v1/health/ping/"
         status_code: 200
       register: health
       until: health.status == 200
@@ -834,7 +841,7 @@
           {% if install_gotosocial | default(false) %}
 
           ──────────────────────────────────────────────────────────────
-          GoToSocial: https://{{ gotosocial_domain }}
+          GoToSocial: https://{{ _gotosocial_domain }}
           {% if gotosocial_username | default('') | length > 0 %}
 
             ✓ Account created: {{ gotosocial_username }}
