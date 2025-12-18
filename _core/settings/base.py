@@ -263,6 +263,18 @@ STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS = config(
     cast=int
 )
 
+# File Upload Limits (P0-3 Security Fix)
+STORMCLOUD_MAX_UPLOAD_SIZE_MB = config(
+    'STORMCLOUD_MAX_UPLOAD_SIZE_MB',
+    default=100,
+    cast=int
+)
+
+# Django upload size limits (in bytes)
+# Controls both in-memory and temp file upload sizes
+DATA_UPLOAD_MAX_MEMORY_SIZE = STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
+
 # CORS
 STORMCLOUD_CORS_ORIGINS = config(
     'STORMCLOUD_CORS_ORIGINS',
@@ -351,6 +363,27 @@ SPELLBOOK_MD_PATH = [
 SPELLBOOK_MD_URL_PREFIX = [
     'docs',
 ]
+
+# =============================================================================
+# DJANGO TASKS FRAMEWORK (Django 6.0+)
+# =============================================================================
+TASKS = {
+    'default': {
+        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
+    }
+}
+
+# Storm Cloud Tasks Configuration
+STORMCLOUD_INDEX_REBUILD_PRIORITY = config(
+    'STORMCLOUD_INDEX_REBUILD_PRIORITY',
+    default=1,
+    cast=int
+)
+STORMCLOUD_INDEX_REBUILD_QUEUE = config(
+    'STORMCLOUD_INDEX_REBUILD_QUEUE',
+    default='maintenance',
+    cast=str
+)
 
 # =============================================================================
 # GOTOSOCIAL INTEGRATION

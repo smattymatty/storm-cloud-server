@@ -10,8 +10,8 @@ Identifies architectural risks, their likelihood and impact, and how we're addre
 
 | Risk | Likelihood | Impact | Status | Mitigation |
 |------|------------|--------|--------|------------|
-| Data loss | Low | Critical | Mitigated | Filesystem is source of truth, index rebuild (ADR 001) |
-| Index desync | Medium | Medium | Mitigated | Rebuild command, filesystem wins |
+| Data loss | Low | Critical | Mitigated | Filesystem is source of truth, index rebuild (ADR 009) |
+| Index desync | Medium | Medium | Mitigated | Rebuild command (ADR 009), filesystem wins |
 | Storage lock-in | Low | Medium | Mitigated | Pluggable backends (ADR 002) |
 | Auth bypass | Low | Critical | Mitigated | Key hashing, security logging, tests |
 | Coupling creep | Medium | Medium | Accepted | Fitness functions defined, not yet automated |

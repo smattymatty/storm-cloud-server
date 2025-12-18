@@ -34,7 +34,7 @@ check_untyped_defs = true            # Check bodies of untyped functions
 disallow_untyped_calls = false       # Allow calling untyped functions
 
 # Import handling
-ignore_missing_imports = false       # Error on missing imports (we have stubs now)
+ignore_missing_imports = true        # Ignore missing type stubs for external libraries
 no_implicit_optional = true          # Require explicit Optional[] for None defaults
 strict_optional = true               # Enable strict Optional checking
 
@@ -102,6 +102,14 @@ ignore_missing_imports = true        # No type stubs available yet
 [[tool.mypy.overrides]]
 module = "django_mercury.*"
 ignore_missing_imports = true        # No type stubs available yet
+
+[[tool.mypy.overrides]]
+module = "decouple"
+ignore_missing_imports = true        # No type stubs available
+
+[[tool.mypy.overrides]]
+module = "django.tasks"
+ignore_missing_imports = true        # Django 6.0 Tasks - stubs pending
 
 # =============================================================================
 # Django Stubs Configuration

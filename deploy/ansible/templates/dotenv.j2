@@ -34,5 +34,9 @@ SECURE_SSL_REDIRECT=False  # nginx handles this
 # Leave empty to disable CORS (most secure, but frontend won't work)
 STORMCLOUD_CORS_ORIGINS={{ cors_origins | default('') }}
 
+# File Upload Limits (P0-3 Security Fix)
+# Maximum file size in MB (set in deploy/config.yml)
+STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ max_upload_size_mb | default('100') }}
+
 # GoToSocial (optional Fediverse server)
 GOTOSOCIAL_DOMAIN={{ gotosocial_domain | default('') }}

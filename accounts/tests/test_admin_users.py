@@ -439,46 +439,45 @@ class AdminUserDeleteTest(StormCloudAdminTestCase):
 class AdminUserPasswordResetTest(StormCloudAdminTestCase):
     """Tests for POST /api/v1/admin/users/{id}/reset-password/"""
 
-    def test_admin_reset_password_with_new_password_succeeds(self):
-        """Admin can set a specific password for user."""
+    def test_admin_reset_password_with_new_password_returns_501(self):
+        """Admin password reset blocked until email configured (P0-2 fix)."""
         user = UserWithProfileFactory()
+        old_password = 'oldpassword123'
+        user.set_password(old_password)
+        user.save()
 
-        data = {'new_password': 'temppassword123'}
+        data = {'new_password': 'newpassword456'}
         response = self.client.post(f'/api/v1/admin/users/{user.id}/reset-password/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
+        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertIn('NOT_IMPLEMENTED', response.data['error']['code'])
+        
+        # Password should NOT be changed
         user.refresh_from_db()
-        self.assertTrue(user.check_password('temppassword123'))
-        self.assertIn('temporary_password', response.data)
+        self.assertTrue(user.check_password(old_password))
 
-    def test_admin_reset_password_with_send_email_succeeds(self):
-        """Admin can generate temporary password with send_email flag."""
-        user = UserWithProfileFactory(email='test@example.com')
+    def test_admin_reset_password_with_send_email_returns_501(self):
+        """Admin password reset with email blocked until configured (P0-2 fix)."""
+        user = UserWithProfileFactory()
 
         data = {'send_email': True}
         response = self.client.post(f'/api/v1/admin/users/{user.id}/reset-password/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        self.assertIn('email configuration', response.data['error']['message'].lower())
 
-        # Password should be changed
-        self.assertIn('temporary_password', response.data)
-        temp_password = response.data['temporary_password']
-
-        user.refresh_from_db()
-        self.assertTrue(user.check_password(temp_password))
-
-    def test_admin_reset_password_without_params_returns_400(self):
-        """Password reset without new_password or send_email returns error."""
+    def test_admin_reset_password_without_params_returns_501(self):
+        """Password reset without params also returns 501 (P0-2 fix)."""
         user = UserWithProfileFactory()
 
         data = {}
         response = self.client.post(f'/api/v1/admin/users/{user.id}/reset-password/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
 
-    def test_admin_reset_password_nonexistent_user_returns_404(self):
-        """Resetting password for non-existent user returns 404."""
+    def test_admin_reset_password_nonexistent_user_returns_501(self):
+        """Password reset for non-existent user still returns 501 (endpoint blocked)."""
         data = {'new_password': 'temppassword123'}
         response = self.client.post('/api/v1/admin/users/99999/reset-password/', data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        # Endpoint is blocked before user lookup, so returns 501 not 404
+        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
 
     def test_non_admin_cannot_reset_password(self):
         """Non-admin cannot reset user password."""

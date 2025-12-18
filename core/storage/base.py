@@ -133,3 +133,41 @@ class AbstractStorageBackend(ABC):
             FileInfo object for the created directory
         """
         pass
+
+    @abstractmethod
+    def move(self, source: str, destination: str) -> FileInfo:
+        """
+        Move file or directory to new location.
+
+        Args:
+            source: Relative path to source file/directory
+            destination: Relative path to destination directory
+
+        Returns:
+            FileInfo object for the moved file/directory at new location
+
+        Raises:
+            FileNotFoundError: If source doesn't exist
+            FileExistsError: If file with same name exists at destination
+            NotADirectoryError: If destination is not a directory
+        """
+        pass
+
+    @abstractmethod
+    def copy(self, source: str, destination: str, new_name: str | None = None) -> FileInfo:
+        """
+        Copy file or directory to new location.
+
+        Args:
+            source: Relative path to source file/directory
+            destination: Relative path to destination directory
+            new_name: Optional new name for copied item (handles collisions)
+
+        Returns:
+            FileInfo object for the copied file/directory
+
+        Raises:
+            FileNotFoundError: If source doesn't exist
+            NotADirectoryError: If destination is not a directory
+        """
+        pass

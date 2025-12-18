@@ -100,6 +100,26 @@ postgres_password: "" # REQUIRED - Set a strong password
 #
 cors_origins: "" # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
 
+# === FILE UPLOAD LIMITS - Storage configuration ===
+#
+# Maximum file size for uploads in megabytes (MB).
+# This is a global limit applied to all uploads regardless of user quota.
+#
+# Default: 100 (100MB per file)
+#
+# Examples:
+#   max_upload_size_mb: 50   # Limit to 50MB files
+#   max_upload_size_mb: 500  # Allow up to 500MB files
+#   max_upload_size_mb: 1024 # Allow up to 1GB files
+#
+# Notes:
+#   - This is separate from per-user storage quotas (set via admin API)
+#   - Very large files (>500MB) may cause memory issues on small VPS instances
+#   - Per-user quotas managed via: PATCH /api/v1/admin/users/{id}/quota/
+#   - See CLAUDE.md for quota management documentation
+#
+max_upload_size_mb: 100 # Maximum file size in MB
+
 # === ADVANCED - Usually don't need to change ===
 
 # Repository URL (change if you forked the project)

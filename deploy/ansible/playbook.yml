@@ -25,6 +25,7 @@
     install_path: "/home/{{ app_user }}/storm-cloud-server"
     web_port: "{{ web_port | default('8000') }}"
     cors_origins: "{{ cors_origins | default('') }}" # CORS origins from config.yml
+    max_upload_size_mb: "{{ max_upload_size_mb | default('100') }}" # P0-3: File upload limit
 
   # ===========================================================================
   # PROMPTS

@@ -199,3 +199,13 @@ class AdminUserDetailSerializer(serializers.Serializer):
     profile = UserProfileSerializer()
     api_keys = APIKeyListSerializer(many=True, source='user.api_keys')
     storage_used_bytes = serializers.IntegerField(default=0)
+
+
+class AdminUserQuotaUpdateSerializer(serializers.Serializer):
+    """Serializer for updating user storage quota (P0-3 Security Fix)."""
+
+    storage_quota_mb = serializers.IntegerField(
+        min_value=0,
+        allow_null=True,
+        help_text="Storage quota in MB, or null for unlimited"
+    )

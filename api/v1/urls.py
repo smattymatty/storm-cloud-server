@@ -17,6 +17,7 @@ from accounts.api import (
     AdminUserDetailView,
     AdminUserListView,
     AdminUserPasswordResetView,
+    AdminUserQuotaUpdateView,
     AdminUserVerifyView,
     # API Keys
     APIKeyCreateView,
@@ -42,6 +43,8 @@ from cms.api import (
     ManagedContentRenderView,
 )
 from storage.api import (
+    BulkOperationView,
+    BulkStatusView,
     DirectoryCreateView,
     DirectoryListRootView,
     DirectoryListView,
@@ -170,6 +173,11 @@ urlpatterns = [
         AdminUserPasswordResetView.as_view(),
         name="admin-users-reset-password",
     ),
+    path(
+        "admin/users/<int:user_id>/quota/",
+        AdminUserQuotaUpdateView.as_view(),
+        name="admin-users-quota",
+    ),
     # API Key Management (Admin)
     path("admin/keys/", AdminAPIKeyListView.as_view(), name="admin-keys-list"),
     path(
@@ -224,6 +232,9 @@ urlpatterns = [
         "files/<path:file_path>/delete/", FileDeleteView.as_view(), name="file-delete"
     ),
     path("files/<path:file_path>/", FileDetailView.as_view(), name="file-detail"),
+    # Bulk operations
+    path("bulk/", BulkOperationView.as_view(), name="bulk-operation"),
+    path("bulk/status/<uuid:task_id>/", BulkStatusView.as_view(), name="bulk-status"),
     # Index management (admin)
     path("index/rebuild/", IndexRebuildView.as_view(), name="index-rebuild"),
     # CMS

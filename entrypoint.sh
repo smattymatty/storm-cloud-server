@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # 1. VALIDATE ENVIRONMENT VARIABLES
 # ============================================
 echo ""
-echo "Step 1/5: Validating environment variables..."
+echo "Step 1/7: Validating environment variables..."
 
 VALIDATION_FAILED=0
 
@@ -63,7 +63,7 @@ echo -e "${GREEN}Environment validation passed${NC}"
 # 2. WAIT FOR DATABASE
 # ============================================
 echo ""
-echo "Step 2/5: Waiting for database to be ready..."
+echo "Step 2/7: Waiting for database to be ready..."
 
 # Use POSTGRES_* environment variables
 DB_HOST="${POSTGRES_HOST}"
@@ -91,7 +91,7 @@ echo -e "${GREEN}✓${NC} Database is ready"
 # 3. RUN MIGRATIONS
 # ============================================
 echo ""
-echo "Step 3/5: Running database migrations..."
+echo "Step 3/7: Running database migrations..."
 
 python manage.py migrate --noinput
 
@@ -106,7 +106,7 @@ fi
 # 4. COLLECT STATIC FILES
 # ============================================
 echo ""
-echo "Step 4/6: Collecting static files..."
+echo "Step 4/7: Collecting static files..."
 
 python manage.py collectstatic --noinput --clear
 
@@ -120,7 +120,7 @@ fi
 # 5. BUILD SPELLBOOK MARKDOWN
 # ============================================
 echo ""
-echo "Step 5/6: Building Spellbook markdown files..."
+echo "Step 5/7: Building Spellbook markdown files..."
 
 python manage.py spellbook_md
 
@@ -131,10 +131,24 @@ else
 fi
 
 # ============================================
-# 6. START APPLICATION
+# 6. REBUILD STORAGE INDEX
 # ============================================
 echo ""
-echo "Step 6/6: Starting application server..."
+echo "Step 6/7: Checking storage index..."
+
+python manage.py rebuild_index --mode audit -v 0
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} Storage index audit complete"
+else
+    echo -e "${YELLOW}WARNING: Storage index audit failed (non-fatal)${NC}"
+fi
+
+# ============================================
+# 7. START APPLICATION
+# ============================================
+echo ""
+echo "Step 7/7: Starting application server..."
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Storm Cloud Server is starting...${NC}"

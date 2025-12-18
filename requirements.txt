@@ -1,4 +1,4 @@
-Django>=5.2,<6.0
+Django>=6.0,<7.0
 djangorestframework>=3.16.0
 drf-spectacular>=0.29.0
 python-decouple>=3.8
@@ -12,7 +12,7 @@ whitenoise>=6.6.0
 factory-boy>=3.3.0
 django-cors-headers>=4.3.0
 coverage>=7.0.0
-django-mercury-performance>=0.1.3b2
+django-mercury-performance>=0.1.3b3 
 django-spellbook==0.2.5b2
 
 # Type checking and stubs

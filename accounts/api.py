@@ -32,6 +32,7 @@ from .serializers import (
     AdminUserCreateSerializer,
     AdminUserUpdateSerializer,
     AdminPasswordResetSerializer,
+    AdminUserQuotaUpdateSerializer,
 )
 from .signals import (
     user_registered,
@@ -824,6 +825,9 @@ class AdminUserDetailView(StormCloudBaseAPIView):
     )
     def get(self, request, user_id):
         """Get user details."""
+        from django.db.models import Sum
+        from storage.models import StoredFile
+        
         try:
             user = User.objects.select_related('profile').prefetch_related('api_keys').get(id=user_id)
         except User.DoesNotExist:
@@ -834,11 +838,21 @@ class AdminUserDetailView(StormCloudBaseAPIView):
                 }
             }, status=status.HTTP_404_NOT_FOUND)
 
+        # P0-3: Calculate storage used
+        storage_used = StoredFile.objects.filter(
+            owner=user
+        ).aggregate(total=Sum('size'))['total'] or 0
+
+        quota_bytes = user.profile.storage_quota_bytes
+        quota_mb = round(quota_bytes / (1024 * 1024), 2) if quota_bytes > 0 else None
+        
         return Response({
             "user": UserSerializer(user).data,
             "profile": UserProfileSerializer(user.profile).data,
             "api_keys": APIKeyListSerializer(user.api_keys.all(), many=True).data,
-            "storage_used_bytes": 0  # TODO: Calculate from storage app
+            "storage_used_bytes": storage_used,
+            "storage_used_mb": round(storage_used / (1024 * 1024), 2),
+            "storage_quota_mb": quota_mb,
         })
 
     @extend_schema(
@@ -1080,21 +1094,50 @@ class AdminUserPasswordResetView(StormCloudBaseAPIView):
 
     @extend_schema(
         summary="Admin: Reset user password",
-        description="Reset a user's password. Can optionally send reset email or set a specific password.",
+        description="Reset a user's password. Requires email configuration to be implemented.",
         request=AdminPasswordResetSerializer,
         responses={
-            200: OpenApiResponse(description="Password reset successful"),
+            501: OpenApiResponse(description="Not implemented - email required"),
             404: OpenApiResponse(description="User not found"),
         },
         tags=['Administration']
     )
     def post(self, request, user_id):
-        """Reset user password."""
-        import secrets
-        import string
+        """Reset user password.
+        
+        P0-2 Security Fix: Endpoint blocked until email functionality is implemented.
+        Returning passwords in API responses creates security risks (logging, caching, etc.)
+        """
+        return Response({
+            "error": {
+                "code": "NOT_IMPLEMENTED",
+                "message": "Password reset requires email configuration.",
+                "recovery": "Use Django management command: python manage.py changepassword <username>"
+            }
+        }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
+
+class AdminUserQuotaUpdateView(StormCloudBaseAPIView):
+    """Admin: Update user storage quota."""
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Update user storage quota",
+        description="Set storage quota for a user in MB. Null means unlimited. P0-3 Security Fix.",
+        request=AdminUserQuotaUpdateSerializer,
+        responses={
+            200: OpenApiResponse(description="Quota updated"),
+            404: OpenApiResponse(description="User not found"),
+        },
+        tags=['Administration']
+    )
+    def patch(self, request, user_id):
+        """Update user quota."""
+        from django.db.models import Sum
+        from storage.models import StoredFile
+        
         try:
-            user = User.objects.get(id=user_id)
+            user = User.objects.select_related('profile').get(id=user_id)
         except User.DoesNotExist:
             return Response({
                 "error": {
@@ -1103,41 +1146,42 @@ class AdminUserPasswordResetView(StormCloudBaseAPIView):
                 }
             }, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AdminPasswordResetSerializer(data=request.data)
+        serializer = AdminUserQuotaUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        new_password = serializer.validated_data.get('new_password')
-        send_email = serializer.validated_data.get('send_email', False)
-
-        response_data = {}
-
-        # If new_password provided, set it directly
-        if new_password:
-            user.set_password(new_password)
-            user.save()
-            response_data['temporary_password'] = new_password
-            response_data['message'] = "Password has been reset"
-        elif send_email:
-            # Generate temporary password and send email
-            alphabet = string.ascii_letters + string.digits
-            temp_password = ''.join(secrets.choice(alphabet) for i in range(16))
-            user.set_password(temp_password)
-            user.save()
-            # TODO: Send email with temp password
-            # For now, just return it in response (not ideal for production)
-            response_data['message'] = f"Password reset email sent to {user.email}"
-            response_data['temporary_password'] = temp_password  # Remove this in production
-            response_data['note'] = "Email sending not yet implemented - temporary password shown here"
+        profile = user.profile
+        new_quota_mb = serializer.validated_data['storage_quota_mb']
+        
+        # Convert MB to bytes for storage (null/0 = unlimited)
+        if new_quota_mb is None or new_quota_mb == 0:
+            new_quota_bytes = 0  # Unlimited
         else:
-            return Response({
-                "error": {
-                    "code": "INVALID_REQUEST",
-                    "message": "Must provide either new_password or send_email=true",
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+            new_quota_bytes = new_quota_mb * 1024 * 1024
+        
+        # Calculate current usage
+        current_usage = StoredFile.objects.filter(
+            owner=user
+        ).aggregate(total=Sum('size'))['total'] or 0
+        current_usage_mb = round(current_usage / (1024 * 1024), 2)
+        
+        # Warn if setting quota below current usage
+        warning = None
+        if new_quota_bytes > 0 and current_usage > new_quota_bytes:
+            warning = f"User currently using {current_usage_mb}MB, which exceeds new quota of {new_quota_mb}MB. User will not be able to upload new files until they delete existing ones."
+        
+        profile.storage_quota_bytes = new_quota_bytes
+        profile.save(update_fields=['storage_quota_bytes'])
 
-        response_data['user_id'] = user.id
-        response_data['username'] = user.username
+        response_data = {
+            "message": "Storage quota updated",
+            "user_id": user.id,
+            "username": user.username,
+            "storage_quota_mb": new_quota_mb if new_quota_bytes > 0 else None,
+            "current_usage_mb": current_usage_mb,
+        }
+        
+        if warning:
+            response_data['warning'] = warning
 
         return Response(response_data)
 

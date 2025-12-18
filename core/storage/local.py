@@ -168,3 +168,91 @@ class LocalStorageBackend(AbstractStorageBackend):
         full_path = self._resolve_path(path)
         full_path.mkdir(parents=True, exist_ok=True)
         return self._file_info(full_path, path)
+
+    def move(self, source: str, destination: str) -> FileInfo:
+        """Move file or directory to new location."""
+        import shutil
+        
+        source_full = self._resolve_path(source)
+        dest_full = self._resolve_path(destination)
+        
+        # Validate source exists
+        if not source_full.exists():
+            raise FileNotFoundError(f"Source not found: {source}")
+        
+        # Validate destination is a directory
+        if not dest_full.exists():
+            raise FileNotFoundError(f"Destination directory not found: {destination}")
+        
+        if not dest_full.is_dir():
+            raise NotADirectoryError(f"Destination is not a directory: {destination}")
+        
+        # Calculate new path
+        source_name = source_full.name
+        new_full_path = dest_full / source_name
+        
+        # Check for collision
+        if new_full_path.exists():
+            raise FileExistsError(
+                f"File '{source_name}' already exists at destination: {destination}"
+            )
+        
+        # Perform move
+        shutil.move(str(source_full), str(new_full_path))
+        
+        # Calculate relative path for return value
+        new_relative_path = str(new_full_path.relative_to(self.storage_root))
+        
+        return self._file_info(new_full_path, new_relative_path)
+
+    def copy(self, source: str, destination: str, new_name: str | None = None) -> FileInfo:
+        """Copy file or directory to new location."""
+        import shutil
+        
+        source_full = self._resolve_path(source)
+        dest_full = self._resolve_path(destination)
+        
+        # Validate source exists
+        if not source_full.exists():
+            raise FileNotFoundError(f"Source not found: {source}")
+        
+        # Validate destination is a directory
+        if not dest_full.exists():
+            raise FileNotFoundError(f"Destination directory not found: {destination}")
+        
+        if not dest_full.is_dir():
+            raise NotADirectoryError(f"Destination is not a directory: {destination}")
+        
+        # Determine final name (with collision handling)
+        if new_name:
+            final_name = new_name
+        else:
+            final_name = source_full.name
+            new_full_path = dest_full / final_name
+            
+            # Handle name collisions by appending " (copy)", " (copy 2)", etc.
+            if new_full_path.exists():
+                base_name = source_full.stem
+                extension = source_full.suffix
+                counter = 1
+                
+                while new_full_path.exists():
+                    if counter == 1:
+                        final_name = f"{base_name} (copy){extension}"
+                    else:
+                        final_name = f"{base_name} (copy {counter}){extension}"
+                    new_full_path = dest_full / final_name
+                    counter += 1
+        
+        new_full_path = dest_full / final_name
+        
+        # Perform copy
+        if source_full.is_dir():
+            shutil.copytree(str(source_full), str(new_full_path))
+        else:
+            shutil.copy2(str(source_full), str(new_full_path))
+        
+        # Calculate relative path for return value
+        new_relative_path = str(new_full_path.relative_to(self.storage_root))
+        
+        return self._file_info(new_full_path, new_relative_path)

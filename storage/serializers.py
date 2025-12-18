@@ -171,3 +171,85 @@ class DirectoryReorderSerializer(serializers.Serializer):
         min_length=1,
         help_text="List of filenames in desired order (partial list allowed)",
     )
+
+
+# =============================================================================
+# Bulk Operations Serializers
+# =============================================================================
+
+
+class BulkOperationRequestSerializer(serializers.Serializer):
+    """Serializer for bulk operation requests."""
+
+    operation = serializers.ChoiceField(
+        choices=['delete', 'move', 'copy'],
+        help_text="Operation to perform on files"
+    )
+    paths = serializers.ListField(
+        child=serializers.CharField(max_length=1024),
+        min_length=1,
+        max_length=250,
+        help_text="List of file/directory paths (1-250 items)"
+    )
+    options = serializers.DictField(
+        required=False,
+        allow_null=True,
+        help_text="Operation-specific options (e.g., destination for move/copy)"
+    )
+
+    def validate(self, data):
+        """Validate operation-specific requirements."""
+        operation = data.get('operation')
+        options = data.get('options', {})
+
+        # Move and copy require destination
+        if operation in ['move', 'copy']:
+            if not options or 'destination' not in options:
+                raise serializers.ValidationError({
+                    'options': f'Destination is required for {operation} operation'
+                })
+
+        return data
+
+
+class BulkOperationResultSerializer(serializers.Serializer):
+    """Serializer for individual file operation result."""
+
+    path = serializers.CharField()
+    success = serializers.BooleanField()
+    error_code = serializers.CharField(allow_null=True, required=False)
+    error_message = serializers.CharField(allow_null=True, required=False)
+    data = serializers.DictField(allow_null=True, required=False)
+
+
+class BulkOperationResponseSerializer(serializers.Serializer):
+    """Serializer for bulk operation response (sync)."""
+
+    operation = serializers.CharField()
+    total = serializers.IntegerField()
+    succeeded = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    results = BulkOperationResultSerializer(many=True)
+
+
+class BulkOperationAsyncResponseSerializer(serializers.Serializer):
+    """Serializer for bulk operation async response."""
+
+    async_field = serializers.BooleanField(source='async')
+    task_id = serializers.CharField()
+    total = serializers.IntegerField()
+    status_url = serializers.CharField()
+
+
+class BulkOperationStatusResponseSerializer(serializers.Serializer):
+    """Serializer for bulk operation status check."""
+
+    task_id = serializers.CharField()
+    status = serializers.ChoiceField(choices=['running', 'complete', 'failed'])
+    operation = serializers.CharField(required=False, allow_null=True)
+    total = serializers.IntegerField(required=False, allow_null=True)
+    succeeded = serializers.IntegerField(required=False, allow_null=True)
+    failed = serializers.IntegerField(required=False, allow_null=True)
+    results = BulkOperationResultSerializer(many=True, required=False)
+    error = serializers.CharField(required=False, allow_null=True)
+    progress = serializers.DictField(required=False, allow_null=True)
