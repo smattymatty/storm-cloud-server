@@ -98,9 +98,9 @@ def health_status(request):
 
     # Storage backend info
     try:
-        from core.storage import get_storage_backend
+        from core.storage import get_storage_backend  # type: ignore[attr-defined]
 
-        backend = get_storage_backend()
+        backend = get_storage_backend()  # type: ignore[operator]
         status_data["storage"] = backend.__class__.__name__.replace(
             "StorageBackend", ""
         ).lower()

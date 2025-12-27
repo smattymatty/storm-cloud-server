@@ -1,0 +1,79 @@
+---
+# Test playbook for the read_dotenv module
+# Run with: ansible-playbook tests/test_playbook.yml
+
+- name: Test read_dotenv module
+  hosts: localhost
+  gather_facts: false
+  
+  tasks:
+    - name: Create test .env file
+      ansible.builtin.copy:
+        dest: /tmp/test.env
+        content: |
+          # Test .env file
+          SECRET_KEY="django-secret-123"
+          POSTGRES_PASSWORD="db-pass-456"
+          DEBUG=False
+          
+          # Multiline example
+          PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+          MIIEpAIBAAKCAQEA...
+          -----END RSA PRIVATE KEY-----"
+
+    - name: Read secrets using custom module
+      read_dotenv:
+        path: /tmp/test.env
+        keys:
+          - SECRET_KEY
+          - POSTGRES_PASSWORD
+          - DEBUG
+          - PRIVATE_KEY
+      register: result
+
+    - name: Display parsed values
+      ansible.builtin.debug:
+        msg: |
+          SECRET_KEY: {{ result.values.SECRET_KEY }}
+          POSTGRES_PASSWORD: {{ result.values.POSTGRES_PASSWORD }}
+          DEBUG: {{ result.values.DEBUG }}
+          PRIVATE_KEY: {{ result.values.PRIVATE_KEY }}
+
+    - name: Verify values are correct
+      ansible.builtin.assert:
+        that:
+          - result.values.SECRET_KEY == "django-secret-123"
+          - result.values.POSTGRES_PASSWORD == "db-pass-456"
+          - result.values.DEBUG == "False"
+          - "'BEGIN RSA PRIVATE KEY' in result.values.PRIVATE_KEY"
+        success_msg: "✓ All assertions passed"
+        fail_msg: "✗ Assertion failed"
+
+    - name: Test missing keys
+      read_dotenv:
+        path: /tmp/test.env
+        keys:
+          - SECRET_KEY
+          - NONEXISTENT_KEY
+        required: false
+      register: missing_test
+
+    - name: Verify missing keys are reported
+      ansible.builtin.assert:
+        that:
+          - "'NONEXISTENT_KEY' in missing_test.missing_keys"
+          - "'SECRET_KEY' in missing_test.values"
+        success_msg: "✓ Missing keys handled correctly"
+
+    - name: Clean up
+      ansible.builtin.file:
+        path: /tmp/test.env
+        state: absent
+
+    - name: All tests passed!
+      ansible.builtin.debug:
+        msg: |
+          
+          ══════════════════════════════════════════════════════════════
+          ✓ All read_dotenv module tests passed!
+          ══════════════════════════════════════════════════════════════

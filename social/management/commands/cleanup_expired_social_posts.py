@@ -1,4 +1,5 @@
 """Delete GoToSocial posts for expired share links."""
+
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -59,10 +60,17 @@ class Command(BaseCommand):
                 )
             else:
                 try:
+                    if link.social_post_id is None:
+                        self.stdout.write(
+                            self.style.WARNING(f"  ⚠ No post ID for: {link.file_path}")
+                        )
+                        continue
                     success = client.delete_status(link.social_post_id)
                     if success:
                         self.stdout.write(
-                            self.style.SUCCESS(f"  ✓ Deleted post for: {link.file_path}")
+                            self.style.SUCCESS(
+                                f"  ✓ Deleted post for: {link.file_path}"
+                            )
                         )
                         deleted += 1
                     else:

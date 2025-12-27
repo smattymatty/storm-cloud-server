@@ -137,6 +137,56 @@ python manage.py rebuild_index --mode audit || echo "⚠️  Index audit found d
 
 Non-blocking - container starts even if audit finds issues.
 
+### CASCADE Deletion Behavior
+
+**Filesystem Wins (Absolute):**
+
+When a file is deleted from the filesystem, the `clean` or `full` mode will delete the orphaned `StoredFile` record. Django's CASCADE behavior automatically handles related records:
+
+```python
+# ShareLink model (storage/models.py)
+class ShareLink(models.Model):
+    stored_file = models.ForeignKey(
+        'StoredFile',
+        on_delete=models.CASCADE,  # ← Automatic deletion
+        related_name='share_links'
+    )
+```
+
+**Clean Mode Execution:**
+
+```python
+# core/services/index_sync.py
+for path in orphaned_in_db:
+    db_file = db_files[path]
+    
+    # Log CASCADE deletions for transparency
+    sharelink_count = db_file.share_links.count()
+    if sharelink_count > 0:
+        logger.info(f"Deleting '{path}' (will CASCADE delete {sharelink_count} ShareLink(s))")
+    
+    db_file.delete()  # CASCADE handles ShareLinks automatically
+```
+
+**Rationale:**
+
+1. **Filesystem is source of truth** - If file doesn't exist, its metadata shouldn't either
+2. **ShareLinks to non-existent files are invalid** - They can't be downloaded, so they should be removed
+3. **Django handles it correctly** - ForeignKey CASCADE is designed for this exact scenario
+4. **User explicitly opts in** - `--force` flag required, preventing accidental deletions
+5. **Logged for transparency** - INFO log shows how many ShareLinks will be deleted
+
+**Example Output:**
+
+```bash
+$ python manage.py rebuild_index --mode clean --force
+
+INFO: Deleting 'beans.txt' (will CASCADE delete 1 ShareLink(s))
+INFO: Deleting 'bonko1.png' (will CASCADE delete 1 ShareLink(s))
+
+✓ Records deleted: 9
+```
+
 ## Consequences
 
 **Positive:**
@@ -145,7 +195,7 @@ Non-blocking - container starts even if audit finds issues.
 - Multiple safe modes prevent accidental data loss
 - Automated audit catches desync early
 - Metadata updates (file size, content_type) handled automatically
-- ShareLink CASCADE protection prevents breaking foreign key relationships
+- **CASCADE deletions handled automatically** - Django's `on_delete=models.CASCADE` removes related ShareLinks when files are deleted (filesystem wins absolutely)
 - Idempotent operations (safe to run multiple times)
 - Supports both system-wide and per-user reconciliation
 
@@ -167,9 +217,9 @@ Non-blocking - container starts even if audit finds issues.
 **Fitness Functions:**
 
 - Index rebuild must be idempotent (running twice produces same result)
-- Database records with active ShareLinks must never be deleted (CASCADE protection)
 - `clean` and `full` modes must require `force=True` to execute
 - Filesystem wins: if file exists on disk but not in DB, DB must be updated (not file deleted)
+- **Filesystem wins (absolute)**: if file is deleted from filesystem, DB record AND related ShareLinks must be deleted (Django CASCADE handles this automatically)
 - Metadata updates must check both size and content_type (stale detection)
 - API endpoint must return task_id and serializable results
 - Management command must succeed even if zero changes needed

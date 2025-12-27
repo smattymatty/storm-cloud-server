@@ -9,7 +9,10 @@ from storage.tasks import rebuild_storage_index
 
 
 class Command(BaseCommand):
-    help = 'Rebuild storage index from filesystem (ADR 000 risk mitigation)'
+    help = (
+        'Rebuild storage index from filesystem (ADR 000/009: Filesystem wins). '
+        'Clean mode will CASCADE delete related ShareLinks automatically.'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -17,7 +20,10 @@ class Command(BaseCommand):
             type=str,
             choices=['audit', 'sync', 'clean', 'full'],
             default='audit',
-            help='Sync mode: audit (report only), sync (add missing), clean (delete orphaned), full (sync+clean)'
+            help=(
+                'Sync mode: audit (report only), sync (add missing), '
+                'clean (delete orphaned + CASCADE ShareLinks), full (sync+clean)'
+            )
         )
         parser.add_argument(
             '--user-id',

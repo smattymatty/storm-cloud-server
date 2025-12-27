@@ -629,7 +629,7 @@ class FileUploadView(StormCloudBaseAPIView):
             )
 
         uploaded_file = request.FILES["file"]
-        
+
         # P0-3: Validate file size against global limit
         max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if uploaded_file.size > max_size:
@@ -644,7 +644,7 @@ class FileUploadView(StormCloudBaseAPIView):
                 },
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
-        
+
         backend = LocalStorageBackend()
         user_prefix = get_user_storage_path(cast(User, request.user))
 
@@ -664,16 +664,21 @@ class FileUploadView(StormCloudBaseAPIView):
             )
 
         full_path = f"{user_prefix}/{file_path}"
-        
+
         # P0-3: Validate against user quota (if set)
+        # IsAuthenticated permission guarantees user is not AnonymousUser
+        assert not request.user.is_anonymous
         profile = request.user.profile
         quota_bytes = profile.storage_quota_bytes
         if quota_bytes > 0:  # 0 = unlimited
             # Calculate user's current storage usage
-            current_usage = StoredFile.objects.filter(
-                owner=request.user
-            ).aggregate(total=Sum('size'))['total'] or 0
-            
+            current_usage = (
+                StoredFile.objects.filter(owner=request.user).aggregate(
+                    total=Sum("size")
+                )["total"]
+                or 0
+            )
+
             # For file replacement (overwrite), calculate delta instead of full size
             size_delta = uploaded_file.size
             try:
@@ -681,9 +686,11 @@ class FileUploadView(StormCloudBaseAPIView):
                 size_delta = uploaded_file.size - old_file.size
             except StoredFile.DoesNotExist:
                 pass  # New file, use full size
-            
+
             if current_usage + size_delta > quota_bytes:
-                space_needed = (current_usage + size_delta - quota_bytes) / (1024 * 1024)
+                space_needed = (current_usage + size_delta - quota_bytes) / (
+                    1024 * 1024
+                )
                 return Response(
                     {
                         "error": {
@@ -691,7 +698,9 @@ class FileUploadView(StormCloudBaseAPIView):
                             "message": "Upload would exceed your storage quota",
                             "quota_mb": round(quota_bytes / (1024 * 1024), 2),
                             "used_mb": round(current_usage / (1024 * 1024), 2),
-                            "file_size_mb": round(uploaded_file.size / (1024 * 1024), 2),
+                            "file_size_mb": round(
+                                uploaded_file.size / (1024 * 1024), 2
+                            ),
                             "space_needed_mb": round(space_needed, 2),
                         }
                     },
@@ -870,36 +879,38 @@ class FileDeleteView(StormCloudBaseAPIView):
 
 class IndexRebuildView(StormCloudBaseAPIView):
     """Rebuild file index from filesystem (admin only)."""
-    
-    permission_classes = [IsAdminUser]  # P0-1: Admin-only for production safety (ADR 009)
+
+    permission_classes = [
+        IsAdminUser
+    ]  # P0-1: Admin-only for production safety (ADR 009)
 
     @extend_schema(
         summary="Rebuild file index",
         description="Reconcile database with filesystem. Admin only. Filesystem wins policy (ADR 000).",
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'mode': {
-                        'type': 'string',
-                        'enum': ['audit', 'sync', 'clean', 'full'],
-                        'default': 'audit',
-                        'description': 'Sync mode'
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["audit", "sync", "clean", "full"],
+                        "default": "audit",
+                        "description": "Sync mode",
                     },
-                    'user_id': {
-                        'type': 'integer',
-                        'nullable': True,
-                        'description': 'Specific user ID or null for all users'
+                    "user_id": {
+                        "type": "integer",
+                        "nullable": True,
+                        "description": "Specific user ID or null for all users",
                     },
-                    'dry_run': {
-                        'type': 'boolean',
-                        'default': False,
-                        'description': 'Preview changes without applying'
+                    "dry_run": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Preview changes without applying",
                     },
-                    'force': {
-                        'type': 'boolean',
-                        'default': False,
-                        'description': 'Required for clean/full modes'
+                    "force": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Required for clean/full modes",
                     },
                 },
             }
@@ -913,37 +924,37 @@ class IndexRebuildView(StormCloudBaseAPIView):
     def post(self, request: Request) -> Response:
         """Enqueue index rebuild task."""
         from storage.tasks import rebuild_storage_index
-        
-        mode = request.data.get('mode', 'audit')
-        user_id = request.data.get('user_id')
-        dry_run = request.data.get('dry_run', False)
-        force = request.data.get('force', False)
-        
+
+        mode = request.data.get("mode", "audit")
+        user_id = request.data.get("user_id")
+        dry_run = request.data.get("dry_run", False)
+        force = request.data.get("force", False)
+
         # Validate mode
-        if mode not in ['audit', 'sync', 'clean', 'full']:
+        if mode not in ["audit", "sync", "clean", "full"]:
             return Response(
                 {
-                    'error': {
-                        'code': 'INVALID_MODE',
-                        'message': f"Invalid mode: {mode}",
-                        'allowed': ['audit', 'sync', 'clean', 'full'],
+                    "error": {
+                        "code": "INVALID_MODE",
+                        "message": f"Invalid mode: {mode}",
+                        "allowed": ["audit", "sync", "clean", "full"],
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Validate force requirement
-        if mode in ['clean', 'full'] and not force:
+        if mode in ["clean", "full"] and not force:
             return Response(
                 {
-                    'error': {
-                        'code': 'FORCE_REQUIRED',
-                        'message': f"Mode '{mode}' requires force=true to prevent accidental data loss",
+                    "error": {
+                        "code": "FORCE_REQUIRED",
+                        "message": f"Mode '{mode}' requires force=true to prevent accidental data loss",
                     }
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         # Enqueue task (ImmediateBackend completes immediately)
         result = rebuild_storage_index.enqueue(
             mode=mode,
@@ -951,17 +962,20 @@ class IndexRebuildView(StormCloudBaseAPIView):
             dry_run=dry_run,
             force=force,
         )
-        
+
         # Return result
-        return Response({
-            'task_id': str(result.id),
-            'status': result.status,
-            'result': result.return_value if result.status == 'SUCCESSFUL' else None,
-            'errors': [
-                {'traceback': e.traceback}
-                for e in result.errors
-            ] if result.errors else [],
-        })
+        return Response(
+            {
+                "task_id": str(result.id),
+                "status": result.status,
+                "result": result.return_value
+                if result.status == "SUCCESSFUL"
+                else None,
+                "errors": [{"traceback": e.traceback} for e in result.errors]
+                if result.errors
+                else [],
+            }
+        )
 
 
 # =============================================================================
@@ -1357,33 +1371,33 @@ class BulkOperationView(StormCloudBaseAPIView):
             "Partial success enabled - individual failures don't abort batch."
         ),
         request={
-            'application/json': {
-                'type': 'object',
-                'properties': {
-                    'operation': {
-                        'type': 'string',
-                        'enum': ['delete', 'move', 'copy'],
-                        'description': 'Operation to perform'
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["delete", "move", "copy"],
+                        "description": "Operation to perform",
                     },
-                    'paths': {
-                        'type': 'array',
-                        'items': {'type': 'string'},
-                        'minItems': 1,
-                        'maxItems': 250,
-                        'description': 'List of file/directory paths'
+                    "paths": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 250,
+                        "description": "List of file/directory paths",
                     },
-                    'options': {
-                        'type': 'object',
-                        'properties': {
-                            'destination': {
-                                'type': 'string',
-                                'description': 'Destination directory for move/copy'
+                    "options": {
+                        "type": "object",
+                        "properties": {
+                            "destination": {
+                                "type": "string",
+                                "description": "Destination directory for move/copy",
                             }
                         },
-                        'description': 'Operation-specific options'
-                    }
+                        "description": "Operation-specific options",
+                    },
                 },
-                'required': ['operation', 'paths']
+                "required": ["operation", "paths"],
             }
         },
         responses={
@@ -1404,63 +1418,51 @@ class BulkOperationView(StormCloudBaseAPIView):
 
         # Validate request
         serializer = BulkOperationRequestSerializer(data=request.data)
-        
+
         try:
             serializer.is_valid(raise_exception=True)
         except Exception as e:
             # Extract validation errors
-            if hasattr(e, 'detail'):
+            if hasattr(e, "detail"):
                 error_details = e.detail
             else:
-                error_details = {'detail': str(e)}
-            
+                error_details = {"detail": str(e)}
+
             return Response(
                 {
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Invalid request data',
-                        'details': error_details
+                    "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Invalid request data",
+                        "details": error_details,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        operation = serializer.validated_data['operation']
-        paths = serializer.validated_data['paths']
-        options = serializer.validated_data.get('options', {})
+        operation = serializer.validated_data["operation"]
+        paths = serializer.validated_data["paths"]
+        options = serializer.validated_data.get("options", {})
 
         # Create service and execute
         backend = LocalStorageBackend()
-        service = BulkOperationService(
-            user=cast(User, request.user),
-            backend=backend
-        )
+        service = BulkOperationService(user=cast(User, request.user), backend=backend)
 
         try:
-            result = service.execute(
-                operation=operation,
-                paths=paths,
-                options=options
-            )
+            result = service.execute(operation=operation, paths=paths, options=options)
         except ValueError as e:
             return Response(
-                {
-                    'error': {
-                        'code': 'INVALID_REQUEST',
-                        'message': str(e)
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": {"code": "INVALID_REQUEST", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Check if async
-        if isinstance(result, dict) and result.get('async'):
-            response_serializer = BulkOperationAsyncResponseSerializer(result)
-            return Response(response_serializer.data, status=status.HTTP_202_ACCEPTED)
+        if isinstance(result, dict) and result.get("async"):
+            async_serializer = BulkOperationAsyncResponseSerializer(result)
+            return Response(async_serializer.data, status=status.HTTP_202_ACCEPTED)
         else:
             # Sync result
-            response_serializer = BulkOperationResponseSerializer(result)
-            return Response(response_serializer.data)
+            sync_serializer = BulkOperationResponseSerializer(result)
+            return Response(sync_serializer.data)
 
 
 class BulkStatusView(StormCloudBaseAPIView):
@@ -1487,52 +1489,54 @@ class BulkStatusView(StormCloudBaseAPIView):
         except Exception:
             return Response(
                 {
-                    'error': {
-                        'code': 'TASK_NOT_FOUND',
-                        'message': 'Task not found',
-                        'task_id': task_id
+                    "error": {
+                        "code": "TASK_NOT_FOUND",
+                        "message": "Task not found",
+                        "task_id": task_id,
                     }
                 },
-                status=status.HTTP_404_NOT_FOUND
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         # Verify ownership - task should have user_id in args
         # For now, we'll allow any authenticated user to check tasks
         # TODO: Add task ownership verification
-        
+
         # Build response based on task status
-        if task_result.status == 'SUCCESSFUL':
+        if task_result.status == "SUCCESSFUL":
             # Task completed
             result_data = task_result.return_value or {}
             response_data = {
-                'task_id': str(task_id),
-                'status': 'complete',
-                'operation': result_data.get('operation'),
-                'total': result_data.get('total'),
-                'succeeded': result_data.get('succeeded'),
-                'failed': result_data.get('failed'),
-                'results': result_data.get('results', [])
+                "task_id": str(task_id),
+                "status": "complete",
+                "operation": result_data.get("operation"),
+                "total": result_data.get("total"),
+                "succeeded": result_data.get("succeeded"),
+                "failed": result_data.get("failed"),
+                "results": result_data.get("results", []),
             }
-        elif task_result.status == 'FAILED':
+        elif task_result.status == "FAILED":
             # Task failed
             error_msg = "Task execution failed"
             if task_result.errors:
-                error_msg = str(task_result.errors[0]) if task_result.errors else error_msg
-                
+                error_msg = (
+                    str(task_result.errors[0]) if task_result.errors else error_msg
+                )
+
             response_data = {
-                'task_id': str(task_id),
-                'status': 'failed',
-                'error': error_msg
+                "task_id": str(task_id),
+                "status": "failed",
+                "error": error_msg,
             }
         else:
             # Task still running (PENDING, RUNNING, etc.)
             response_data = {
-                'task_id': str(task_id),
-                'status': 'running',
-                'progress': {
-                    'status': task_result.status,
-                    'message': 'Task is processing...'
-                }
+                "task_id": str(task_id),
+                "status": "running",
+                "progress": {
+                    "status": task_result.status,
+                    "message": "Task is processing...",
+                },
             }
 
         serializer = BulkOperationStatusResponseSerializer(response_data)

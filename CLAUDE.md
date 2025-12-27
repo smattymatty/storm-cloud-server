@@ -97,13 +97,29 @@ curl -X POST /api/v1/index/rebuild/ \
 
 - **audit** - Report missing/orphaned records, make no changes
 - **sync** - Add missing DB records for files on disk, update stale metadata
-- **clean** - Delete orphaned DB records (requires `--force`)
+- **clean** - Delete orphaned DB records (requires `--force`), CASCADE deletes related ShareLinks
 - **full** - Sync + clean (requires `--force`)
+
+### CASCADE Deletion Behavior
+
+**Filesystem Wins (Absolute):** When `clean` or `full` mode deletes an orphaned StoredFile record, Django automatically CASCADE deletes related ShareLinks. This is intentional - ShareLinks pointing to non-existent files are invalid.
+
+Example:
+```bash
+$ python manage.py rebuild_index --mode clean --force
+
+INFO: Deleting 'beans.txt' (will CASCADE delete 1 ShareLink(s))
+INFO: Deleting 'bonko1.png' (will CASCADE delete 1 ShareLink(s))
+
+✓ Records deleted: 9
+```
+
+**Why CASCADE?** Filesystem is source of truth. If file doesn't exist, its metadata (StoredFile + ShareLinks) shouldn't either.
 
 ### Safety Features
 
 - Clean/full modes require `--force` flag to prevent accidental data loss
-- Records with active ShareLinks are never deleted (CASCADE protection)
+- **Django CASCADE handles related records automatically** - ShareLinks deleted with files
 - Dry-run mode available for all operations
 - Idempotent operations (safe to run multiple times)
 - Filesystem always wins - database updates to match disk

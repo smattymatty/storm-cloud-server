@@ -11,7 +11,9 @@
 # =============================================================================
 
 .PHONY: help setup build up down restart logs shell superuser api_key migrate backup clean \
-        deploy deploy-check deploy-app deploy-nginx deploy-ssl gotosocial-user gotosocial-token
+        deploy deploy-check deploy-app deploy-nginx deploy-ssl \
+        destroy destroy-check destroy-app destroy-force \
+        gotosocial-user gotosocial-token
 
 # Colors
 GREEN := \033[0;32m
@@ -127,6 +129,22 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
+	@echo "$(GREEN)Checking secrets...$(NC)"
+	@if [ -z "$$STORMCLOUD_POSTGRES_PASSWORD" ]; then \
+		echo "$(YELLOW)⚠️  STORMCLOUD_POSTGRES_PASSWORD not set$(NC)"; \
+		echo "   You will be prompted during deployment."; \
+		echo ""; \
+		echo "$(CYAN)Tip: Set secrets beforehand for non-interactive deployment:$(NC)"; \
+		echo "  export STORMCLOUD_POSTGRES_PASSWORD=\"your-password\""; \
+		echo "  export STORMCLOUD_SECRET_KEY=\"your-key\"  # Optional (auto-generates)"; \
+		echo ""; \
+		echo "Generate secure password: $(GREEN)openssl rand -base64 32$(NC)"; \
+		echo ""; \
+		echo "See: deploy/README.md#secrets"; \
+		echo ""; \
+	else \
+		echo "$(GREEN)✓ STORMCLOUD_POSTGRES_PASSWORD is set$(NC)"; \
+	fi
 	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
 	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \
 		echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"; \
@@ -191,6 +209,95 @@ deploy-ssl: ## Renew/update SSL certificates
 		-i inventory.yml \
 		--extra-vars "@../config.yml" \
 		--tags ssl -K
+
+# =============================================================================
+# DESTRUCTION 💀
+# =============================================================================
+
+destroy: ## 💀 DESTROY entire deployment (INTERACTIVE - requires confirmations)
+	@echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"
+	@echo "$(CYAN)  💀 STORM CLOUD SERVER - DESTRUCTION SEQUENCE 💀$(NC)"
+	@echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)⚠️  WARNING: This will PERMANENTLY DELETE:$(NC)"
+	@echo "  - All Docker containers, images, volumes"
+	@echo "  - Application directory and ALL uploaded files"
+	@echo "  - Database data"
+	@echo "  - nginx configuration"
+	@echo "  - SSL certificates"
+	@echo "  - User account ($(shell grep app_user $(CONFIG_FILE) 2>/dev/null | cut -d: -f2 | tr -d ' ' || echo stormcloud))"
+	@echo "  - Docker, nginx, and certbot packages"
+	@echo ""
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		echo ""; \
+		echo "Cannot determine target server."; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
+	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \
+		echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"; \
+		cd deploy/ansible && ansible-galaxy install -r requirements.yml --force && \
+		touch ~/.ansible/.stormcloud_galaxy_timestamp; \
+	fi
+	@echo ""
+	@echo "$(YELLOW)You will be prompted to confirm destruction...$(NC)"
+	@echo ""
+	@cd deploy/ansible && ansible-playbook destroy.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "destruction_mode=full" \
+		-K
+
+destroy-check: ## 💀 Dry-run destruction (show what would be deleted)
+	@echo "$(CYAN)Destruction dry-run (no changes will be made)$(NC)"
+	@echo ""
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)Checking what would be destroyed...$(NC)"
+	@echo ""
+	@cd deploy/ansible && ansible-playbook destroy.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "destruction_mode=full" \
+		--extra-vars "force_destroy=true" \
+		--check --diff -K
+
+destroy-app: ## 💀 DESTROY application only (keep system packages)
+	@echo "$(CYAN)Application-only destruction$(NC)"
+	@echo ""
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)This will remove Docker containers and app files but keep packages installed.$(NC)"
+	@echo ""
+	@cd deploy/ansible && ansible-playbook destroy.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "destruction_mode=app_only" \
+		-K
+
+destroy-force: ## 💀💀💀 SCORCHED EARTH - Skip confirmations (USE WITH EXTREME CAUTION)
+	@echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"
+	@echo "$(CYAN)  ☢️  FORCED DESTRUCTION - NO CONFIRMATIONS ☢️$(NC)"
+	@echo "$(CYAN)══════════════════════════════════════════════════════════════$(NC)"
+	@echo ""
+	@echo "$(YELLOW)⚠️  Destruction will proceed WITHOUT confirmations!$(NC)"
+	@echo "$(YELLOW)⚠️  Press Ctrl+C within 5 seconds to abort...$(NC)"
+	@sleep 5
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@cd deploy/ansible && ansible-playbook destroy.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "destruction_mode=scorched_earth" \
+		--extra-vars "force_destroy=true" \
+		-K
 
 # =============================================================================
 # GOTOSOCIAL

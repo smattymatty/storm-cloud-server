@@ -1,8 +1,8 @@
 # Storm Cloud Server
 
-Self-hostable cloud storage with API key authentication and markdown CMS capabilities. Built with Django 5.2 and Django REST Framework.
+Self-hostable cloud storage with API key authentication and markdown CMS capabilities. Built with Django 6.0 and Django REST Framework.
 
-[![Django](https://img.shields.io/badge/django-5.2-blue)](https://www.djangoproject.com/)
+[![Django](https://img.shields.io/badge/django-6.0-blue)](https://www.djangoproject.com/)
 [![Python](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -421,4 +421,4 @@ For questions or issues, please open an issue on GitHub.
 
 ---
 
-**Built with Django 5.2 and Django REST Framework**
+**Built with Django 6.0 and Django REST Framework**

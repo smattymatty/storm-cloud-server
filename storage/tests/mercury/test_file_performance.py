@@ -3,6 +3,7 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+from django.utils import timezone
 from django_mercury import monitor
 from rest_framework.test import APITestCase
 
@@ -33,7 +34,7 @@ class FileOperationPerformance(APITestCase):
                 path=f"file{i}.txt",
                 size=1024,
                 is_directory=False,
-                modified_at=None,
+                modified_at=timezone.now(),
                 content_type="text/plain",
             )
             for i in range(100)

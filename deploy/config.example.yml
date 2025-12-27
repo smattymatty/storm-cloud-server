@@ -62,17 +62,28 @@ gotosocial_domain: "" # e.g., social.example.com
 # GoToSocial container runs as UID 1000 by default. Only change if using a custom image.
 gotosocial_uid: 1000
 
-# === POSTGRES - Database configuration ===
-
-# REQUIRED: Strong password for PostgreSQL database
-# This password is used to secure your database. Choose a strong, unique password.
-# You'll need this password for:
-#   - Database backups and restores
-#   - Direct database access (psql, pgAdmin, etc.)
-#   - External tools that connect to the database
+# === SECRETS - Sensitive credentials ===
 #
-# Example: postgres_password: "MySecureP@ssw0rd!2024"
-postgres_password: "" # REQUIRED - Set a strong password
+# IMPORTANT: Secrets are now managed via environment variables for better security.
+# DO NOT store secrets in this config file.
+#
+# Set these environment variables before deploying:
+#
+#   export STORMCLOUD_POSTGRES_PASSWORD="your-secure-password"
+#   export STORMCLOUD_SECRET_KEY="your-django-secret-key"  # Optional (auto-generates if not set)
+#   export STORMCLOUD_GOTOSOCIAL_USERNAME="your-username"  # Optional (if using GoToSocial)
+#   export STORMCLOUD_GOTOSOCIAL_EMAIL="your@email.com"    # Optional
+#   export STORMCLOUD_GOTOSOCIAL_PASSWORD="your-password"  # Optional
+#   make deploy
+#
+# If environment variables are not set, you will be prompted during deployment.
+#
+# Generate a secure password:
+#   openssl rand -base64 32
+#
+# Password manager integration:
+#   export STORMCLOUD_POSTGRES_PASSWORD=$(op read "op://vault/stormcloud/postgres_password")  # 1Password
+#   export STORMCLOUD_POSTGRES_PASSWORD=$(bw get password postgres_stormcloud)                # Bitwarden
 
 # === CORS - Cross-Origin Resource Sharing ===
 #

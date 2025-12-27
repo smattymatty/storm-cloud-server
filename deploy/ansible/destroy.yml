@@ -1,0 +1,558 @@
+# =============================================================================
+# Storm Cloud Server - DESTRUCTION PLAYBOOK
+# =============================================================================
+#
+# ██████╗ ███████╗███████╗████████╗██████╗  ██████╗ ██╗   ██╗
+# ██╔══██╗██╔════╝██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗╚██╗ ██╔╝
+# ██║  ██║█████╗  ███████╗   ██║   ██████╔╝██║   ██║ ╚████╔╝ 
+# ██║  ██║██╔══╝  ╚════██║   ██║   ██╔══██╗██║   ██║  ╚██╔╝  
+# ██████╔╝███████╗███████║   ██║   ██║  ██║╚██████╔╝   ██║   
+# ╚═════╝ ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝    ╚═╝   
+#
+# ⚠️  WARNING: THIS WILL COMPLETELY DESTROY YOUR DEPLOYMENT ⚠️
+#
+# Usage:
+#   make destroy          # Interactive with confirmations
+#   make destroy-check    # Dry run (show what would be deleted)
+#
+# What Gets OBLITERATED:
+#   - All Docker containers, images, volumes, networks
+#   - Application directory (/home/stormcloud/storm-cloud-server/)
+#   - All uploaded files and databases
+#   - nginx configuration files
+#   - SSL certificates
+#   - Application user account
+#   - Docker, nginx, certbot packages
+#   - Firewall rules
+#   - System logs related to the application
+#   - GoToSocial (if installed)
+#   - EVERYTHING. NO SURVIVORS.
+#
+# =============================================================================
+
+---
+- name: DESTROY Storm Cloud Server
+  hosts: all
+  become: true
+
+  vars:
+    # app_user comes from config.yml, defaults to 'stormcloud' if not set
+    install_path: "/home/{{ app_user | default('stormcloud') }}/storm-cloud-server"
+    # destruction_mode is passed via --extra-vars (full, app_only, scorched_earth)
+    # create_backup is passed via --extra-vars or defaults to false
+    # force_destroy is passed via --extra-vars or defaults to false
+
+  # ===========================================================================
+  # PRE-DESTRUCTION VALIDATION
+  # ===========================================================================
+
+  pre_tasks:
+    # -------------------------------------------------------------------------
+    # Interactive Prompts (skipped if force_destroy=true or check mode)
+    # -------------------------------------------------------------------------
+
+    - name: Prompt for server IP confirmation
+      ansible.builtin.pause:
+        prompt: |
+          
+          ⚠️  CONFIRM SERVER IP ADDRESS TO DESTROY
+          
+          Expected IP: {{ ansible_host }}
+          
+          Type the IP address above to confirm
+      register: confirmation_ip_input
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+    - name: Prompt for DESTROY confirmation
+      ansible.builtin.pause:
+        prompt: |
+          
+          Type 'DESTROY' in ALL CAPS to confirm total annihilation
+      register: confirmation_word_input
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+    - name: Prompt for backup
+      ansible.builtin.pause:
+        prompt: |
+          
+          Create final backup before destruction? (yes/no)
+      register: backup_prompt_input
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+    # -------------------------------------------------------------------------
+    # Set variables from prompts or auto-confirm
+    # -------------------------------------------------------------------------
+
+    - name: Set confirmation variables from prompts
+      ansible.builtin.set_fact:
+        confirmation_ip: "{{ confirmation_ip_input.user_input | default('') }}"
+        confirmation_word: "{{ confirmation_word_input.user_input | default('') }}"
+        backup_before_destroy: "{{ backup_prompt_input.user_input | default('no') }}"
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+    - name: Auto-confirm for forced/check mode
+      ansible.builtin.set_fact:
+        confirmation_ip: "{{ ansible_host }}"
+        confirmation_word: "DESTROY"
+        backup_before_destroy: "no"
+      when: (force_destroy | default(false) | bool) or ansible_check_mode
+      tags: [always]
+    - name: Show destruction scope
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          💀 DESTRUCTION SEQUENCE INITIATED
+          ══════════════════════════════════════════════════════════════
+          
+          Target Server: {{ ansible_host }}
+          Destruction Mode: {{ destruction_mode | default('full') }}
+          Create Backup: {{ create_backup | default(false) or (backup_before_destroy | default('no') == 'yes') }}
+          
+          The following will be PERMANENTLY DELETED:
+          {% if destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full' %}
+            🔥 ALL Docker containers, images, volumes
+            🔥 Application directory: {{ install_path }}
+            🔥 All uploaded files and databases
+            🔥 nginx configuration
+            🔥 SSL certificates ({{ domain | default('*') }})
+            🔥 User account: {{ app_user | default('stormcloud') }}
+            🔥 Docker package
+            🔥 nginx package
+            🔥 Certbot package
+            🔥 All application logs
+          {% if install_gotosocial | default(false) %}
+            🔥 GoToSocial server and data
+          {% endif %}
+          {% else %}
+            🔥 Docker containers, images, volumes
+            🔥 Application directory: {{ install_path }}
+          {% endif %}
+          
+          ⚠️  THIS CANNOT BE UNDONE WITHOUT A BACKUP
+          
+          ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+    - name: Validate confirmation (if not forced)
+      ansible.builtin.assert:
+        that:
+          - confirmation_ip == ansible_host
+          - confirmation_word == "DESTROY"
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ❌ Destruction ABORTED - Invalid Confirmation
+          ══════════════════════════════════════════════════════════════
+          
+          You entered:
+            IP Address: "{{ confirmation_ip | default('(none)') }}" (expected: "{{ ansible_host }}")
+            Confirmation: "{{ confirmation_word | default('(none)') }}" (expected: "DESTROY")
+          
+          Destruction cancelled. Your server is safe.
+          
+          ══════════════════════════════════════════════════════════════
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+    - name: Final warning
+      ansible.builtin.pause:
+        prompt: |
+          
+          ══════════════════════════════════════════════════════════════
+          ⚠️  LAST CHANCE TO ABORT
+          ══════════════════════════════════════════════════════════════
+          
+          Destruction will begin in 10 seconds...
+          
+          Press Ctrl+C then 'A' to ABORT
+          Press ENTER to proceed with TOTAL ANNIHILATION
+          
+          ══════════════════════════════════════════════════════════════
+        seconds: 10
+      when: not (force_destroy | default(false) | bool) and not ansible_check_mode
+      tags: [always]
+
+  # ===========================================================================
+  # BACKUP (Optional)
+  # ===========================================================================
+
+  tasks:
+    - name: Create final backup before destruction
+      block:
+        - name: Check if application exists
+          ansible.builtin.stat:
+            path: "{{ install_path }}"
+          register: app_exists
+
+        - name: Run backup script
+          ansible.builtin.shell:
+            cmd: ./scripts/backup.sh
+            chdir: "{{ install_path }}"
+          become_user: "{{ app_user | default('stormcloud') }}"
+          when: app_exists.stat.exists
+          register: backup_result
+          failed_when: false
+
+        - name: Show backup result
+          ansible.builtin.debug:
+            msg: |
+              
+              ══════════════════════════════════════════════════════════════
+              💾 Backup Complete
+              ══════════════════════════════════════════════════════════════
+              
+              {{ backup_result.stdout }}
+              
+              ══════════════════════════════════════════════════════════════
+          when: backup_result is defined and backup_result.rc == 0
+
+      when: create_backup | default(false) or backup_before_destroy | default('no') == 'yes'
+      tags: [backup]
+
+    # -------------------------------------------------------------------------
+    # PHASE 1: APPLICATION DESTRUCTION
+    # -------------------------------------------------------------------------
+
+    - name: "💀 PHASE 1: Destroying Application"
+      ansible.builtin.debug:
+        msg: "Starting application destruction..."
+      tags: [always]
+
+    - name: Stop all Docker containers
+      ansible.builtin.shell:
+        cmd: docker compose down --remove-orphans --volumes || true
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user | default('stormcloud') }}"
+      register: docker_down
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Stop Docker containers (alternative method)
+      ansible.builtin.shell:
+        cmd: docker stop $(docker ps -aq) 2>/dev/null || true
+      register: docker_stop
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Remove all Docker containers
+      ansible.builtin.shell:
+        cmd: docker rm -f $(docker ps -aq) 2>/dev/null || true
+      register: docker_rm
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Remove all Docker images
+      ansible.builtin.shell:
+        cmd: docker rmi -f $(docker images -aq) 2>/dev/null || true
+      register: docker_rmi
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Remove all Docker volumes
+      ansible.builtin.shell:
+        cmd: docker volume rm $(docker volume ls -q) 2>/dev/null || true
+      register: docker_vol_rm
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Remove all Docker networks (except defaults)
+      ansible.builtin.shell:
+        cmd: docker network ls --format '{{.Name}}' | grep -v -E '^(bridge|host|none)$' | xargs -r docker network rm 2>/dev/null || true
+      register: docker_net_rm
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Prune Docker system
+      ansible.builtin.shell:
+        cmd: docker system prune -af --volumes 2>/dev/null || true
+      register: docker_prune
+      failed_when: false
+      changed_when: true
+      tags: [docker]
+
+    - name: Obliterate application directory
+      ansible.builtin.file:
+        path: "{{ install_path }}"
+        state: absent
+      tags: [app]
+
+    - name: Remove application user
+      ansible.builtin.user:
+        name: "{{ app_user | default('stormcloud') }}"
+        state: absent
+        remove: true
+        force: true
+      tags: [user]
+
+    # -------------------------------------------------------------------------
+    # PHASE 2: CONFIGURATION DESTRUCTION
+    # -------------------------------------------------------------------------
+
+    - name: "💀 PHASE 2: Destroying Configuration"
+      ansible.builtin.debug:
+        msg: "Obliterating nginx and SSL configuration..."
+      tags: [always]
+
+    - name: Stop nginx
+      ansible.builtin.service:
+        name: nginx
+        state: stopped
+      failed_when: false
+      tags: [nginx]
+
+    - name: Remove nginx site configurations
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx/sites-enabled/stormcloud.conf
+        - /etc/nginx/sites-enabled/stormcloud
+        - /etc/nginx/sites-available/stormcloud
+        - /etc/nginx/sites-enabled/gotosocial.conf
+        - /etc/nginx/sites-enabled/gotosocial
+        - /etc/nginx/sites-available/gotosocial
+      tags: [nginx]
+
+    - name: Remove SSL certificates
+      ansible.builtin.file:
+        path: "/etc/letsencrypt/live/{{ item }}"
+        state: absent
+      loop:
+        - "{{ domain | default('') }}"
+        - "{{ gotosocial_domain | default('') }}"
+      when: item | length > 0
+      tags: [ssl]
+
+    - name: Remove all Let's Encrypt certificate archives
+      ansible.builtin.file:
+        path: "/etc/letsencrypt/archive/{{ item }}"
+        state: absent
+      loop:
+        - "{{ domain | default('') }}"
+        - "{{ gotosocial_domain | default('') }}"
+      when: item | length > 0
+      tags: [ssl]
+
+    - name: Remove Let's Encrypt renewal configs
+      ansible.builtin.file:
+        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        state: absent
+      loop:
+        - "{{ domain | default('') }}"
+        - "{{ gotosocial_domain | default('') }}"
+      when: item | length > 0
+      tags: [ssl]
+
+    - name: Remove certbot webroot
+      ansible.builtin.file:
+        path: /var/www/certbot
+        state: absent
+      tags: [ssl]
+
+    # -------------------------------------------------------------------------
+    # PHASE 3: PACKAGE DESTRUCTION (Scorched Earth)
+    # -------------------------------------------------------------------------
+
+    - name: "💀 PHASE 3: Scorched Earth - Removing Packages"
+      ansible.builtin.debug:
+        msg: "Uninstalling all packages..."
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [always]
+
+    - name: Uninstall Docker
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+          - docker-compose
+        state: absent
+        purge: true
+        autoremove: true
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [docker]
+
+    - name: Remove Docker repository
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/keyrings/docker.gpg
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [docker]
+
+    - name: Remove Docker data directory
+      ansible.builtin.file:
+        path: /var/lib/docker
+        state: absent
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [docker]
+
+    - name: Uninstall nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: absent
+        purge: true
+        autoremove: true
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [nginx]
+
+    - name: Remove nginx directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx
+        - /var/log/nginx
+        - /var/www/html
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [nginx]
+
+    - name: Uninstall certbot
+      ansible.builtin.apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: absent
+        purge: true
+        autoremove: true
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [ssl]
+
+    - name: Remove Let's Encrypt directory
+      ansible.builtin.file:
+        path: /etc/letsencrypt
+        state: absent
+      when: destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full'
+      tags: [ssl]
+
+    # -------------------------------------------------------------------------
+    # PHASE 4: CLEANUP & LOGS
+    # -------------------------------------------------------------------------
+
+    - name: "💀 PHASE 4: Final Cleanup"
+      ansible.builtin.debug:
+        msg: "Removing logs and traces..."
+      tags: [always]
+
+    - name: Remove application logs
+      ansible.builtin.shell:
+        cmd: rm -f /var/log/{{ item }}
+      loop:
+        - stormcloud*.log
+        - nginx/stormcloud*.log
+        - nginx/gotosocial*.log
+      failed_when: false
+      tags: [logs]
+
+    - name: Clean package cache
+      ansible.builtin.apt:
+        autoclean: true
+        autoremove: true
+      tags: [cleanup]
+
+    - name: Remove unused dependencies
+      ansible.builtin.apt:
+        autoremove: true
+        purge: true
+      tags: [cleanup]
+
+    # -------------------------------------------------------------------------
+    # PHASE 5: FIREWALL RESET (Optional)
+    # -------------------------------------------------------------------------
+
+    - name: "💀 PHASE 5: Firewall Reset"
+      ansible.builtin.debug:
+        msg: "Resetting firewall rules..."
+      when: destruction_mode | default('full') == 'scorched_earth'
+      tags: [always]
+
+    - name: Reset UFW to defaults
+      ansible.builtin.shell:
+        cmd: ufw --force reset
+      when: destruction_mode | default('full') == 'scorched_earth'
+      failed_when: false
+      tags: [firewall]
+
+    - name: Re-allow SSH (so you can still connect)
+      community.general.ufw:
+        rule: allow
+        name: OpenSSH
+      when: destruction_mode | default('full') == 'scorched_earth'
+      tags: [firewall]
+
+    - name: Re-enable firewall
+      community.general.ufw:
+        state: enabled
+      when: destruction_mode | default('full') == 'scorched_earth'
+      tags: [firewall]
+
+  # ===========================================================================
+  # POST-DESTRUCTION
+  # ===========================================================================
+
+  post_tasks:
+    - name: Verify destruction
+      ansible.builtin.stat:
+        path: "{{ install_path }}"
+      register: verify_app
+
+    - name: Verify user removal
+      ansible.builtin.shell:
+        cmd: id {{ app_user | default('stormcloud') }}
+      register: verify_user
+      failed_when: false
+      changed_when: false
+
+    - name: Destruction complete
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          💀 DESTRUCTION COMPLETE 💀
+          ══════════════════════════════════════════════════════════════
+          
+          Server: {{ ansible_host }}
+          Mode: {{ destruction_mode | default('full') }}
+          
+          Obliterated:
+            ✓ Application directory: {{ 'DESTROYED' if not verify_app.stat.exists else 'FAILED' }}
+            ✓ User account: {{ 'DESTROYED' if verify_user.rc != 0 else 'FAILED' }}
+            ✓ Docker containers: DESTROYED
+            ✓ Docker images: DESTROYED
+            ✓ Docker volumes: DESTROYED
+            ✓ nginx configuration: DESTROYED
+            ✓ SSL certificates: DESTROYED
+          {% if destruction_mode | default('full') == 'scorched_earth' or destruction_mode | default('full') == 'full' %}
+            ✓ Docker package: UNINSTALLED
+            ✓ nginx package: UNINSTALLED
+            ✓ Certbot package: UNINSTALLED
+          {% endif %}
+          
+          Your VPS has been returned to {{ 'pristine' if destruction_mode | default('full') == 'scorched_earth' else 'clean' }} state.
+          
+          {% if backup_before_destroy | default('no') == 'yes' or create_backup %}
+          📦 Backup created before destruction.
+          {% else %}
+          ⚠️  No backup was created. Data is gone forever.
+          {% endif %}
+          
+          To redeploy:
+            make deploy
+          
+          ══════════════════════════════════════════════════════════════
+      tags: [always]

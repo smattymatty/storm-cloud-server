@@ -29,18 +29,28 @@
   # ===========================================================================
 
   vars_prompt:
-    - name: gotosocial_username
-      prompt: "GoToSocial username (press ENTER to skip GoToSocial account setup)"
+    - name: _postgres_password_prompt
+      prompt: "PostgreSQL password (or set STORMCLOUD_POSTGRES_PASSWORD env var, press ENTER to use env var)"
+      private: true
+      default: ""
+
+    - name: _secret_key_prompt
+      prompt: "Django SECRET_KEY (press ENTER to auto-generate, or set STORMCLOUD_SECRET_KEY env var)"
+      private: true
+      default: ""
+
+    - name: _gotosocial_username_prompt
+      prompt: "GoToSocial username (or set STORMCLOUD_GOTOSOCIAL_USERNAME, press ENTER to skip)"
       private: false
       default: ""
 
-    - name: gotosocial_email
-      prompt: "GoToSocial email (required if username provided)"
+    - name: _gotosocial_email_prompt
+      prompt: "GoToSocial email (or set STORMCLOUD_GOTOSOCIAL_EMAIL)"
       private: false
       default: ""
 
-    - name: gotosocial_password
-      prompt: "GoToSocial password (minimum 16 characters, required if username provided)"
+    - name: _gotosocial_password_prompt
+      prompt: "GoToSocial password (or set STORMCLOUD_GOTOSOCIAL_PASSWORD, min 16 chars)"
       private: true
       default: ""
 
@@ -59,23 +69,98 @@
         _gotosocial_domain: "{{ gotosocial_domain | default('') }}"
       tags: [always]
 
+    # -------------------------------------------------------------------------
+    # Secret Resolution: Environment Variables > Prompts
+    # -------------------------------------------------------------------------
+    
+    - name: Resolve secrets (env vars take precedence over prompts)
+      ansible.builtin.set_fact:
+        postgres_password: "{{ lookup('env', 'STORMCLOUD_POSTGRES_PASSWORD') | default(_postgres_password_prompt, true) }}"
+        secret_key_input: "{{ lookup('env', 'STORMCLOUD_SECRET_KEY') | default(_secret_key_prompt, true) }}"
+        gotosocial_username: "{{ lookup('env', 'STORMCLOUD_GOTOSOCIAL_USERNAME') | default(_gotosocial_username_prompt, true) }}"
+        gotosocial_email: "{{ lookup('env', 'STORMCLOUD_GOTOSOCIAL_EMAIL') | default(_gotosocial_email_prompt, true) }}"
+        gotosocial_password: "{{ lookup('env', 'STORMCLOUD_GOTOSOCIAL_PASSWORD') | default(_gotosocial_password_prompt, true) }}"
+      no_log: true  # Don't expose secrets in logs
+      tags: [always]
+
+    - name: Auto-generate SECRET_KEY if not provided
+      ansible.builtin.set_fact:
+        secret_key_generated: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits,punctuation') }}"
+      when: secret_key_input | default('') | length == 0
+      no_log: true
+      tags: [always]
+
+    - name: Set final SECRET_KEY
+      ansible.builtin.set_fact:
+        secret_key: "{{ secret_key_input if (secret_key_input | default('') | length > 0) else secret_key_generated }}"
+      no_log: true
+      tags: [always]
+
+    - name: Show auto-generated SECRET_KEY (save this somewhere safe!)
+      ansible.builtin.debug:
+        msg: |
+          
+          ══════════════════════════════════════════════════════════════
+          ⚠️  AUTO-GENERATED SECRET_KEY
+          ══════════════════════════════════════════════════════════════
+          
+          Your Django SECRET_KEY has been auto-generated:
+          
+          {{ secret_key }}
+          
+          ⚠️  SAVE THIS SOMEWHERE SAFE (password manager, encrypted file)
+          
+          To use the same key in future deployments:
+            export STORMCLOUD_SECRET_KEY="{{ secret_key }}"
+          
+          ══════════════════════════════════════════════════════════════
+      when: secret_key_input | default('') | length == 0
+      tags: [always]
+
     - name: Validate config
       ansible.builtin.assert:
         that:
           - server_ip | default('') | length > 0
           - domain | default('') | length > 0
           - admin_email | default('') | length > 0
-          - postgres_password | default('') | length > 0
         fail_msg: |
 
           ══════════════════════════════════════════════════════════════
-          Missing required config. Edit deploy/config.yml:
+          ❌ Missing required config
+          ══════════════════════════════════════════════════════════════
+          
+          Edit deploy/config.yml and set:
 
-            server_ip:       {{ server_ip | default('(empty)') }}
-            domain:          {{ domain | default('(empty)') }}
-            admin_email:     {{ admin_email | default('(empty)') }}
-            postgres_password: {{ postgres_password | default('(empty)') }}
+            server_ip:    {{ server_ip | default('(empty)') }}
+            domain:       {{ domain | default('(empty)') }}
+            admin_email:  {{ admin_email | default('(empty)') }}
 
+          ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+    - name: Validate secrets
+      ansible.builtin.assert:
+        that:
+          - postgres_password | default('') | length > 0
+          - secret_key | default('') | length > 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ❌ STORMCLOUD_POSTGRES_PASSWORD is required
+          ══════════════════════════════════════════════════════════════
+          
+          Set secrets as environment variables before deploying:
+
+            export STORMCLOUD_POSTGRES_PASSWORD="your-secure-password"
+            export STORMCLOUD_SECRET_KEY="your-django-secret-key"  # Optional (will auto-generate)
+            make deploy
+
+          Or you will be prompted for them during deployment.
+
+          Generate a secure password:
+            openssl rand -base64 32
+
+          Need help? See: deploy/README.md#secrets
           ══════════════════════════════════════════════════════════════
       tags: [always]
 
@@ -646,7 +731,7 @@
       tags: [app, gotosocial]
 
     # -------------------------------------------------------------------------
-    # Secrets (idempotent)
+    # Secrets (managed via env vars/prompts at playbook start)
     # -------------------------------------------------------------------------
 
     - name: Check for existing .env
@@ -655,49 +740,34 @@
       register: env_check
       tags: [app, env]
 
-    # First deploy: generate new secrets
-    - name: Generate secrets (new install)
+    # Existing deploy: read and preserve secrets using custom dotenv parser
+    - name: Read existing secrets from .env
+      read_dotenv:
+        path: "{{ install_path }}/.env"
+        keys:
+          - SECRET_KEY
+          - POSTGRES_PASSWORD
+        required: false
+      register: existing_secrets
+      when: env_check.stat.exists
+      tags: [app, env]
+
+    - name: Preserve existing secrets (don't overwrite with new values)
       ansible.builtin.set_fact:
-        secret_key: "{{ lookup('password', '/dev/null length=50 chars=ascii_letters,digits') }}"
+        secret_key: "{{ existing_secrets.values.SECRET_KEY }}"
+        db_password: "{{ existing_secrets.values.POSTGRES_PASSWORD }}"
+      when:
+        - env_check.stat.exists
+        - existing_secrets.values.SECRET_KEY is defined
+        - existing_secrets.values.POSTGRES_PASSWORD is defined
+      no_log: true
+      tags: [app, env]
+
+    - name: Use new secrets for first deployment
+      ansible.builtin.set_fact:
         db_password: "{{ postgres_password }}"
       when: not env_check.stat.exists
-      tags: [app, env]
-
-    # Existing deploy: read and preserve secrets
-    - name: Read existing .env
-      ansible.builtin.slurp:
-        src: "{{ install_path }}/.env"
-      register: env_content
-      when: env_check.stat.exists
-      tags: [app, env]
-
-    - name: Parse existing secrets
-      ansible.builtin.set_fact:
-        secret_key: "{{ env_content.content | b64decode | regex_search('SECRET_KEY=([^\\s#]+)', '\\1', multiline=True) | default([''], true) | first }}"
-        db_password: "{{ env_content.content | b64decode | regex_search('POSTGRES_PASSWORD=([^\\s#]+)', '\\1', multiline=True) | default([''], true) | first }}"
-      when: env_check.stat.exists
-      tags: [app, env]
-
-    - name: Validate parsed secrets
-      ansible.builtin.assert:
-        that:
-          - secret_key | default('') | length > 0
-          - db_password | default('') | length > 0
-        fail_msg: |
-
-          ══════════════════════════════════════════════════════════════
-          ❌ Failed to parse secrets from existing .env file
-          ══════════════════════════════════════════════════════════════
-          
-          The existing .env file at {{ install_path }}/.env appears to be
-          corrupted or missing required SECRET_KEY and POSTGRES_PASSWORD values.
-          
-          Please either:
-          1. Fix the .env file manually on the server
-          2. Remove the .env file to generate new secrets (WARNING: will break existing data)
-          
-          ══════════════════════════════════════════════════════════════
-      when: env_check.stat.exists
+      no_log: true
       tags: [app, env]
 
     - name: Write .env

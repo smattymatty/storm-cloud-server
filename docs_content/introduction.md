@@ -70,7 +70,7 @@ See [Architecture Decision Records](../architecture/records/) for detailed desig
 
 ## Technology Stack
 
-- **Backend**: Django 5.2 + Django REST Framework
+- **Backend**: Django 6.0 + Django REST Framework
 - **Database**: PostgreSQL
 - **Storage**: Local filesystem (S3/Backblaze coming)
 - **Authentication**: API Keys + JWT (SimpleJWT)

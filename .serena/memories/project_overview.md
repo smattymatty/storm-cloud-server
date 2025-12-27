@@ -6,7 +6,7 @@ Self-hostable cloud storage server with API key authentication and markdown CMS 
 ## Tech Stack
 
 ### Core Framework
-- **Django 6.0** (production) / 5.2 (README mentions) - Web framework
+- **Django 6.0** - Web framework
 - **Django REST Framework 3.16+** - API framework
 - **Python 3.12+** - Programming language
 

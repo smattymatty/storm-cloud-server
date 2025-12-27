@@ -9,6 +9,7 @@ Usage:
     stats = service.sync(mode='audit', dry_run=True)
 """
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -16,6 +17,8 @@ from django.contrib.auth import get_user_model
 from core.storage.base import AbstractStorageBackend
 from core.storage.local import LocalStorageBackend
 from storage.models import StoredFile
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -107,7 +110,22 @@ class IndexSyncService:
         mode: str,
         dry_run: bool
     ) -> IndexSyncStats:
-        """Sync a single user's files."""
+        """
+        Sync a single user's files between filesystem and database.
+        
+        Clean mode implements "filesystem wins" absolutely:
+        - Orphaned DB records are deleted
+        - Django CASCADE automatically deletes related ShareLinks
+        - This is intentional: ShareLinks to non-existent files are invalid
+        
+        Args:
+            user: Django User object to sync
+            mode: 'audit', 'sync', 'clean', or 'full'
+            dry_run: Preview changes without applying
+            
+        Returns:
+            IndexSyncStats with operation results
+        """
         stats = IndexSyncStats()
         user_prefix = f"{user.id}"
         
@@ -171,21 +189,25 @@ class IndexSyncService:
                         stats.records_created += 1
         
         # Clean orphaned records (mode: clean or full)
+        # Note: Django CASCADE will automatically delete related ShareLinks
+        # This implements "filesystem wins" - if file is gone, everything goes
         if mode in ['clean', 'full']:
             for path in orphaned_in_db:
                 db_file = db_files[path]
                 
-                # Check if ShareLinks exist (CASCADE protection)
-                # Use related_name from ShareLink model
-                if hasattr(db_file, 'share_links') and db_file.share_links.exists():
-                    stats.records_skipped += 1
-                    stats.errors.append(
-                        f"Skipped {path}: has active ShareLinks (CASCADE protection)"
-                    )
-                    continue
-                
                 if not dry_run:
                     try:
+                        # Log CASCADE deletions for transparency
+                        sharelink_count = 0
+                        if hasattr(db_file, 'share_links'):
+                            sharelink_count = db_file.share_links.count()
+                            if sharelink_count > 0:
+                                logger.info(
+                                    f"Deleting '{path}' (will CASCADE delete "
+                                    f"{sharelink_count} ShareLink(s))"
+                                )
+                        
+                        # Delete will CASCADE to related ShareLinks automatically
                         db_file.delete()
                         stats.records_deleted += 1
                     except Exception as e:

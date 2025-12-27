@@ -18,23 +18,23 @@ class UserFactory(factory.django.DjangoModelFactory):
         model = User
         skip_postgeneration_save = True
 
-    username = factory.Sequence(lambda n: f'user{n}')
-    email = factory.LazyAttribute(lambda o: f'{o.username}@example.com')
+    username = factory.Sequence(lambda n: f"user{n}")
+    email = factory.LazyAttribute(lambda o: f"{o.username}@example.com")
     is_active = True
 
     @factory.post_generation
     def password(self, create, extracted, **kwargs):
         """Set password after user creation."""
-        password = extracted or 'testpass123'
-        self.set_password(password)
+        password = extracted or "testpass123"
+        self.set_password(password)  # type: ignore[attr-defined]
         if create:
-            self.save()
+            self.save()  # type: ignore[attr-defined]
 
     class Params:
         admin = factory.Trait(
             is_staff=True,
             is_superuser=True,
-            username=factory.Sequence(lambda n: f'admin{n}'),
+            username=factory.Sequence(lambda n: f"admin{n}"),
         )
 
 
@@ -56,7 +56,7 @@ class UserWithProfileFactory(UserFactory):
 
     profile = factory.RelatedFactory(
         UserProfileFactory,
-        factory_related_name='user',
+        factory_related_name="user",
     )
 
     class Params:
@@ -66,7 +66,7 @@ class UserWithProfileFactory(UserFactory):
         admin = factory.Trait(
             is_staff=True,
             is_superuser=True,
-            username=factory.Sequence(lambda n: f'admin{n}'),
+            username=factory.Sequence(lambda n: f"admin{n}"),
             profile__is_email_verified=True,
         )
 
@@ -78,7 +78,7 @@ class APIKeyFactory(factory.django.DjangoModelFactory):
         model = APIKey
 
     user = factory.SubFactory(UserFactory)
-    name = factory.Sequence(lambda n: f'key-{n}')
+    name = factory.Sequence(lambda n: f"key-{n}")
     is_active = True
 
     class Params:
@@ -95,9 +95,7 @@ class EmailVerificationTokenFactory(factory.django.DjangoModelFactory):
         model = EmailVerificationToken
 
     user = factory.SubFactory(UserFactory)
-    expires_at = factory.LazyFunction(
-        lambda: timezone.now() + timedelta(hours=24)
-    )
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(hours=24))
 
     class Params:
         expired = factory.Trait(
