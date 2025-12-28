@@ -25,7 +25,6 @@
 #   - Docker, nginx, certbot packages
 #   - Firewall rules
 #   - System logs related to the application
-#   - GoToSocial (if installed)
 #   - EVERYTHING. NO SURVIVORS.
 #
 # =============================================================================
@@ -125,9 +124,6 @@
             🔥 nginx package
             🔥 Certbot package
             🔥 All application logs
-          {% if install_gotosocial | default(false) %}
-            🔥 GoToSocial server and data
-          {% endif %}
           {% else %}
             🔥 Docker containers, images, volumes
             🔥 Application directory: {{ install_path }}
@@ -319,39 +315,27 @@
         - /etc/nginx/sites-enabled/stormcloud.conf
         - /etc/nginx/sites-enabled/stormcloud
         - /etc/nginx/sites-available/stormcloud
-        - /etc/nginx/sites-enabled/gotosocial.conf
-        - /etc/nginx/sites-enabled/gotosocial
-        - /etc/nginx/sites-available/gotosocial
       tags: [nginx]
 
     - name: Remove SSL certificates
       ansible.builtin.file:
-        path: "/etc/letsencrypt/live/{{ item }}"
+        path: "/etc/letsencrypt/live/{{ domain }}"
         state: absent
-      loop:
-        - "{{ domain | default('') }}"
-        - "{{ gotosocial_domain | default('') }}"
-      when: item | length > 0
+      when: domain | default('') | length > 0
       tags: [ssl]
 
     - name: Remove all Let's Encrypt certificate archives
       ansible.builtin.file:
-        path: "/etc/letsencrypt/archive/{{ item }}"
+        path: "/etc/letsencrypt/archive/{{ domain }}"
         state: absent
-      loop:
-        - "{{ domain | default('') }}"
-        - "{{ gotosocial_domain | default('') }}"
-      when: item | length > 0
+      when: domain | default('') | length > 0
       tags: [ssl]
 
     - name: Remove Let's Encrypt renewal configs
       ansible.builtin.file:
-        path: "/etc/letsencrypt/renewal/{{ item }}.conf"
+        path: "/etc/letsencrypt/renewal/{{ domain }}.conf"
         state: absent
-      loop:
-        - "{{ domain | default('') }}"
-        - "{{ gotosocial_domain | default('') }}"
-      when: item | length > 0
+      when: domain | default('') | length > 0
       tags: [ssl]
 
     - name: Remove certbot webroot
@@ -455,7 +439,6 @@
       loop:
         - stormcloud*.log
         - nginx/stormcloud*.log
-        - nginx/gotosocial*.log
       failed_when: false
       tags: [logs]
 

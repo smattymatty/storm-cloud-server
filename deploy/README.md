@@ -74,16 +74,6 @@ export STORMCLOUD_SECRET_KEY="your-django-secret-key"
 
 If not set, a random 50-character key will be auto-generated and displayed during deployment. **Save this key** for future deployments.
 
-### Optional Secrets (GoToSocial)
-
-If deploying with GoToSocial enabled (`install_gotosocial: true`):
-
-```bash
-export STORMCLOUD_GOTOSOCIAL_USERNAME="your-username"
-export STORMCLOUD_GOTOSOCIAL_EMAIL="you@example.com"
-export STORMCLOUD_GOTOSOCIAL_PASSWORD="your-secure-password"  # Min 16 chars
-```
-
 ### Copy-Paste Template
 
 ```bash
@@ -92,9 +82,6 @@ export STORMCLOUD_POSTGRES_PASSWORD="CHANGE_ME"
 
 # Optional (will prompt if not set)
 export STORMCLOUD_SECRET_KEY=""  # Auto-generates if empty
-export STORMCLOUD_GOTOSOCIAL_USERNAME=""
-export STORMCLOUD_GOTOSOCIAL_EMAIL=""
-export STORMCLOUD_GOTOSOCIAL_PASSWORD=""
 
 # Deploy
 make deploy

@@ -35,14 +35,6 @@ Part of the Storm Developments open source stack.
 - Access analytics (view count, last accessed)
 - Anonymous rate limiting for public endpoints
 
-### Federated Transparency (GoToSocial Integration)
-- **Federated Read Model via ActivityPub** - Auto-post share links to your Fediverse account
-- Organizational transparency for co-ops, open-source projects, and democratic organizations
-- Posts include file details, expiry, and access links
-- Automatic cleanup when links expire or are revoked
-- Graceful degradation if social server is unavailable
-- See [ADR 008: Federated Read Model](architecture/records/008-federated-read-model.md)
-
 ### Content Management System
 - Markdown rendering with Django Spellbook
 - Managed content with custom SpellBlocks (in development)

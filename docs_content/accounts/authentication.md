@@ -540,6 +540,103 @@ All authentication errors follow this format:
 
 ---
 
+## Admin User Management
+
+Admins can create users and API keys directly, bypassing registration and email verification.
+
+### Create User (Admin)
+
+**Endpoint:** `POST /api/v1/admin/users/`
+
+Password is optional - if not provided, user will have unusable password and must authenticate via API key only.
+
+**Request:**
+```bash
+# Create user without password (API-key-only access)
+curl -X POST http://localhost:8000/api/v1/admin/users/ \
+  -H "Authorization: Bearer ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "newuser",
+    "email": "newuser@example.com",
+    "is_email_verified": true
+  }'
+
+# Create user with password (can also use session login)
+curl -X POST http://localhost:8000/api/v1/admin/users/ \
+  -H "Authorization: Bearer ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "staffuser",
+    "email": "staff@example.com",
+    "password": "SecurePass123!",
+    "is_staff": true,
+    "is_email_verified": true
+  }'
+```
+
+**Response:**
+```json
+{
+  "user": {
+    "id": 5,
+    "username": "newuser",
+    "email": "newuser@example.com"
+  },
+  "profile": {
+    "is_email_verified": true
+  },
+  "message": "User created successfully"
+}
+```
+
+### Create API Key for User (Admin)
+
+**Endpoint:** `POST /api/v1/admin/users/<user_id>/keys/`
+
+Create an API key for any user. The key is returned once and cannot be retrieved later.
+
+**Request:**
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/users/5/keys/ \
+  -H "Authorization: Bearer ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "CLI Key"}'
+```
+
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "name": "CLI Key",
+  "key": "abc123xyz456def789...",
+  "created_at": "2025-12-28T10:00:00Z",
+  "last_used_at": null
+}
+```
+
+**⚠️ IMPORTANT:** Save the `key` value and give it to the user - it's only shown once!
+
+### Complete Admin Flow
+
+```bash
+# 1. Create user (no password needed)
+curl -X POST /api/v1/admin/users/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -d '{"username": "bob", "email": "bob@example.com", "is_email_verified": true}'
+# Returns: {"user": {"id": 5, ...}, ...}
+
+# 2. Create API key for user
+curl -X POST /api/v1/admin/users/5/keys/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -d '{"name": "CLI Key"}'
+# Returns: {"key": "abc123...", ...}
+
+# 3. Give the key to the user - they're ready to go!
+```
+
+---
+
 ## Configuration
 
 Configure authentication in `.env`:

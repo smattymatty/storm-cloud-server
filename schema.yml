@@ -972,6 +972,80 @@ paths:
           description: ''
         '404':
           description: File not found
+  /api/v1/files/{file_path}/content/:
+    get:
+      operationId: v1_files_content_preview
+      description: Get raw text content of a file for preview. Only works for text-based
+        files (plain text, markdown, code). Binary files will return 400 error.
+      summary: Preview file content
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          description: Raw file content (text/plain)
+        '400':
+          description: File is binary or path invalid
+        '404':
+          description: File not found
+        '413':
+          description: File too large for preview
+    put:
+      operationId: v1_files_content_edit
+      description: Update file content with raw body. Request body contains the new
+        file content directly (not multipart). File must already exist. Respects user
+        storage quotas.
+      summary: Edit file content
+      parameters:
+      - in: path
+        name: file_path
+        schema:
+          type: string
+        required: true
+      tags:
+      - Files
+      requestBody:
+        content:
+          text/plain:
+            schema:
+              schema:
+                type: string
+                format: binary
+          application/octet-stream:
+            schema:
+              schema:
+                type: string
+                format: binary
+      security:
+      - APIKeyAuth: []
+      - cookieAuth: []
+      - BearerAuth: []
+      - SessionAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileInfoResponse'
+          description: ''
+        '400':
+          description: Invalid path or directory
+        '404':
+          description: File not found
+        '413':
+          description: Content too large
+        '507':
+          description: Quota exceeded
   /api/v1/files/{file_path}/create/:
     post:
       operationId: v1_files_create_create
@@ -1660,7 +1734,7 @@ components:
           type: string
           readOnly: true
         has_password:
-          type: string
+          type: boolean
           readOnly: true
         expiry_days:
           allOf:
@@ -1704,18 +1778,8 @@ components:
           readOnly: true
           description: Whether this link is active (false = revoked)
         is_expired:
-          type: string
-          readOnly: true
-        posted_to_social:
           type: boolean
           readOnly: true
-          description: Whether this link was posted to GoToSocial
-        social_post_url:
-          type: string
-          format: uri
-          readOnly: true
-          nullable: true
-          description: Public URL of the social post
       required:
       - created_at
       - custom_slug
@@ -1729,8 +1793,6 @@ components:
       - is_expired
       - last_accessed_at
       - owner
-      - posted_to_social
-      - social_post_url
       - token
       - url
       - view_count

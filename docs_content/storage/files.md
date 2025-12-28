@@ -213,6 +213,115 @@ Binary file stream with appropriate `Content-Type` and `Content-Disposition` hea
 
 ---
 
+### Preview File Content
+
+**GET** `/api/v1/files/{file_path}/content/`
+
+Get raw text content of a file for preview. Only works for text-based files.
+
+**Supported File Types:**
+- Text files: `.txt`, `.md`, `.rst`
+- Code files: `.py`, `.js`, `.ts`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, etc.
+- Config files: `.json`, `.yaml`, `.toml`, `.ini`, `.env`
+- Known filenames: `Makefile`, `Dockerfile`, `.gitignore`
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | Yes | File path to preview |
+
+**Example Request:**
+
+```bash
+curl http://localhost:8000/api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+**Response:**
+
+Raw text content with `Content-Type: text/plain; charset=utf-8`.
+
+```
+# My Project
+
+This is the readme file content...
+```
+
+**Error Codes:**
+
+| Code | Description |
+|------|-------------|
+| `FILE_NOT_FOUND` | File does not exist at this path |
+| `NOT_TEXT_FILE` | Binary files cannot be previewed |
+| `FILE_TOO_LARGE` | Exceeds preview size limit (default 5MB) |
+
+---
+
+### Edit File Content
+
+**PUT** `/api/v1/files/{file_path}/content/`
+
+Update file content with raw body. The request body contains the new file content directly (not multipart).
+
+**Path Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | Yes | File path to edit |
+
+**Request Body:**
+
+Raw text content (not JSON, not multipart).
+
+**Headers:**
+
+```
+Content-Type: text/plain
+```
+
+**Example Request:**
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: text/plain" \
+  -d "# Updated Content
+
+This is the new file content."
+```
+
+**Example Response:**
+
+```json
+{
+  "detail": "File updated",
+  "path": "readme.md",
+  "name": "readme.md",
+  "size": 48,
+  "content_type": "text/markdown",
+  "is_directory": false,
+  "created_at": "2025-12-11T10:00:00Z",
+  "modified_at": "2025-12-28T15:30:00Z",
+  "encryption_method": "none"
+}
+```
+
+**Error Codes:**
+
+| Code | Description |
+|------|-------------|
+| `FILE_NOT_FOUND` | File doesn't exist (use upload endpoint to create new files) |
+| `FILE_TOO_LARGE` | Exceeds upload size limit |
+| `QUOTA_EXCEEDED` | Edit would exceed user storage quota |
+
+**Notes:**
+- File must already exist (use upload endpoint to create new files)
+- Respects global upload limit and per-user quotas
+- Content type is preserved from original file
+
+---
+
 ### File Info
 
 **GET** `/api/v1/files/{file_path}/`
@@ -500,8 +609,9 @@ See [ADR 002](../../architecture/records/002-storage-backend.md) for architectur
 | List | 60 requests/minute |
 | Upload | 30 requests/minute |
 | Download | 60 requests/minute |
+| Preview | 60 requests/minute |
+| Edit | 30 requests/minute |
 | Info | 100 requests/minute |
-| Replace | 30 requests/minute |
 | Delete | 30 requests/minute |
 
 Limits are per API key.
@@ -529,6 +639,9 @@ All errors follow this format:
 | `FILE_NOT_FOUND` | 404 | File doesn't exist |
 | `FILE_REQUIRED` | 400 | No file in upload request |
 | `FILE_ALREADY_EXISTS` | 409 | File exists (use replace) |
+| `FILE_TOO_LARGE` | 400 | Exceeds size limit |
+| `NOT_TEXT_FILE` | 400 | Binary file cannot be previewed |
+| `QUOTA_EXCEEDED` | 400 | Storage quota exceeded |
 | `PATH_TRAVERSAL_DETECTED` | 400 | Invalid path |
 | `UNAUTHORIZED` | 401 | Missing/invalid API key |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
@@ -570,6 +683,21 @@ response = requests.get(
     headers=headers
 )
 files = response.json()["entries"]
+
+# Preview file content
+response = requests.get(
+    f"{BASE_URL}/files/readme.md/content/",
+    headers=headers
+)
+print(response.text)
+
+# Edit file content
+response = requests.put(
+    f"{BASE_URL}/files/readme.md/content/",
+    headers={**headers, "Content-Type": "text/plain"},
+    data="# Updated Content\n\nNew content here."
+)
+print(response.json())
 ```
 
 ### JavaScript/TypeScript
@@ -647,6 +775,18 @@ curl "$BASE_URL/dirs/" \
 # Delete
 curl -X DELETE "$BASE_URL/files/old-file.txt/delete/" \
   -H "Authorization: Bearer $API_KEY"
+
+# Preview file content (cat)
+curl "$BASE_URL/files/readme.md/content/" \
+  -H "Authorization: Bearer $API_KEY"
+
+# Edit file content
+curl -X PUT "$BASE_URL/files/readme.md/content/" \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: text/plain" \
+  -d "# Updated Readme
+
+New content goes here."
 ```
 
 ---

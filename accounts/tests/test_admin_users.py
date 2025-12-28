@@ -523,6 +523,114 @@ class AdminUserPasswordResetTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class AdminUserCreatePasswordOptionalTest(StormCloudAdminTestCase):
+    """Tests for optional password in admin user creation."""
+
+    def test_admin_create_user_without_password_succeeds(self):
+        """Admin can create user without password (API-key-only access)."""
+        data = {
+            "username": "nokeyuser",
+            "email": "nokey@example.com",
+            "is_email_verified": True,
+        }
+        response = self.client.post("/api/v1/admin/users/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        user = User.objects.get(username="nokeyuser")
+        # User should have unusable password
+        self.assertFalse(user.has_usable_password())
+
+    def test_admin_create_user_with_empty_password_succeeds(self):
+        """Admin can create user with empty password string."""
+        data = {
+            "username": "emptypassuser",
+            "email": "emptypass@example.com",
+            "password": "",
+            "is_email_verified": True,
+        }
+        response = self.client.post("/api/v1/admin/users/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        user = User.objects.get(username="emptypassuser")
+        self.assertFalse(user.has_usable_password())
+
+    def test_admin_create_user_with_password_still_works(self):
+        """Admin can still create user with password."""
+        data = {
+            "username": "withpassuser",
+            "email": "withpass@example.com",
+            "password": "securepass123",
+            "is_email_verified": True,
+        }
+        response = self.client.post("/api/v1/admin/users/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        user = User.objects.get(username="withpassuser")
+        self.assertTrue(user.has_usable_password())
+        self.assertTrue(user.check_password("securepass123"))
+
+
+class AdminUserAPIKeyCreateTest(StormCloudAdminTestCase):
+    """Tests for POST /api/v1/admin/users/{id}/keys/"""
+
+    def test_admin_create_key_for_user_succeeds(self):
+        """Admin can create API key for any user."""
+        user = UserWithProfileFactory()
+
+        data = {"name": "Admin Created Key"}
+        response = self.client.post(f"/api/v1/admin/users/{user.id}/keys/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Verify key was created
+        self.assertIn("key", response.data)
+        self.assertIn("id", response.data)
+        self.assertEqual(response.data["name"], "Admin Created Key")
+
+        # Verify key exists in database
+        from accounts.models import APIKey
+        self.assertTrue(APIKey.objects.filter(user=user, name="Admin Created Key").exists())
+
+    def test_admin_create_key_with_default_name(self):
+        """Key gets default name if not provided."""
+        user = UserWithProfileFactory()
+
+        data = {}
+        response = self.client.post(f"/api/v1/admin/users/{user.id}/keys/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["name"], "API Key")
+
+    def test_admin_create_key_for_nonexistent_user_returns_404(self):
+        """Creating key for non-existent user returns 404."""
+        data = {"name": "Test Key"}
+        response = self.client.post("/api/v1/admin/users/99999/keys/", data)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_admin_cannot_create_key_for_other_user(self):
+        """Non-admin cannot create API key for another user."""
+        regular_user = UserWithProfileFactory(verified=True)
+        from accounts.tests.factories import APIKeyFactory
+
+        regular_key = APIKeyFactory(user=regular_user)
+        self.authenticate(api_key=regular_key)
+
+        target_user = UserWithProfileFactory()
+        data = {"name": "Unauthorized Key"}
+        response = self.client.post(f"/api/v1/admin/users/{target_user.id}/keys/", data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_create_key_returns_key_value(self):
+        """Created key response includes the actual key value."""
+        user = UserWithProfileFactory()
+
+        data = {"name": "CLI Key"}
+        response = self.client.post(f"/api/v1/admin/users/{user.id}/keys/", data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Key should be a non-empty string
+        self.assertIsInstance(response.data["key"], str)
+        self.assertGreater(len(response.data["key"]), 20)
+
+
 class AdminUserDetailIsActiveTest(StormCloudAdminTestCase):
     """Tests for is_active field in user detail responses."""
 

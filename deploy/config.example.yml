@@ -43,25 +43,6 @@ install_nginx: true
 install_certbot: true
 configure_firewall: true
 
-# === GOTOSOCIAL - Optional Fediverse Server ===
-#
-# GoToSocial is a lightweight, single-user Mastodon-compatible server.
-# Enable this to run your own Fediverse instance alongside Storm Cloud.
-#
-# Requirements:
-#   - A separate domain/subdomain (e.g., social.example.com)
-#   - DNS A record pointing to your server_ip
-#
-# After deployment:
-#   make gotosocial-user   Create a user account
-#   make gotosocial-token  Generate API token for Django
-#
-install_gotosocial: false
-gotosocial_domain: "" # e.g., social.example.com
-
-# GoToSocial container runs as UID 1000 by default. Only change if using a custom image.
-gotosocial_uid: 1000
-
 # === SECRETS - Sensitive credentials ===
 #
 # IMPORTANT: Secrets are now managed via environment variables for better security.
@@ -71,9 +52,6 @@ gotosocial_uid: 1000
 #
 #   export STORMCLOUD_POSTGRES_PASSWORD="your-secure-password"
 #   export STORMCLOUD_SECRET_KEY="your-django-secret-key"  # Optional (auto-generates if not set)
-#   export STORMCLOUD_GOTOSOCIAL_USERNAME="your-username"  # Optional (if using GoToSocial)
-#   export STORMCLOUD_GOTOSOCIAL_EMAIL="your@email.com"    # Optional
-#   export STORMCLOUD_GOTOSOCIAL_PASSWORD="your-password"  # Optional
 #   make deploy
 #
 # If environment variables are not set, you will be prompted during deployment.

@@ -11,6 +11,7 @@ from accounts.api import (
     AdminAPIKeyListView,
     AdminAPIKeyRevokeView,
     AdminUserActivateView,
+    AdminUserAPIKeyCreateView,
     # Admin
     AdminUserCreateView,
     AdminUserDeactivateView,
@@ -178,6 +179,11 @@ urlpatterns = [
         "admin/users/<int:user_id>/quota/",
         AdminUserQuotaUpdateView.as_view(),
         name="admin-users-quota",
+    ),
+    path(
+        "admin/users/<int:user_id>/keys/",
+        AdminUserAPIKeyCreateView.as_view(),
+        name="admin-users-keys-create",
     ),
     # API Key Management (Admin)
     path("admin/keys/", AdminAPIKeyListView.as_view(), name="admin-keys-list"),

@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework import status
@@ -749,7 +750,11 @@ class AdminUserCreateView(StormCloudBaseAPIView):
 
     @extend_schema(
         summary="Admin: Create user",
-        description="Create a new user (admin only). Bypasses registration settings.",
+        description=(
+            "Create a new user (admin only). Bypasses registration settings. "
+            "Password is optional - if not provided, user will have unusable password "
+            "and must authenticate via API key only."
+        ),
         request=AdminUserCreateSerializer,
         responses={
             201: OpenApiResponse(description="User created"),
@@ -761,13 +766,21 @@ class AdminUserCreateView(StormCloudBaseAPIView):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Get password (may be None or empty)
+        password = serializer.validated_data.get("password")
+
         # Create user
         user = User.objects.create_user(
             username=serializer.validated_data["username"],
             email=serializer.validated_data["email"],
-            password=serializer.validated_data["password"],
+            password=password if password else None,
             is_staff=serializer.validated_data.get("is_staff", False),
         )
+
+        # If no password provided, set unusable password
+        if not password:
+            user.set_unusable_password()
+            user.save()
 
         # Create profile
         profile = UserProfile.objects.create(
@@ -849,7 +862,11 @@ class AdminUserListView(StormCloudBaseAPIView):
 
     @extend_schema(
         summary="Admin: Create user",
-        description="Create a new user (admin only). Bypasses registration settings.",
+        description=(
+            "Create a new user (admin only). Bypasses registration settings. "
+            "Password is optional - if not provided, user will have unusable password "
+            "and must authenticate via API key only."
+        ),
         request=AdminUserCreateSerializer,
         responses={
             201: OpenApiResponse(description="User created"),
@@ -863,16 +880,24 @@ class AdminUserListView(StormCloudBaseAPIView):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Get password (may be None or empty)
+        password = serializer.validated_data.get("password")
+
         try:
             # Create user
             user = User.objects.create_user(
                 username=serializer.validated_data["username"],
                 email=serializer.validated_data["email"],
-                password=serializer.validated_data["password"],
+                password=password if password else None,
                 is_staff=serializer.validated_data.get("is_staff", False),
                 first_name=serializer.validated_data.get("first_name", ""),
                 last_name=serializer.validated_data.get("last_name", ""),
             )
+
+            # If no password provided, set unusable password
+            if not password:
+                user.set_unusable_password()
+                user.save()
 
             # Create profile
             profile = UserProfile.objects.create(
@@ -1349,6 +1374,36 @@ class AdminUserQuotaUpdateView(StormCloudBaseAPIView):
             response_data["warning"] = warning
 
         return Response(response_data)
+
+
+class AdminUserAPIKeyCreateView(StormCloudBaseAPIView):
+    """Admin: Create API key for user."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Create API key for user",
+        description="Create a new API key for a specific user. Returns the key (shown only once).",
+        request=APIKeyCreateSerializer,
+        responses={
+            201: APIKeySerializer,
+            404: OpenApiResponse(description="User not found"),
+        },
+        tags=["Administration"],
+    )
+    def post(self, request: Request, user_id: int) -> Response:
+        """Create API key for specified user."""
+        user = get_object_or_404(User, pk=user_id)
+
+        serializer = APIKeyCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        name = serializer.validated_data.get("name", "API Key")
+        key = APIKey.objects.create(user=user, name=name)
+
+        api_key_created.send(sender=APIKey, api_key=key, user=user)
+
+        return Response(APIKeySerializer(key).data, status=status.HTTP_201_CREATED)
 
 
 class AdminAPIKeyListView(StormCloudBaseAPIView):

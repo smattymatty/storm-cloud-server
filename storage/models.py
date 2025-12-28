@@ -185,22 +185,6 @@ class ShareLink(AbstractBaseModel):
         default=True, help_text="Whether this link is active (false = revoked)"
     )
 
-    # Social posting metadata
-    posted_to_social = models.BooleanField(
-        default=False, help_text="Whether this link was posted to GoToSocial"
-    )
-    social_post_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text="GoToSocial status ID (for deletion/editing)",
-    )
-    social_post_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="Public URL of the social post",
-    )
-
     class Meta:
         verbose_name = "Share Link"
         verbose_name_plural = "Share Links"

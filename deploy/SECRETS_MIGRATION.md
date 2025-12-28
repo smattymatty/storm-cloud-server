@@ -50,9 +50,6 @@ Secrets from env vars → templated into server `.env` file. Falls back to inter
 |--------|---------------------|----------|------------------|
 | PostgreSQL Password | `STORMCLOUD_POSTGRES_PASSWORD` | ✅ Yes | Prompts if not set |
 | Django SECRET_KEY | `STORMCLOUD_SECRET_KEY` | ❌ No | Auto-generates if not set |
-| GoToSocial Username | `STORMCLOUD_GOTOSOCIAL_USERNAME` | ❌ No | Prompts if GoToSocial enabled |
-| GoToSocial Email | `STORMCLOUD_GOTOSOCIAL_EMAIL` | ❌ No | Prompts if GoToSocial enabled |
-| GoToSocial Password | `STORMCLOUD_GOTOSOCIAL_PASSWORD` | ❌ No | Prompts if GoToSocial enabled |
 
 ### Resolution Order
 

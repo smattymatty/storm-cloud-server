@@ -93,6 +93,8 @@ class APIKeyListSerializer(serializers.ModelSerializer):
 class APIKeyCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating API keys."""
 
+    name = serializers.CharField(max_length=255, required=False, default="API Key")
+
     class Meta:
         model = APIKey
         fields = ['name']
@@ -140,19 +142,24 @@ class AuthMeResponseSerializer(serializers.Serializer):
 
 # Admin serializers
 class AdminUserCreateSerializer(serializers.Serializer):
-    """Serializer for admin user creation."""
+    """Serializer for admin user creation.
+
+    Password is optional - if not provided, user will have unusable password
+    and must authenticate via API key only.
+    """
 
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     is_email_verified = serializers.BooleanField(default=False)
     is_staff = serializers.BooleanField(default=False)
 
     def validate_password(self, value):
-        """Validate password."""
-        validate_password(value)
+        """Validate password only if provided."""
+        if value:
+            validate_password(value)
         return value
 
 

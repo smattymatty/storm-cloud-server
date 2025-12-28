@@ -1381,8 +1381,6 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         """Create new share link."""
         from django.conf import settings
 
-        from social.middleware import get_social_warnings
-
         serializer = ShareLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -1440,14 +1438,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
             share_link.save()
 
         response_serializer = ShareLinkResponseSerializer(share_link)
-        response_data = response_serializer.data
-
-        # Check for social posting warnings
-        warnings = get_social_warnings()
-        if warnings:
-            response_data["warnings"] = warnings
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class ShareLinkDetailView(StormCloudBaseAPIView):

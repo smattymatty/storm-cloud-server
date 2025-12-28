@@ -2,6 +2,7 @@
 
 import re
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import ShareLink, StoredFile
@@ -129,21 +130,22 @@ class ShareLinkResponseSerializer(serializers.ModelSerializer):
             "last_accessed_at",
             "is_active",
             "is_expired",
-            "posted_to_social",
-            "social_post_url",
         ]
         read_only_fields = fields
 
-    def get_url(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_url(self, obj: ShareLink) -> str:
         """Build full public URL for this share link."""
         key = obj.get_public_url_key()
         return f"/api/v1/public/{key}/"
 
-    def get_has_password(self, obj):
+    @extend_schema_field(serializers.BooleanField())
+    def get_has_password(self, obj: ShareLink) -> bool:
         """Check if this link has password protection."""
         return bool(obj.password_hash)
 
-    def get_is_expired(self, obj):
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_expired(self, obj: ShareLink) -> bool:
         """Check if this link has expired."""
         return obj.is_expired()
 
