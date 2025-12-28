@@ -30,7 +30,7 @@ This projects `venv/` installs from `requirements.txt` - ensure to activate the 
 ## CLI Commands (Design Target)
 ```
 stormcloud auth login/logout/whoami
-stormcloud files ls/upload/download/rm/info
+stormcloud files ls/upload/download/rm/info/cat/edit
 stormcloud share create/list/revoke/info
 stormcloud cms add/remove/list/render
 stormcloud health ping/status
@@ -38,6 +38,47 @@ stormcloud index audit/sync/clean/full  # Index rebuild operations
 ```
 
 API responses should map cleanly to these commands.
+
+## File Content Preview/Edit
+
+**Endpoint:** `GET/PUT /api/v1/files/{path}/content/`
+
+Preview and edit text file content inline (without multipart upload or attachment download).
+
+**Preview (GET):**
+```bash
+# Get file content as plain text
+curl /api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer API_KEY"
+# Returns: raw text content with Content-Type: text/plain
+```
+
+**Edit (PUT):**
+```bash
+# Update file content with raw body
+curl -X PUT /api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer API_KEY" \
+  -H "Content-Type: text/plain" \
+  -d "# Updated Content"
+# Returns: JSON with updated file metadata
+```
+
+**Supported File Types (Preview):**
+- Text files: `.txt`, `.md`, `.rst`
+- Code files: `.py`, `.js`, `.ts`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, etc.
+- Config files: `.json`, `.yaml`, `.toml`, `.ini`, `.env`
+- Known filenames: `Makefile`, `Dockerfile`, `.gitignore`
+
+**Limits:**
+- Preview size limit: Configurable via `STORMCLOUD_MAX_PREVIEW_SIZE_MB` (default 5MB)
+- Edit respects global upload limit and per-user quotas
+- Edit requires file to exist (use upload endpoint to create new files)
+
+**Error Codes:**
+- `NOT_TEXT_FILE` - Binary files cannot be previewed
+- `FILE_TOO_LARGE` - Exceeds preview/upload size limit
+- `FILE_NOT_FOUND` - File doesn't exist (edit requires existing file)
+- `QUOTA_EXCEEDED` - Edit would exceed user quota
 
 ## Index Rebuild System
 

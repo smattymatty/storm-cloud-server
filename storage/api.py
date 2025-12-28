@@ -2,13 +2,14 @@
 
 import uuid
 from base64 import b64decode, b64encode
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Union, cast
+from typing import Any, Optional, Union, cast
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db.models import F, Sum
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -44,6 +45,100 @@ from .utils import get_share_link_by_token
 def get_user_storage_path(user: User) -> str:
     """Get storage path prefix for user."""
     return f"{user.id}"
+
+
+# Text MIME types allowed for content preview
+TEXT_PREVIEW_MIME_TYPES: frozenset[str] = frozenset([
+    # Plain text
+    "text/plain",
+    # Markup/Markdown
+    "text/markdown",
+    "text/x-markdown",
+    "text/html",
+    "text/xml",
+    "text/css",
+    # Code files
+    "text/x-python",
+    "text/x-python-script",
+    "application/x-python-code",
+    "text/javascript",
+    "application/javascript",
+    "application/json",
+    "text/x-java-source",
+    "text/x-c",
+    "text/x-c++",
+    "text/x-go",
+    "text/x-rust",
+    "text/x-ruby",
+    "text/x-php",
+    "text/x-sh",
+    "text/x-shellscript",
+    "application/x-sh",
+    "text/x-yaml",
+    "application/x-yaml",
+    "text/x-toml",
+    "application/xml",
+    "application/toml",
+    "text/csv",
+    "text/tab-separated-values",
+])
+
+# File extensions treated as text for preview
+TEXT_EXTENSIONS: frozenset[str] = frozenset([
+    ".txt", ".md", ".markdown", ".rst", ".asciidoc",
+    ".py", ".pyw", ".pyi",
+    ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
+    ".json", ".jsonl", ".json5",
+    ".html", ".htm", ".xml", ".xhtml", ".svg",
+    ".css", ".scss", ".sass", ".less",
+    ".java", ".kt", ".kts", ".scala",
+    ".c", ".h", ".cpp", ".hpp", ".cc", ".hh", ".cxx",
+    ".go", ".rs", ".rb", ".php",
+    ".sh", ".bash", ".zsh", ".fish",
+    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
+    ".csv", ".tsv",
+    ".sql", ".graphql", ".gql",
+    ".env",
+])
+
+# Known filenames without extensions that are text
+TEXT_FILENAMES: frozenset[str] = frozenset([
+    "makefile", "dockerfile", "gemfile", "rakefile",
+    "readme", "license", "changelog", "contributing",
+    ".gitignore", ".dockerignore", ".editorconfig",
+    ".env", ".env.example", ".env.local",
+])
+
+
+def is_text_file(file_path: str, content_type: Optional[str]) -> bool:
+    """
+    Determine if a file should be treated as text for preview.
+
+    Uses a whitelist approach:
+    1. Check content_type against known text MIME types
+    2. Fall back to extension-based detection
+    3. Check known text filenames without extensions
+    """
+    # Check MIME type first
+    if content_type:
+        ct_lower = content_type.lower().split(";")[0].strip()
+        if ct_lower in TEXT_PREVIEW_MIME_TYPES:
+            return True
+        # Any text/* is allowed
+        if ct_lower.startswith("text/"):
+            return True
+
+    # Check extension
+    ext = Path(file_path).suffix.lower()
+    if ext in TEXT_EXTENSIONS:
+        return True
+
+    # Check known filenames without extensions
+    name = Path(file_path).name.lower()
+    if name in TEXT_FILENAMES:
+        return True
+
+    return False
 
 
 class DirectoryListBaseView(StormCloudBaseAPIView):
@@ -821,6 +916,273 @@ class FileDownloadView(StormCloudBaseAPIView):
         response["Content-Disposition"] = f'attachment; filename="{file_info.name}"'
 
         return response
+
+
+class FileContentView(StormCloudBaseAPIView):
+    """Preview and edit file content (text files only)."""
+
+    throttle_classes = [DownloadRateThrottle]
+
+    @extend_schema(
+        operation_id="v1_files_content_preview",
+        summary="Preview file content",
+        description=(
+            "Get raw text content of a file for preview. "
+            "Only works for text-based files (plain text, markdown, code). "
+            "Binary files will return 400 error."
+        ),
+        responses={
+            200: OpenApiResponse(description="Raw file content (text/plain)"),
+            400: OpenApiResponse(description="File is binary or path invalid"),
+            404: OpenApiResponse(description="File not found"),
+            413: OpenApiResponse(description="File too large for preview"),
+        },
+        tags=["Files"],
+    )
+    def get(
+        self, request: Request, file_path: str
+    ) -> Union[Response, HttpResponse]:
+        """Preview text file content."""
+        backend = LocalStorageBackend()
+        user_prefix = get_user_storage_path(cast(User, request.user))
+
+        # Validate path
+        try:
+            file_path = normalize_path(file_path)
+        except PathValidationError as e:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full_path = f"{user_prefix}/{file_path}"
+
+        # Get file info
+        try:
+            file_info = backend.info(full_path)
+        except FileNotFoundError:
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' does not exist.",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Reject directories
+        if file_info.is_directory:
+            return Response(
+                {
+                    "error": {
+                        "code": "PATH_IS_DIRECTORY",
+                        "message": f"Path '{file_path}' is a directory.",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check size limit
+        max_preview_bytes = settings.STORMCLOUD_MAX_PREVIEW_SIZE_MB * 1024 * 1024
+        if file_info.size > max_preview_bytes:
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File exceeds maximum preview size.",
+                        "max_size_mb": settings.STORMCLOUD_MAX_PREVIEW_SIZE_MB,
+                        "file_size_mb": round(file_info.size / (1024 * 1024), 2),
+                    }
+                },
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        # Check if text file
+        if not is_text_file(file_path, file_info.content_type):
+            return Response(
+                {
+                    "error": {
+                        "code": "NOT_TEXT_FILE",
+                        "message": "File is binary and cannot be previewed as text.",
+                        "content_type": file_info.content_type,
+                        "recovery": f"Use GET /api/v1/files/{file_path}/download/ for binary files.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Read and return content
+        try:
+            file_handle = backend.open(full_path)
+            content = file_handle.read()
+            file_handle.close()
+        except Exception as e:
+            return Response(
+                {"error": {"code": "READ_ERROR", "message": str(e)}},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Return as plain text (not attachment download)
+        response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        response["X-Content-Type-Original"] = file_info.content_type or "text/plain"
+        return response
+
+    @extend_schema(
+        operation_id="v1_files_content_edit",
+        summary="Edit file content",
+        description=(
+            "Update file content with raw body. "
+            "Request body contains the new file content directly (not multipart). "
+            "File must already exist. Respects user storage quotas."
+        ),
+        request={
+            "text/plain": {"schema": {"type": "string", "format": "binary"}},
+            "application/octet-stream": {"schema": {"type": "string", "format": "binary"}},
+        },
+        responses={
+            200: FileInfoResponseSerializer,
+            400: OpenApiResponse(description="Invalid path or directory"),
+            404: OpenApiResponse(description="File not found"),
+            413: OpenApiResponse(description="Content too large"),
+            507: OpenApiResponse(description="Quota exceeded"),
+        },
+        tags=["Files"],
+    )
+    def put(self, request: Request, file_path: str) -> Response:
+        """Update file content."""
+        backend = LocalStorageBackend()
+        user_prefix = get_user_storage_path(cast(User, request.user))
+
+        # Validate path
+        try:
+            file_path = normalize_path(file_path)
+        except PathValidationError as e:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full_path = f"{user_prefix}/{file_path}"
+
+        # Check file exists (edit requires existing file)
+        try:
+            old_info = backend.info(full_path)
+        except FileNotFoundError:
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' does not exist.",
+                        "path": file_path,
+                        "recovery": "Use POST /api/v1/files/{path}/upload/ to create new files.",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Reject directories
+        if old_info.is_directory:
+            return Response(
+                {
+                    "error": {
+                        "code": "PATH_IS_DIRECTORY",
+                        "message": "Cannot edit a directory.",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Get request body
+        content = request.body
+        new_size = len(content)
+
+        # Check global upload limit
+        max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if new_size > max_size:
+            return Response(
+                {
+                    "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "Content exceeds maximum allowed size.",
+                        "max_size_mb": settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB,
+                        "content_size_mb": round(new_size / (1024 * 1024), 2),
+                    }
+                },
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        # Check quota (calculate delta like upload does)
+        profile = request.user.profile  # type: ignore[union-attr]
+        quota_bytes = profile.storage_quota_bytes
+        if quota_bytes > 0:
+            current_usage = (
+                StoredFile.objects.filter(owner=request.user).aggregate(
+                    total=Sum("size")
+                )["total"]
+                or 0
+            )
+            old_size = old_info.size
+            size_delta = new_size - old_size
+
+            if current_usage + size_delta > quota_bytes:
+                return Response(
+                    {
+                        "error": {
+                            "code": "QUOTA_EXCEEDED",
+                            "message": "Edit would exceed your storage quota.",
+                            "quota_mb": round(quota_bytes / (1024 * 1024), 2),
+                            "used_mb": round(current_usage / (1024 * 1024), 2),
+                            "content_size_mb": round(new_size / (1024 * 1024), 2),
+                        }
+                    },
+                    status=status.HTTP_507_INSUFFICIENT_STORAGE,
+                )
+
+        # Save content
+        content_file = BytesIO(content)
+        file_info = backend.save(full_path, content_file)
+
+        # Update database record
+        stored_file, _created = StoredFile.objects.update_or_create(
+            owner=request.user,
+            path=file_path,
+            defaults={
+                "name": file_info.name,
+                "size": file_info.size,
+                "content_type": file_info.content_type or "",
+                "is_directory": False,
+            },
+        )
+
+        # Return updated metadata
+        response_data = {
+            "path": file_path,
+            "name": file_info.name,
+            "size": file_info.size,
+            "content_type": file_info.content_type,
+            "is_directory": False,
+            "created_at": stored_file.created_at,
+            "modified_at": file_info.modified_at,
+            "encryption_method": stored_file.encryption_method,
+        }
+
+        return Response(response_data)
 
 
 class FileDeleteView(StormCloudBaseAPIView):

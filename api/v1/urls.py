@@ -50,6 +50,7 @@ from storage.api import (
     DirectoryListView,
     DirectoryReorderView,
     DirectoryResetOrderView,
+    FileContentView,
     FileCreateView,
     FileDeleteView,
     FileDetailView,
@@ -230,6 +231,11 @@ urlpatterns = [
     ),
     path(
         "files/<path:file_path>/delete/", FileDeleteView.as_view(), name="file-delete"
+    ),
+    path(
+        "files/<path:file_path>/content/",
+        FileContentView.as_view(),
+        name="file-content",
     ),
     path("files/<path:file_path>/", FileDetailView.as_view(), name="file-detail"),
     # Bulk operations
