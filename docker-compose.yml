@@ -4,7 +4,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backups:/backups # For easy database backups
+      - ${BACKUPS_PATH:-./backups}:/backups
     environment:
       POSTGRES_DB: stormcloud
       POSTGRES_USER: stormcloud
@@ -26,7 +26,7 @@ services:
     ports:
       - "${WEB_PORT:-8000}:8000"
     volumes:
-      - ./uploads:/app/uploads
+      - ${UPLOADS_PATH:-./uploads}:/app/uploads
     env_file:
       - .env
     depends_on:

@@ -37,3 +37,7 @@ STORMCLOUD_CORS_ORIGINS={{ _cors_origins }}
 # File Upload Limits (P0-3 Security Fix)
 # Maximum file size in MB (set in deploy/config.yml)
 STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ _max_upload_size_mb }}
+
+# Persistent Data Paths (outside git repo to prevent data loss)
+UPLOADS_PATH=/var/stormcloud/uploads
+BACKUPS_PATH=/var/stormcloud/backups

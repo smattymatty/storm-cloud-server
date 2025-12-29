@@ -243,6 +243,18 @@
         append: true
       tags: [system]
 
+    - name: Create persistent data directories (outside git repo)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        mode: "0750"
+      loop:
+        - /var/stormcloud
+        - /var/stormcloud/uploads
+        - /var/stormcloud/backups
+      tags: [system, app]
+
     # -------------------------------------------------------------------------
     # Firewall
     # -------------------------------------------------------------------------
@@ -573,10 +585,10 @@
       no_log: true
       tags: [app, env]
 
-    - name: Use new secrets for first deployment
+    - name: Use new secrets for first deployment or missing password
       ansible.builtin.set_fact:
         db_password: "{{ postgres_password }}"
-      when: not env_check.stat.exists
+      when: db_password is not defined
       no_log: true
       tags: [app, env]
 
@@ -593,12 +605,13 @@
     # Docker
     # -------------------------------------------------------------------------
 
-    - name: Build images (fresh rebuild)
+    - name: Build images
       ansible.builtin.command:
-        cmd: docker compose build --no-cache
+        cmd: docker compose build
         chdir: "{{ install_path }}"
       become_user: "{{ app_user }}"
-      when: git_result.changed
+      # Always rebuild - Docker cache makes this fast when unchanged
+      # Removed: when: git_result.changed (caused missed deploys)
       tags: [app, docker]
 
     - name: Start containers
