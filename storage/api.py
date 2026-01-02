@@ -28,6 +28,12 @@ from core.throttling import (
 from core.utils import PathValidationError, normalize_path
 from core.views import StormCloudBaseAPIView
 
+from accounts.permissions import (
+    check_max_upload_size,
+    check_share_link_limit,
+    check_user_permission,
+)
+
 from .models import ShareLink, StoredFile
 from .serializers import (
     DirectoryListResponseSerializer,
@@ -738,6 +744,12 @@ class FileUploadView(StormCloudBaseAPIView):
 
         uploaded_file = request.FILES["file"]
 
+        # Check user permission to upload
+        check_user_permission(request.user, "can_upload")
+
+        # Check per-user file size limit
+        check_max_upload_size(request.user, uploaded_file.size)
+
         # P0-3: Validate file size against global limit
         max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if uploaded_file.size > max_size:
@@ -773,6 +785,13 @@ class FileUploadView(StormCloudBaseAPIView):
 
         full_path = f"{user_prefix}/{file_path}"
 
+        # Check if this is an overwrite (file already exists)
+        is_overwrite = StoredFile.objects.filter(
+            owner=request.user, path=file_path
+        ).exists()
+        if is_overwrite:
+            check_user_permission(request.user, "can_overwrite")
+
         # P0-3: Validate against user quota (if set)
         # IsAuthenticated permission guarantees user is not AnonymousUser
         assert not request.user.is_anonymous
@@ -789,11 +808,9 @@ class FileUploadView(StormCloudBaseAPIView):
 
             # For file replacement (overwrite), calculate delta instead of full size
             size_delta = uploaded_file.size
-            try:
+            if is_overwrite:
                 old_file = StoredFile.objects.get(owner=request.user, path=file_path)
                 size_delta = uploaded_file.size - old_file.size
-            except StoredFile.DoesNotExist:
-                pass  # New file, use full size
 
             if current_usage + size_delta > quota_bytes:
                 space_needed = (current_usage + size_delta - quota_bytes) / (
@@ -1086,6 +1103,9 @@ class FileContentView(StormCloudBaseAPIView):
     )
     def put(self, request: Request, file_path: str) -> Response:
         """Update file content."""
+        # Check user permission to overwrite files
+        check_user_permission(request.user, "can_overwrite")
+
         backend = LocalStorageBackend()
         user_prefix = get_user_storage_path(cast(User, request.user))
 
@@ -1226,6 +1246,9 @@ class FileDeleteView(StormCloudBaseAPIView):
     )
     def delete(self, request: Request, file_path: str) -> Response:
         """Delete file."""
+        # Check user permission to delete
+        check_user_permission(request.user, "can_delete")
+
         backend = LocalStorageBackend()
         user_prefix = get_user_storage_path(cast(User, request.user))
 
@@ -1407,6 +1430,12 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
     def post(self, request: Request) -> Response:
         """Create new share link."""
         from django.conf import settings
+
+        # Check user permission to create share links
+        check_user_permission(request.user, "can_create_shares")
+
+        # Check if user has reached max share links limit
+        check_share_link_limit(request.user)
 
         serializer = ShareLinkCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1822,6 +1851,16 @@ class BulkOperationView(StormCloudBaseAPIView):
         operation = serializer.validated_data["operation"]
         paths = serializer.validated_data["paths"]
         options = serializer.validated_data.get("options", {})
+
+        # Check permission based on operation type
+        permission_map = {
+            "delete": "can_delete",
+            "move": "can_move",
+            "copy": "can_upload",  # Copy creates new files
+        }
+        required_permission = permission_map.get(operation)
+        if required_permission:
+            check_user_permission(request.user, required_permission)
 
         # Create service and execute
         backend = LocalStorageBackend()

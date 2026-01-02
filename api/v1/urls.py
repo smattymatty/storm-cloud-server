@@ -19,6 +19,7 @@ from accounts.api import (
     AdminUserListView,
     AdminUserPasswordResetView,
     AdminUserQuotaUpdateView,
+    AdminUserPermissionsUpdateView,
     AdminUserVerifyView,
     # API Keys
     APIKeyCreateView,
@@ -179,6 +180,11 @@ urlpatterns = [
         "admin/users/<int:user_id>/quota/",
         AdminUserQuotaUpdateView.as_view(),
         name="admin-users-quota",
+    ),
+    path(
+        "admin/users/<int:user_id>/permissions/",
+        AdminUserPermissionsUpdateView.as_view(),
+        name="admin-users-permissions",
     ),
     path(
         "admin/users/<int:user_id>/keys/",

@@ -326,7 +326,38 @@ curl -X PATCH /api/v1/admin/users/123/quota/ \
 # View user storage usage
 curl /api/v1/admin/users/123/ \
   -H "Authorization: Bearer ADMIN_KEY"
-# Returns: storage_used_mb, storage_quota_mb
+# Returns: storage_used_mb, storage_quota_mb, profile.permissions
+
+# Update user permissions
+curl -X PATCH /api/v1/admin/users/123/permissions/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"can_upload": false, "can_delete": false, "max_share_links": 5}'
+```
+
+## User Permission Flags
+
+Granular per-user permissions stored on `UserProfile`:
+
+| Permission | Default | Description |
+|------------|---------|-------------|
+| `can_upload` | `true` | Upload new files |
+| `can_delete` | `true` | Delete files/folders |
+| `can_move` | `true` | Move/rename files/folders |
+| `can_overwrite` | `true` | Overwrite/edit existing files |
+| `can_create_shares` | `true` | Create share links |
+| `max_share_links` | `0` | Max active share links (0 = unlimited) |
+| `max_upload_bytes` | `0` | Per-file upload limit (0 = use server default) |
+
+**Error Response (403):**
+```json
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "You do not have permission to perform this action.",
+    "permission": "can_delete"
+  }
+}
 ```
 
 ## Not Building Yet
@@ -334,7 +365,6 @@ curl /api/v1/admin/users/123/ \
 - Web dashboard
 - Backblaze B2 backend
 - Custom SpellBlocks
-- Advanced permissions (basic share links implemented)
 - Versioning
 - Encryption (metadata in place, implementation pending)
 

@@ -128,21 +128,13 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)Checking secrets...$(NC)"
 	@if [ -z "$$STORMCLOUD_POSTGRES_PASSWORD" ]; then \
-		echo "$(YELLOW)⚠️  STORMCLOUD_POSTGRES_PASSWORD not set$(NC)"; \
-		echo "   You will be prompted during deployment."; \
+		echo "$(YELLOW)ERROR: STORMCLOUD_POSTGRES_PASSWORD not set$(NC)"; \
 		echo ""; \
-		echo "$(CYAN)Tip: Set secrets beforehand for non-interactive deployment:$(NC)"; \
-		echo "  export STORMCLOUD_POSTGRES_PASSWORD=\"your-password\""; \
-		echo "  export STORMCLOUD_SECRET_KEY=\"your-key\"  # Optional (auto-generates)"; \
+		echo "Set it with:"; \
+		echo "  export STORMCLOUD_POSTGRES_PASSWORD=\"MY_SECURE_PASSWORD\""; \
 		echo ""; \
-		echo "Generate secure password: $(GREEN)openssl rand -base64 32$(NC)"; \
-		echo ""; \
-		echo "See: deploy/README.md#secrets"; \
-		echo ""; \
-	else \
-		echo "$(GREEN)✓ STORMCLOUD_POSTGRES_PASSWORD is set$(NC)"; \
+		exit 1; \
 	fi
 	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
 	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \

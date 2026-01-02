@@ -25,21 +25,6 @@
     install_path: "/home/{{ app_user }}/storm-cloud-server"
 
   # ===========================================================================
-  # PROMPTS
-  # ===========================================================================
-
-  vars_prompt:
-    - name: _postgres_password_prompt
-      prompt: "PostgreSQL password (or set STORMCLOUD_POSTGRES_PASSWORD env var, press ENTER to use env var)"
-      private: true
-      default: ""
-
-    - name: _secret_key_prompt
-      prompt: "Django SECRET_KEY (press ENTER to auto-generate, or set STORMCLOUD_SECRET_KEY env var)"
-      private: true
-      default: ""
-
-  # ===========================================================================
   # PRE-FLIGHT
   # ===========================================================================
 
@@ -54,14 +39,14 @@
       tags: [always]
 
     # -------------------------------------------------------------------------
-    # Secret Resolution: Environment Variables > Prompts
+    # Secret Resolution: Read from environment variables
     # -------------------------------------------------------------------------
-    
-    - name: Resolve secrets (env vars take precedence over prompts)
+
+    - name: Read secrets from environment variables
       ansible.builtin.set_fact:
-        postgres_password: "{{ lookup('env', 'STORMCLOUD_POSTGRES_PASSWORD') | default(_postgres_password_prompt, true) }}"
-        secret_key_input: "{{ lookup('env', 'STORMCLOUD_SECRET_KEY') | default(_secret_key_prompt, true) }}"
-      no_log: true  # Don't expose secrets in logs
+        postgres_password: "{{ lookup('env', 'STORMCLOUD_POSTGRES_PASSWORD') }}"
+        secret_key_input: "{{ lookup('env', 'STORMCLOUD_SECRET_KEY') }}"
+      no_log: true
       tags: [always]
 
     - name: Auto-generate SECRET_KEY if not provided

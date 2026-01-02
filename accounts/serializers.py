@@ -25,7 +25,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['is_email_verified']
+        fields = [
+            'is_email_verified',
+            # Permission flags
+            'can_upload',
+            'can_delete',
+            'can_move',
+            'can_overwrite',
+            'can_create_shares',
+            'max_share_links',
+            'max_upload_bytes',
+        ]
 
 
 class RegistrationSerializer(serializers.Serializer):
@@ -215,4 +225,39 @@ class AdminUserQuotaUpdateSerializer(serializers.Serializer):
         min_value=0,
         allow_null=True,
         help_text="Storage quota in MB, or null for unlimited"
+    )
+
+
+class AdminUserPermissionsUpdateSerializer(serializers.Serializer):
+    """Serializer for updating user permission flags."""
+
+    can_upload = serializers.BooleanField(
+        required=False,
+        help_text="User can upload new files"
+    )
+    can_delete = serializers.BooleanField(
+        required=False,
+        help_text="User can delete files and folders"
+    )
+    can_move = serializers.BooleanField(
+        required=False,
+        help_text="User can move/rename files and folders"
+    )
+    can_overwrite = serializers.BooleanField(
+        required=False,
+        help_text="User can overwrite/edit existing files"
+    )
+    can_create_shares = serializers.BooleanField(
+        required=False,
+        help_text="User can create share links"
+    )
+    max_share_links = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        help_text="Maximum active share links allowed. 0 = unlimited"
+    )
+    max_upload_bytes = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        help_text="Per-file upload size limit in bytes. 0 = use server default"
     )

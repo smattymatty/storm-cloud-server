@@ -49,6 +49,10 @@ class APIKeyAuthentication(BaseAuthentication):
         except APIKey.DoesNotExist:
             raise AuthenticationFailed("Invalid API key")
 
+        # Check if user account is active
+        if not api_key.user.is_active:
+            raise AuthenticationFailed("User account is deactivated")
+
         # Update last used timestamp
         api_key.last_used_at = timezone.now()
         api_key.save(update_fields=["last_used_at"])

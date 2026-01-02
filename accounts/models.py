@@ -31,6 +31,36 @@ class UserProfile(AbstractBaseModel):
         help_text="Current storage usage in bytes."
     )
 
+    # Permission flags - granular control over user capabilities
+    can_upload = models.BooleanField(
+        default=True,
+        help_text="User can upload new files."
+    )
+    can_delete = models.BooleanField(
+        default=True,
+        help_text="User can delete files and folders."
+    )
+    can_move = models.BooleanField(
+        default=True,
+        help_text="User can move/rename files and folders."
+    )
+    can_overwrite = models.BooleanField(
+        default=True,
+        help_text="User can overwrite/edit existing files."
+    )
+    can_create_shares = models.BooleanField(
+        default=True,
+        help_text="User can create share links."
+    )
+    max_share_links = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum active share links allowed. 0 = unlimited."
+    )
+    max_upload_bytes = models.BigIntegerField(
+        default=0,
+        help_text="Per-file upload size limit in bytes. 0 = use server default."
+    )
+
     class Meta:
         verbose_name = "User Profile"
         verbose_name_plural = "User Profiles"

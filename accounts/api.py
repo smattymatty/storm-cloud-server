@@ -35,6 +35,7 @@ from .serializers import (
     AdminUserUpdateSerializer,
     AdminPasswordResetSerializer,
     AdminUserQuotaUpdateSerializer,
+    AdminUserPermissionsUpdateSerializer,
 )
 from .signals import (
     user_registered,
@@ -1374,6 +1375,73 @@ class AdminUserQuotaUpdateView(StormCloudBaseAPIView):
             response_data["warning"] = warning
 
         return Response(response_data)
+
+
+class AdminUserPermissionsUpdateView(StormCloudBaseAPIView):
+    """Admin: Update user permissions."""
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Update user permissions",
+        description="Update granular permission flags for a user.",
+        request=AdminUserPermissionsUpdateSerializer,
+        responses={
+            200: OpenApiResponse(description="Permissions updated"),
+            404: OpenApiResponse(description="User not found"),
+        },
+        tags=["Administration"],
+    )
+    def patch(self, request: Request, user_id: int) -> Response:
+        """Update user permissions."""
+        try:
+            user = User.objects.select_related("profile").get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "error": {
+                        "code": "USER_NOT_FOUND",
+                        "message": "User not found.",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = AdminUserPermissionsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        profile = user.profile
+        updated_fields = []
+
+        # Update only the fields that were provided
+        permission_fields = [
+            'can_upload', 'can_delete', 'can_move', 'can_overwrite',
+            'can_create_shares', 'max_share_links', 'max_upload_bytes'
+        ]
+
+        for field in permission_fields:
+            if field in serializer.validated_data:
+                setattr(profile, field, serializer.validated_data[field])
+                updated_fields.append(field)
+
+        if updated_fields:
+            profile.save(update_fields=updated_fields)
+
+        return Response({
+            "message": "Permissions updated",
+            "user_id": user.id,
+            "username": user.username,
+            "updated_fields": updated_fields,
+            "permissions": {
+                "can_upload": profile.can_upload,
+                "can_delete": profile.can_delete,
+                "can_move": profile.can_move,
+                "can_overwrite": profile.can_overwrite,
+                "can_create_shares": profile.can_create_shares,
+                "max_share_links": profile.max_share_links,
+                "max_upload_bytes": profile.max_upload_bytes,
+            }
+        })
 
 
 class AdminUserAPIKeyCreateView(StormCloudBaseAPIView):
