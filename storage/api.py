@@ -39,7 +39,7 @@ from .serializers import (
     ShareLinkResponseSerializer,
     StoredFileSerializer,
 )
-from .utils import get_share_link_by_token
+from .utils import generate_etag, get_share_link_by_token
 
 
 def get_user_storage_path(user: User) -> str:
@@ -589,7 +589,20 @@ class FileDetailView(StormCloudBaseAPIView):
             "encryption_method": encryption_method,
         }
 
-        return Response(response_data)
+        # Generate ETag from file metadata
+        etag = generate_etag(file_path, file_info.size, file_info.modified_at)
+
+        # Check conditional request (If-None-Match header)
+        if_none_match = request.headers.get("If-None-Match", "").strip('"')
+        if if_none_match == etag:
+            response = Response(status=status.HTTP_304_NOT_MODIFIED)
+            response["ETag"] = f'"{etag}"'
+            return response
+
+        response = Response(response_data)
+        response["ETag"] = f'"{etag}"'
+        response["Cache-Control"] = "private, must-revalidate"
+        return response
 
 
 class FileCreateView(StormCloudBaseAPIView):
@@ -884,8 +897,8 @@ class FileDownloadView(StormCloudBaseAPIView):
 
         full_path = f"{user_prefix}/{file_path}"
 
+        # Get file metadata first (no file I/O)
         try:
-            file_handle = backend.open(full_path)
             file_info = backend.info(full_path)
         except FileNotFoundError:
             return Response(
@@ -898,7 +911,8 @@ class FileDownloadView(StormCloudBaseAPIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
-        except IsADirectoryError:
+
+        if file_info.is_directory:
             return Response(
                 {
                     "error": {
@@ -910,7 +924,20 @@ class FileDownloadView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Generate ETag and check conditional request before opening file
+        etag = generate_etag(file_path, file_info.size, file_info.modified_at)
+        if_none_match = request.headers.get("If-None-Match", "").strip('"')
+        if if_none_match == etag:
+            response = HttpResponse(status=304)
+            response["ETag"] = f'"{etag}"'
+            return response
+
+        # Only open file if we actually need to send content
+        file_handle = backend.open(full_path)
+
         response = FileResponse(file_handle)
+        response["ETag"] = f'"{etag}"'
+        response["Cache-Control"] = "private, must-revalidate"
         if file_info.content_type:
             response["Content-Type"] = file_info.content_type
         response["Content-Disposition"] = f'attachment; filename="{file_info.name}"'

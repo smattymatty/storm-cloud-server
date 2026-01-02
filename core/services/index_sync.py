@@ -228,7 +228,7 @@ class IndexSyncService:
         
         try:
             for file_info in self._list_recursive(user_prefix):
-                relative_path = file_info.path.replace(f"{user_prefix}/", "")
+                relative_path = file_info.path.removeprefix(f"{user_prefix}/")
                 files[relative_path] = {
                     'name': file_info.name,
                     'size': file_info.size,

@@ -35,18 +35,21 @@ class IndexSyncServiceTestCase(TestCase):
         """Set up test environment."""
         super().setUp()
         self.user = UserWithProfileFactory(verified=True)
-        
+
         # Use test storage root
         self.settings_override = override_settings(
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
         )
         self.settings_override.enable()
-        
+
         # Create user storage directory
         self.user_storage = self.test_storage_root / str(self.user.id)
         self.user_storage.mkdir(exist_ok=True)
-        
-        self.service = IndexSyncService()
+
+        # Explicitly pass backend with correct storage root to avoid settings timing issues
+        from core.storage.local import LocalStorageBackend
+        backend = LocalStorageBackend(storage_root=self.test_storage_root)
+        self.service = IndexSyncService(backend=backend)
 
     def tearDown(self):
         """Clean up test-specific storage."""
@@ -182,16 +185,16 @@ class IndexSyncServiceTestCase(TestCase):
         """Test sync mode creates DB records for directories."""
         self._create_directory('folder1')
         self._create_directory('folder1/subfolder')
-        
+
         stats = self.service.sync(mode='sync')
-        
+
         self.assertEqual(stats.records_created, 2)
-        
+
         # Verify directory records
         folder = StoredFile.objects.get(owner=self.user, path='folder1')
         self.assertTrue(folder.is_directory)
         self.assertEqual(folder.size, 0)
-        
+
         subfolder = StoredFile.objects.get(owner=self.user, path='folder1/subfolder')
         self.assertTrue(subfolder.is_directory)
         self.assertEqual(subfolder.parent_path, 'folder1')
@@ -289,20 +292,27 @@ class IndexSyncServiceTestCase(TestCase):
         # Record should still exist
         self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 1)
 
-    def test_clean_skips_records_with_share_links(self):
-        """Test clean mode skips records that have active ShareLinks."""
-        # Create orphaned file with ShareLink
+    def test_clean_deletes_records_with_share_links(self):
+        """Test clean mode deletes orphaned records and CASCADE deletes ShareLinks.
+
+        Architecture: "filesystem wins" absolutely. If the file doesn't exist
+        on disk, the DB record is deleted along with any ShareLinks pointing to it.
+        ShareLinks to non-existent files are invalid.
+        """
+        # Create orphaned file with ShareLink (no actual file on disk)
         stored_file = StoredFileFactory(owner=self.user, path='shared.txt', name='shared.txt')
-        ShareLinkFactory(owner=self.user, stored_file=stored_file)
-        
+        share_link = ShareLinkFactory(owner=self.user, stored_file=stored_file)
+
         stats = self.service.sync(mode='clean', force=True)
-        
-        # Should skip deletion
-        self.assertEqual(stats.records_deleted, 0)
-        self.assertEqual(stats.records_skipped, 1)
-        
-        # Record should still exist
-        self.assertTrue(StoredFile.objects.filter(owner=self.user, path='shared.txt').exists())
+
+        # Should delete the orphaned record (filesystem wins)
+        self.assertEqual(stats.records_deleted, 1)
+
+        # StoredFile should be gone
+        self.assertFalse(StoredFile.objects.filter(owner=self.user, path='shared.txt').exists())
+
+        # ShareLink should also be gone (CASCADE)
+        self.assertFalse(ShareLink.objects.filter(pk=share_link.pk).exists())
 
     def test_clean_dry_run_doesnt_delete(self):
         """Test clean dry-run shows what would be deleted without deleting."""

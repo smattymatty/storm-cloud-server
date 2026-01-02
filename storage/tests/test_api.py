@@ -454,3 +454,124 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
 
         # Check the error message mentions encryption_method
         self.assertIn("encryption_method", str(cm.exception).lower())
+
+
+class ETagSupportTest(StormCloudAPITestCase):
+    """Tests for ETag headers and conditional GET behavior."""
+
+    def setUp(self):
+        """Create a test file for ETag tests."""
+        super().setUp()
+        self.authenticate()
+
+        # Upload a test file
+        test_file = BytesIO(b"test content for etag")
+        test_file.name = "etag-test.txt"
+        response = self.client.post(
+            "/api/v1/files/etag-test.txt/upload/", {"file": test_file}
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_info_endpoint_returns_etag(self):
+        """GET /files/{path}/ includes ETag header."""
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("ETag", response)
+        # ETag should be quoted
+        self.assertTrue(response["ETag"].startswith('"'))
+        self.assertTrue(response["ETag"].endswith('"'))
+
+    def test_info_endpoint_returns_cache_control(self):
+        """GET /files/{path}/ includes Cache-Control header."""
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Cache-Control", response)
+        self.assertEqual(response["Cache-Control"], "private, must-revalidate")
+
+    def test_download_endpoint_returns_etag(self):
+        """GET /files/{path}/download/ includes ETag header."""
+        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("ETag", response)
+        self.assertTrue(response["ETag"].startswith('"'))
+        self.assertTrue(response["ETag"].endswith('"'))
+
+    def test_download_endpoint_returns_cache_control(self):
+        """GET /files/{path}/download/ includes Cache-Control header."""
+        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("Cache-Control", response)
+        self.assertEqual(response["Cache-Control"], "private, must-revalidate")
+
+    def test_both_endpoints_return_same_etag(self):
+        """Info and download endpoints return identical ETag for same file."""
+        info_response = self.client.get("/api/v1/files/etag-test.txt/")
+        download_response = self.client.get("/api/v1/files/etag-test.txt/download/")
+
+        self.assertEqual(info_response["ETag"], download_response["ETag"])
+
+    def test_info_conditional_get_returns_304_on_match(self):
+        """If-None-Match with matching ETag returns 304 on info endpoint."""
+        # First request to get ETag
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        etag = response["ETag"]
+
+        # Conditional request with matching ETag
+        response = self.client.get(
+            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
+        )
+        self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
+
+    def test_download_conditional_get_returns_304_on_match(self):
+        """If-None-Match with matching ETag returns 304 on download endpoint."""
+        # First request to get ETag
+        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        etag = response["ETag"]
+
+        # Conditional request with matching ETag
+        response = self.client.get(
+            "/api/v1/files/etag-test.txt/download/", HTTP_IF_NONE_MATCH=etag
+        )
+        self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
+
+    def test_conditional_get_returns_200_on_mismatch(self):
+        """If-None-Match with stale ETag returns 200 + new content."""
+        # Request with a stale/wrong ETag
+        response = self.client.get(
+            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH='"stale-etag"'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Should include the correct ETag
+        self.assertIn("ETag", response)
+
+    def test_304_response_includes_etag(self):
+        """304 responses include the ETag header."""
+        # First request to get ETag
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        etag = response["ETag"]
+
+        # Conditional request
+        response = self.client.get(
+            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
+        )
+        self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
+        self.assertIn("ETag", response)
+        self.assertEqual(response["ETag"], etag)
+
+    def test_etag_changes_after_file_update(self):
+        """Re-uploading file changes ETag."""
+        # Get original ETag
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        original_etag = response["ETag"]
+
+        # Re-upload with different content
+        new_content = BytesIO(b"updated content for etag test")
+        new_content.name = "etag-test.txt"
+        self.client.post("/api/v1/files/etag-test.txt/upload/", {"file": new_content})
+
+        # Get new ETag
+        response = self.client.get("/api/v1/files/etag-test.txt/")
+        new_etag = response["ETag"]
+
+        # ETags should be different
+        self.assertNotEqual(original_etag, new_etag)

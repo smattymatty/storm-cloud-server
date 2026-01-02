@@ -159,12 +159,21 @@ class BulkOperationService:
                 seen.add(path)
                 unique_paths.append(path)
 
-        # Execute operation for each path
+        # Use bulk method for delete to avoid N+1 queries
+        if operation == "delete":
+            results = self._execute_bulk_delete(unique_paths)
+            for result in results:
+                stats.results.append(result)
+                if result.success:
+                    stats.succeeded += 1
+                else:
+                    stats.failed += 1
+            return stats
+
+        # Execute operation for each path (move/copy still use per-path logic)
         for path in unique_paths:
             result: BulkOperationResult
-            if operation == "delete":
-                result = self._execute_delete(path)
-            elif operation == "move":
+            if operation == "move":
                 result = self._execute_move(path, options["destination"])
             elif operation == "copy":
                 result = self._execute_copy(path, options["destination"])
@@ -226,6 +235,103 @@ class BulkOperationService:
             "total": len(paths),
             "status_url": f"/api/v1/bulk/status/{result.id}/",
         }
+
+    def _execute_bulk_delete(self, paths: List[str]) -> List[BulkOperationResult]:
+        """
+        Delete multiple files efficiently with batched DB operations.
+
+        Implements "filesystem wins" - delete from filesystem first,
+        then bulk remove DB records. Uses single SELECT and single DELETE
+        to avoid N+1 query patterns.
+
+        Args:
+            paths: List of file paths to delete
+
+        Returns:
+            List of BulkOperationResult for each path
+        """
+        results: List[BulkOperationResult] = []
+
+        # 1. Normalize and validate all paths upfront
+        path_map: dict[str, str] = {}  # normalized_path -> original_path
+        for path in paths:
+            try:
+                normalized = normalize_path(path)
+                path_map[normalized] = path
+            except PathValidationError as e:
+                results.append(BulkOperationResult(
+                    path=path,
+                    success=False,
+                    error_code="INVALID_PATH",
+                    error_message=str(e),
+                ))
+
+        if not path_map:
+            return results
+
+        # 2. Fetch ALL StoredFile records in ONE query
+        db_files: dict[str, StoredFile] = {
+            f.path: f
+            for f in StoredFile.objects.filter(
+                owner=self.user,
+                path__in=path_map.keys()
+            )
+        }
+
+        # 3. Process filesystem deletions, track successful DB records
+        successful_file_ids: List[int] = []
+
+        for normalized_path, original_path in path_map.items():
+            full_path = f"{self.user_prefix}/{normalized_path}"
+            db_file = db_files.get(normalized_path)
+
+            # Check existence - need either DB record or filesystem presence
+            if not db_file and not self.backend.exists(full_path):
+                results.append(BulkOperationResult(
+                    path=original_path,
+                    success=False,
+                    error_code="NOT_FOUND",
+                    error_message=f"File not found: {original_path}",
+                ))
+                continue
+
+            # Delete from filesystem
+            try:
+                try:
+                    file_info = self.backend.info(full_path)
+
+                    if file_info.is_directory:
+                        # Recursive delete for directories
+                        resolved_path = self.backend._resolve_path(full_path)  # type: ignore[attr-defined]
+                        if resolved_path.exists():
+                            shutil.rmtree(resolved_path)
+                    else:
+                        # Regular file delete
+                        self.backend.delete(full_path)
+                except FileNotFoundError:
+                    # Already deleted or doesn't exist - that's OK
+                    pass
+
+                # Track successful deletion for bulk DB cleanup
+                if db_file:
+                    successful_file_ids.append(db_file.id)
+
+                results.append(BulkOperationResult(path=original_path, success=True))
+
+            except Exception as e:
+                results.append(BulkOperationResult(
+                    path=original_path,
+                    success=False,
+                    error_code="DELETE_FAILED",
+                    error_message=f"Filesystem error: {str(e)}",
+                ))
+
+        # 4. Bulk delete ALL successful DB records in ONE operation
+        # Django handles CASCADE automatically (ShareLinks, ManagedContent)
+        if successful_file_ids:
+            StoredFile.objects.filter(id__in=successful_file_ids).delete()
+
+        return results
 
     def _execute_delete(self, path: str) -> BulkOperationResult:
         """

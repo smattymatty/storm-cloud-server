@@ -80,6 +80,47 @@ curl -X PUT /api/v1/files/readme.md/content/ \
 - `FILE_NOT_FOUND` - File doesn't exist (edit requires existing file)
 - `QUOTA_EXCEEDED` - Edit would exceed user quota
 
+## ETag Conditional Caching
+
+**Endpoints:**
+- `GET /api/v1/files/{path}/` (info)
+- `GET /api/v1/files/{path}/download/`
+
+Both endpoints support HTTP conditional caching via ETag headers. ETags are generated from file metadata (path + size + modified_at), ensuring consistency with "filesystem wins" architecture.
+
+**Response Headers:**
+```http
+HTTP/1.1 200 OK
+ETag: "a1b2c3d4e5f6"
+```
+
+**Conditional Request:**
+```bash
+# Check if cached version is still valid
+curl /api/v1/files/photo.jpg/download/ \
+  -H "Authorization: Bearer API_KEY" \
+  -H 'If-None-Match: "a1b2c3d4e5f6"'
+
+# Returns 304 Not Modified if unchanged (no body)
+# Returns 200 with new ETag if changed
+```
+
+**Two-Step Optimization Pattern:**
+```bash
+# 1. Lightweight metadata check
+curl /api/v1/files/gallery/photo.jpg/ \
+  -H "Authorization: Bearer API_KEY"
+# → 200 OK, ETag: "abc123", size: 2.4MB
+
+# 2. Conditional download (skip if unchanged)
+curl /api/v1/files/gallery/photo.jpg/download/ \
+  -H "Authorization: Bearer API_KEY" \
+  -H 'If-None-Match: "abc123"'
+# → 304 Not Modified (no body, no file I/O)
+```
+
+This is especially useful for large files - clients can check freshness without the server opening the file handle.
+
 ## Index Rebuild System
 
 The filesystem-database sync system ensures the database index stays accurate.
