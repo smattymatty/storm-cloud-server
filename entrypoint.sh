@@ -60,10 +60,40 @@ fi
 echo -e "${GREEN}Environment validation passed${NC}"
 
 # ============================================
-# 2. WAIT FOR DATABASE
+# 2. VALIDATE DATA DIRECTORY MOUNTS
 # ============================================
 echo ""
-echo "Step 2/7: Waiting for database to be ready..."
+echo "Step 2/8: Validating data directory mounts..."
+
+# Check uploads directory exists
+if [ ! -d "/app/uploads" ]; then
+    echo -e "${RED}ERROR: /app/uploads directory does not exist!${NC}"
+    echo "This indicates the uploads volume is not mounted correctly."
+    echo "Fix: Check docker-compose.yml volume configuration"
+    exit 1
+fi
+
+# Check uploads directory is writable
+if ! touch /app/uploads/.mount_test 2>/dev/null; then
+    echo -e "${RED}ERROR: /app/uploads is not writable!${NC}"
+    echo "Fix: Check volume permissions and ownership"
+    exit 1
+fi
+rm -f /app/uploads/.mount_test
+
+# Create mount marker if it doesn't exist (helps detect ephemeral mounts)
+if [ ! -f "/app/uploads/.mounted" ]; then
+    echo "Creating mount marker file..."
+    touch /app/uploads/.mounted 2>/dev/null || true
+fi
+
+echo -e "${GREEN}✓${NC} Data directory mounts validated"
+
+# ============================================
+# 3. WAIT FOR DATABASE
+# ============================================
+echo ""
+echo "Step 3/8: Waiting for database to be ready..."
 
 # Use POSTGRES_* environment variables
 DB_HOST="${POSTGRES_HOST}"
@@ -88,10 +118,10 @@ done
 echo -e "${GREEN}✓${NC} Database is ready"
 
 # ============================================
-# 3. RUN MIGRATIONS
+# 4. RUN MIGRATIONS
 # ============================================
 echo ""
-echo "Step 3/7: Running database migrations..."
+echo "Step 4/8: Running database migrations..."
 
 python manage.py migrate --noinput
 
@@ -103,10 +133,10 @@ else
 fi
 
 # ============================================
-# 4. COLLECT STATIC FILES
+# 5. COLLECT STATIC FILES
 # ============================================
 echo ""
-echo "Step 4/7: Collecting static files..."
+echo "Step 5/8: Collecting static files..."
 
 python manage.py collectstatic --noinput --clear
 
@@ -117,10 +147,10 @@ else
 fi
 
 # ============================================
-# 5. BUILD SPELLBOOK MARKDOWN
+# 6. BUILD SPELLBOOK MARKDOWN
 # ============================================
 echo ""
-echo "Step 5/7: Building Spellbook markdown files..."
+echo "Step 6/8: Building Spellbook markdown files..."
 
 python manage.py spellbook_md
 
@@ -131,10 +161,10 @@ else
 fi
 
 # ============================================
-# 6. REBUILD STORAGE INDEX
+# 7. REBUILD STORAGE INDEX
 # ============================================
 echo ""
-echo "Step 6/7: Checking storage index..."
+echo "Step 7/8: Checking storage index..."
 
 python manage.py rebuild_index --mode audit -v 0
 
@@ -145,10 +175,10 @@ else
 fi
 
 # ============================================
-# 7. START APPLICATION
+# 8. START APPLICATION
 # ============================================
 echo ""
-echo "Step 7/7: Starting application server..."
+echo "Step 8/8: Starting application server..."
 echo ""
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Storm Cloud Server is starting...${NC}"

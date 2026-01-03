@@ -241,6 +241,69 @@
       tags: [system, app]
 
     # -------------------------------------------------------------------------
+    # Data Directory Validation (prevent data loss)
+    # -------------------------------------------------------------------------
+
+    - name: Validate uploads directory exists
+      ansible.builtin.stat:
+        path: /var/stormcloud/uploads
+      register: uploads_dir
+      tags: [app, validation]
+
+    - name: Fail if uploads directory missing
+      ansible.builtin.fail:
+        msg: |
+          CRITICAL: /var/stormcloud/uploads does not exist!
+          This could indicate a serious configuration problem.
+          Run the playbook with 'system' tag first to create directories.
+      when: not uploads_dir.stat.exists
+      tags: [app, validation]
+
+    - name: Test uploads directory is writable
+      ansible.builtin.file:
+        path: /var/stormcloud/uploads/.write_test
+        state: touch
+        owner: "{{ app_user }}"
+      tags: [app, validation]
+
+    - name: Remove write test file
+      ansible.builtin.file:
+        path: /var/stormcloud/uploads/.write_test
+        state: absent
+      tags: [app, validation]
+
+    - name: Count files in uploads directory
+      ansible.builtin.find:
+        paths: /var/stormcloud/uploads
+        recurse: yes
+        file_type: file
+      register: uploads_files
+      tags: [app, validation]
+
+    - name: Warn if uploads directory is empty
+      ansible.builtin.pause:
+        prompt: |
+
+          ⚠️  WARNING: /var/stormcloud/uploads contains {{ uploads_files.matched }} files.
+
+          If this is NOT a fresh deployment, this could indicate DATA LOSS.
+
+          Continue deployment? Type 'yes' to continue or Ctrl+C to abort:
+      when:
+        - uploads_files.matched == 0
+        - not (skip_empty_warning | default(false) | bool)
+      register: empty_warning
+      tags: [app, validation]
+
+    - name: Abort if user declines
+      ansible.builtin.fail:
+        msg: "Deployment aborted by user due to empty uploads directory"
+      when:
+        - empty_warning.user_input is defined
+        - empty_warning.user_input | lower != 'yes'
+      tags: [app, validation]
+
+    # -------------------------------------------------------------------------
     # Firewall
     # -------------------------------------------------------------------------
 
@@ -418,6 +481,37 @@
       ansible.builtin.debug:
         var: install_dir
       tags: [app]
+
+    # =========================================================================
+    # Pre-Deploy Backup (optional - prevents data loss)
+    # =========================================================================
+    # Run with: make deploy EXTRA_VARS="backup_before_deploy=true"
+    # =========================================================================
+
+    - name: Create pre-deploy backup
+      when:
+        - backup_before_deploy | default(false) | bool
+        - install_dir.stat.exists | default(false)
+      block:
+        - name: Check if backup script exists
+          ansible.builtin.stat:
+            path: "{{ install_path }}/scripts/backup.sh"
+          register: backup_script
+
+        - name: Run backup script
+          ansible.builtin.shell: |
+            cd {{ install_path }}
+            bash scripts/backup.sh
+          become: true
+          become_user: "{{ app_user }}"
+          when: backup_script.stat.exists
+          register: backup_result
+
+        - name: Log backup result
+          ansible.builtin.debug:
+            msg: "Pre-deploy backup created successfully"
+          when: backup_result is succeeded
+      tags: [app, backup]
 
     # =========================================================================
     # Git Recovery - Handle broken deployment states
@@ -617,6 +711,38 @@
       retries: 30
       delay: 2
       tags: [app, docker]
+
+    # -------------------------------------------------------------------------
+    # Post-Deploy Verification (data integrity check)
+    # -------------------------------------------------------------------------
+
+    - name: Count files in uploads after deploy
+      ansible.builtin.find:
+        paths: /var/stormcloud/uploads
+        recurse: yes
+        file_type: file
+      register: uploads_after_deploy
+      tags: [app, validation]
+
+    - name: Report uploads file count
+      ansible.builtin.debug:
+        msg: "✓ Uploads directory contains {{ uploads_after_deploy.matched }} files"
+      tags: [app, validation]
+
+    - name: Verify database connectivity
+      ansible.builtin.command:
+        cmd: docker compose exec -T app python manage.py check --database default
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      register: db_check
+      failed_when: false
+      changed_when: false
+      tags: [app, validation]
+
+    - name: Report database status
+      ansible.builtin.debug:
+        msg: "{{ '✓ Database check passed' if db_check.rc == 0 else '⚠ Database check failed' }}"
+      tags: [app, validation]
 
     # -------------------------------------------------------------------------
     # Done
