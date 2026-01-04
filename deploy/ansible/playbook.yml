@@ -282,6 +282,81 @@
       register: uploads_files
       tags: [app, validation]
 
+    # =========================================================================
+    # DATA MIGRATION: Move files from old location (inside repo) to new location
+    # =========================================================================
+    # Previous versions stored uploads in ./uploads inside the git repo.
+    # Git operations would wipe this directory. This migration moves files
+    # to /var/stormcloud/uploads BEFORE any git operations happen.
+    # =========================================================================
+
+    - name: Check for uploads in OLD location (inside repo)
+      ansible.builtin.find:
+        paths: "{{ install_path }}/uploads"
+        recurse: yes
+        file_type: file
+      become: true
+      become_user: "{{ app_user }}"
+      register: old_uploads_files
+      failed_when: false
+      tags: [app, validation, migration]
+
+    - name: Migrate uploads from old location to new location
+      when:
+        - old_uploads_files.matched is defined
+        - old_uploads_files.matched > 0
+        - uploads_files.matched == 0
+      block:
+        - name: Notify about migration
+          ansible.builtin.debug:
+            msg: |
+
+              ══════════════════════════════════════════════════════════════
+              📦 MIGRATING {{ old_uploads_files.matched }} FILES
+              ══════════════════════════════════════════════════════════════
+
+              Moving files from:
+                {{ install_path }}/uploads/
+
+              To persistent location:
+                /var/stormcloud/uploads/
+
+              This prevents data loss during git operations.
+              ══════════════════════════════════════════════════════════════
+
+        - name: Copy files from old to new location (preserving structure)
+          ansible.builtin.shell: |
+            rsync -av --remove-source-files {{ install_path }}/uploads/ /var/stormcloud/uploads/
+          become: true
+          become_user: "{{ app_user }}"
+          register: rsync_result
+
+        - name: Clean up empty directories in old location
+          ansible.builtin.shell: |
+            find {{ install_path }}/uploads -type d -empty -delete 2>/dev/null || true
+          become: true
+          become_user: "{{ app_user }}"
+
+        - name: Verify migration
+          ansible.builtin.find:
+            paths: /var/stormcloud/uploads
+            recurse: yes
+            file_type: file
+          become: true
+          become_user: "{{ app_user }}"
+          register: uploads_files_after_migration
+
+        - name: Report migration result
+          ansible.builtin.debug:
+            msg: "✓ Migrated {{ old_uploads_files.matched }} files → /var/stormcloud/uploads/ now has {{ uploads_files_after_migration.matched }} files"
+      tags: [app, validation, migration]
+
+    - name: Update uploads_files count after migration
+      ansible.builtin.set_fact:
+        uploads_files: "{{ uploads_files_after_migration }}"
+      when: uploads_files_after_migration is defined
+      tags: [app, validation, migration]
+
     - name: Warn if uploads directory is empty
       ansible.builtin.pause:
         prompt: |
