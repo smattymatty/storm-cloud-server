@@ -56,7 +56,7 @@ class FileOperationPerformance(APITestCase):
         # Create parent directory first
         self.client.post("/api/v1/dirs/uploads/create/")
 
-        with monitor(response_time_ms=50, query_count=10) as result:
+        with monitor(response_time_ms=50, query_count=11) as result:
             response = self.client.post(
                 "/api/v1/files/uploads/test.bin/upload/",
                 {"file": content},

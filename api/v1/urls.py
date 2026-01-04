@@ -64,6 +64,18 @@ from storage.api import (
     ShareLinkDetailView,
     ShareLinkListCreateView,
 )
+from storage.admin_api import (
+    AdminBulkOperationView,
+    AdminDirectoryCreateView,
+    AdminDirectoryListRootView,
+    AdminDirectoryListView,
+    AdminFileAuditLogListView,
+    AdminFileContentView,
+    AdminFileDeleteView,
+    AdminFileDetailView,
+    AdminFileDownloadView,
+    AdminFileUploadView,
+)
 
 # Server start time for uptime calculation
 _server_start_time = time.time()
@@ -197,6 +209,63 @@ urlpatterns = [
         "admin/keys/<uuid:key_id>/revoke/",
         AdminAPIKeyRevokeView.as_view(),
         name="admin-keys-revoke",
+    ),
+    # -------------------------------------------------------------------------
+    # Admin File Operations (act on user's files)
+    # -------------------------------------------------------------------------
+    # Audit Log
+    path(
+        "admin/audit/files/",
+        AdminFileAuditLogListView.as_view(),
+        name="admin-audit-files",
+    ),
+    # User's directories
+    path(
+        "admin/users/<int:user_id>/dirs/",
+        AdminDirectoryListRootView.as_view(),
+        name="admin-user-dir-list-root",
+    ),
+    path(
+        "admin/users/<int:user_id>/dirs/<path:dir_path>/create/",
+        AdminDirectoryCreateView.as_view(),
+        name="admin-user-dir-create",
+    ),
+    path(
+        "admin/users/<int:user_id>/dirs/<path:dir_path>/",
+        AdminDirectoryListView.as_view(),
+        name="admin-user-dir-list",
+    ),
+    # User's files
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/upload/",
+        AdminFileUploadView.as_view(),
+        name="admin-user-file-upload",
+    ),
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/download/",
+        AdminFileDownloadView.as_view(),
+        name="admin-user-file-download",
+    ),
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/delete/",
+        AdminFileDeleteView.as_view(),
+        name="admin-user-file-delete",
+    ),
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/content/",
+        AdminFileContentView.as_view(),
+        name="admin-user-file-content",
+    ),
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/",
+        AdminFileDetailView.as_view(),
+        name="admin-user-file-detail",
+    ),
+    # User's bulk operations
+    path(
+        "admin/users/<int:user_id>/bulk/",
+        AdminBulkOperationView.as_view(),
+        name="admin-user-bulk-operation",
     ),
     # =========================================================================
     # Storage

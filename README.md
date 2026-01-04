@@ -39,6 +39,12 @@ Part of the Storm Developments open source stack.
 - Markdown rendering with Django Spellbook
 - Managed content with custom SpellBlocks (in development)
 
+### Web UI
+- Browser-based file management interface
+- File upload, download, and organization
+- Share link management
+- User settings and API key management
+
 ---
 
 ## Quick Start
@@ -104,10 +110,19 @@ All endpoints are versioned under `/api/v1/`. Full API documentation available a
 | GET | `/api/v1/dirs/` | List root directory |
 | GET | `/api/v1/dirs/{path}/` | List directory contents |
 | POST | `/api/v1/dirs/{path}/create/` | Create directory |
-| GET | `/api/v1/files/{path}/` | Get file metadata |
+| GET | `/api/v1/files/{path}/` | Get file metadata (supports ETag) |
 | POST | `/api/v1/files/{path}/upload/` | Upload file |
-| GET | `/api/v1/files/{path}/download/` | Download file |
+| GET | `/api/v1/files/{path}/download/` | Download file (supports ETag/If-None-Match) |
 | DELETE | `/api/v1/files/{path}/delete/` | Delete file |
+| GET | `/api/v1/files/{path}/content/` | Preview text file content |
+| PUT | `/api/v1/files/{path}/content/` | Edit text file content |
+| POST | `/api/v1/bulk/` | Bulk delete/move/copy operations |
+
+### Index Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/index/rebuild/` | Rebuild database index (admin only) |
 
 ### Share Link Endpoints
 
@@ -124,12 +139,31 @@ All endpoints are versioned under `/api/v1/`. Full API documentation available a
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET/POST | `/api/v1/admin/users/` | List/create users |
-| GET | `/api/v1/admin/users/{id}/` | Get user details |
+| GET | `/api/v1/admin/users/{id}/` | Get user details (includes storage usage) |
 | POST | `/api/v1/admin/users/{id}/verify/` | Verify user email |
 | POST | `/api/v1/admin/users/{id}/deactivate/` | Deactivate user |
 | POST | `/api/v1/admin/users/{id}/activate/` | Activate user |
+| PATCH | `/api/v1/admin/users/{id}/quota/` | Set user storage quota |
+| PATCH | `/api/v1/admin/users/{id}/permissions/` | Update user permissions |
+| POST | `/api/v1/admin/users/{id}/keys/` | Create API key for user |
 | GET | `/api/v1/admin/keys/` | List all API keys |
 | POST | `/api/v1/admin/keys/{id}/revoke/` | Revoke any API key |
+
+### Admin File Access Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/users/{id}/dirs/` | List user's root directory |
+| GET | `/api/v1/admin/users/{id}/dirs/{path}/` | List user's subdirectory |
+| POST | `/api/v1/admin/users/{id}/dirs/{path}/create/` | Create directory in user's storage |
+| GET | `/api/v1/admin/users/{id}/files/{path}/` | Get file metadata |
+| POST | `/api/v1/admin/users/{id}/files/{path}/upload/` | Upload file to user's storage |
+| GET | `/api/v1/admin/users/{id}/files/{path}/download/` | Download user's file |
+| DELETE | `/api/v1/admin/users/{id}/files/{path}/delete/` | Delete user's file (recursive) |
+| GET | `/api/v1/admin/users/{id}/files/{path}/content/` | Preview user's text file |
+| PUT | `/api/v1/admin/users/{id}/files/{path}/content/` | Edit user's text file |
+| POST | `/api/v1/admin/users/{id}/bulk/` | Bulk operations on user's files |
+| GET | `/api/v1/admin/audit/files/` | Query file audit logs |
 
 ### Health Endpoints
 
@@ -183,6 +217,190 @@ curl http://127.0.0.1:8000/api/v1/shares/ \
 curl -X DELETE http://127.0.0.1:8000/api/v1/shares/{share-id}/ \
   -H "Authorization: Bearer YOUR-API-KEY"
 ```
+
+---
+
+## Advanced Features
+
+### File Content Preview & Edit
+
+Preview and edit text file content inline without multipart upload or attachment download.
+
+```bash
+# Preview file content (returns plain text)
+curl http://127.0.0.1:8000/api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer YOUR-API-KEY"
+
+# Edit file content (raw body)
+curl -X PUT http://127.0.0.1:8000/api/v1/files/readme.md/content/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: text/plain" \
+  -d "# Updated Content"
+```
+
+**Supported file types:** `.txt`, `.md`, `.rst`, `.py`, `.js`, `.ts`, `.go`, `.rs`, `.java`, `.c`, `.cpp`, `.json`, `.yaml`, `.toml`, `.ini`, `.env`, `Makefile`, `Dockerfile`, `.gitignore`, and more.
+
+**Limits:** Preview size configurable via `STORMCLOUD_MAX_PREVIEW_SIZE_MB` (default 5MB).
+
+### ETag Conditional Caching
+
+File info and download endpoints support HTTP conditional caching via ETag headers, reducing bandwidth for unchanged files.
+
+```bash
+# First request - get file with ETag
+curl -i http://127.0.0.1:8000/api/v1/files/photo.jpg/download/ \
+  -H "Authorization: Bearer YOUR-API-KEY"
+# Response includes: ETag: "a1b2c3d4e5f6"
+
+# Subsequent request - check if file changed
+curl http://127.0.0.1:8000/api/v1/files/photo.jpg/download/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H 'If-None-Match: "a1b2c3d4e5f6"'
+# Returns 304 Not Modified if unchanged (no body transferred)
+```
+
+### Bulk Operations
+
+Perform operations on multiple files/folders in a single API request (1-250 paths).
+
+```bash
+# Delete multiple files
+curl -X POST http://127.0.0.1:8000/api/v1/bulk/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"delete","paths":["old1.txt","old2.txt","archive/"]}'
+
+# Move files to folder
+curl -X POST http://127.0.0.1:8000/api/v1/bulk/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"move","paths":["file1.txt","file2.txt"],"options":{"destination":"archive"}}'
+
+# Copy files
+curl -X POST http://127.0.0.1:8000/api/v1/bulk/ \
+  -H "Authorization: Bearer YOUR-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"copy","paths":["doc.txt"],"options":{"destination":"backup"}}'
+```
+
+**Operations:** `delete` (recursive for directories), `move`, `copy`
+
+**Response:** Partial success supported - individual failures don't abort the batch.
+
+### Index Rebuild (Filesystem-Database Sync)
+
+The database is a rebuildable index; the filesystem is the source of truth. Use these tools to reconcile discrepancies.
+
+```bash
+# Management command
+python manage.py rebuild_index --mode audit      # Report only
+python manage.py rebuild_index --mode sync       # Add missing DB records
+python manage.py rebuild_index --mode clean --force  # Delete orphaned DB records
+python manage.py rebuild_index --mode full --force   # Sync + clean
+
+# API endpoint (admin only)
+curl -X POST http://127.0.0.1:8000/api/v1/index/rebuild/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"audit"}'
+```
+
+**Modes:**
+- `audit` - Report discrepancies, make no changes
+- `sync` - Add missing DB records for files on disk
+- `clean` - Delete orphaned DB records (requires `--force`)
+- `full` - Sync + clean (requires `--force`)
+
+Index audit runs automatically on container startup.
+
+### Admin File Access
+
+Admins can access, manage, and audit any user's files. All operations are logged to `FileAuditLog`.
+
+```bash
+# List user's files
+curl http://127.0.0.1:8000/api/v1/admin/users/123/dirs/ \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Download user's file
+curl http://127.0.0.1:8000/api/v1/admin/users/123/files/document.pdf/download/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" -o document.pdf
+
+# Upload file to user's storage
+curl -X POST http://127.0.0.1:8000/api/v1/admin/users/123/files/reports/q4.pdf/upload/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" \
+  -F "file=@q4.pdf"
+
+# Delete user's file (recursive for directories)
+curl -X DELETE http://127.0.0.1:8000/api/v1/admin/users/123/files/old-folder/delete/ \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Bulk operations on user's files
+curl -X POST http://127.0.0.1:8000/api/v1/admin/users/123/bulk/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"move","paths":["file1.txt","file2.txt"],"options":{"destination":"archive"}}'
+```
+
+### File Audit Logging
+
+Query audit logs to track all admin file operations.
+
+```bash
+# List all audit logs
+curl http://127.0.0.1:8000/api/v1/admin/audit/files/ \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Filter by target user
+curl "http://127.0.0.1:8000/api/v1/admin/audit/files/?user_id=123" \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Filter by action type
+curl "http://127.0.0.1:8000/api/v1/admin/audit/files/?action=delete" \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Filter failures only
+curl "http://127.0.0.1:8000/api/v1/admin/audit/files/?success=false" \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+
+# Date range filter
+curl "http://127.0.0.1:8000/api/v1/admin/audit/files/?from=2024-01-01&to=2024-12-31" \
+  -H "Authorization: Bearer ADMIN-API-KEY"
+```
+
+**Logged actions:** `list`, `upload`, `download`, `delete`, `move`, `copy`, `edit`, `preview`, `create_dir`, `bulk_delete`, `bulk_move`, `bulk_copy`
+
+**Filter options:** `user_id`, `performed_by`, `action`, `admin_only`, `success`, `path`, `from`, `to`, `page`, `page_size`
+
+### User Quotas & Permissions
+
+Admins can set per-user storage quotas and granular permissions.
+
+```bash
+# Set storage quota (MB)
+curl -X PATCH http://127.0.0.1:8000/api/v1/admin/users/123/quota/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"storage_quota_mb": 500}'
+
+# Update permissions
+curl -X PATCH http://127.0.0.1:8000/api/v1/admin/users/123/permissions/ \
+  -H "Authorization: Bearer ADMIN-API-KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"can_upload": true, "can_delete": false, "max_share_links": 10}'
+```
+
+**Permission flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `can_upload` | `true` | Upload new files |
+| `can_delete` | `true` | Delete files/folders |
+| `can_move` | `true` | Move/rename files |
+| `can_overwrite` | `true` | Overwrite/edit existing files |
+| `can_create_shares` | `true` | Create share links |
+| `max_share_links` | `0` | Max active share links (0 = unlimited) |
+| `max_upload_bytes` | `0` | Per-file upload limit (0 = server default) |
 
 ---
 
@@ -245,6 +463,8 @@ cp .env.template .env
 | `THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE` | `30/min` | Public share download limit |
 | `STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS` | `True` | Allow unlimited expiry on share links |
 | `STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS` | `7` | Default expiry for new share links |
+| `STORMCLOUD_MAX_UPLOAD_SIZE_MB` | `100` | Maximum file upload size in MB |
+| `STORMCLOUD_MAX_PREVIEW_SIZE_MB` | `5` | Maximum file size for content preview |
 
 ### Email Configuration
 
@@ -284,6 +504,11 @@ python manage.py revoke_api_key --id <key-uuid>
 
 # Clean up expired tokens
 python manage.py cleanup_expired_tokens
+
+# Rebuild database index from filesystem
+python manage.py rebuild_index --mode audit       # Report discrepancies
+python manage.py rebuild_index --mode sync        # Add missing records
+python manage.py rebuild_index --mode full --force  # Full reconciliation
 ```
 
 ---
@@ -315,19 +540,33 @@ coverage html  # Open htmlcov/index.html
 - **Pluggable Backends**: Abstract storage interface for future expansion
 - **CLI-First Design**: API responses optimized for command-line consumption
 - **URL Versioning**: All endpoints under `/api/v1/`
+- **Filesystem Wins**: Database is a rebuildable index; filesystem is source of truth
 
 ### App Structure
 ```
 storm-cloud-server/
 ├── _core/          # Django project configuration
-├── core/           # Base models, storage backends, shared utilities
+├── core/           # Base models, storage backends, bulk operations, index sync
 ├── accounts/       # User management, authentication, API keys
-├── storage/        # File CRUD operations
-├── cms/            # Markdown CMS
+├── storage/        # File CRUD operations, share links
+├── cms/            # Markdown CMS (Spellbook)
+├── social/         # GoToSocial/ActivityPub integration
 └── api/v1/         # Versioned URL routing
 ```
 
-Architecture decision records available in `/architecture/records/`.
+### Architecture Decision Records
+
+| ADR | Title |
+|-----|-------|
+| [000](architecture/records/000-risk-matrix.md) | Risk Matrix |
+| [001](architecture/records/001-service-granularity.md) | Service Granularity (Modular Monolith) |
+| [002](architecture/records/002-storage-backend-strategy.md) | Storage Backend Strategy |
+| [003](architecture/records/003-authentication-model.md) | Authentication Model |
+| [004](architecture/records/004-API-versioning-strategy.md) | API Versioning Strategy |
+| [005](architecture/records/005-cli-first-development-strategy.md) | CLI-First Development |
+| [006](architecture/records/006-encryption-strategy.md) | Encryption Strategy |
+| [007](architecture/records/007-rate-limiting.md) | Rate Limiting |
+| [009](architecture/records/009-index-rebuild-strategy.md) | Index Rebuild Strategy |
 
 ---
 
@@ -339,24 +578,35 @@ Architecture decision records available in `/architecture/records/`.
    - File Uploads: 100/hour
    - File Downloads: 500/hour
    - General API: 1000 requests/hour
-2. **Security Event Logging**: All authentication events logged to `logs/security.log`
-3. **Email Enumeration Prevention**: Generic responses for email-related endpoints
-4. **Soft Delete**: API keys revoked, not deleted (audit trail preserved)
-5. **CORS Protection**: Locked down by default
-6. **Path Traversal Protection**: Input validation on all file paths
-7. **Password Validation**: Django's built-in validators enforced
+2. **Per-User Quotas**: Storage limits and upload size restrictions per user
+3. **Granular Permissions**: Fine-grained control over user capabilities (upload, delete, share, etc.)
+4. **Security Event Logging**: All authentication events logged to `logs/security.log`
+5. **File Audit Logging**: All admin file operations logged to `FileAuditLog` (IP, user agent, success/failure)
+6. **Email Enumeration Prevention**: Generic responses for email-related endpoints
+7. **Soft Delete**: API keys revoked, not deleted (audit trail preserved)
+8. **CORS Protection**: Locked down by default
+9. **Path Traversal Protection**: Input validation on all file paths
+10. **Password Validation**: Django's built-in validators enforced
+11. **Admin-Only Endpoints**: Sensitive operations (index rebuild, quota management, file access) restricted to admins
 
-See [ADR 007: Rate Limiting Strategy](architecture/records/007-rate-limiting-strategy.md) for implementation details.
+See [ADR 007: Rate Limiting Strategy](architecture/records/007-rate-limiting.md) for implementation details.
 
 ---
 
 ## Project Status
 
-**Current Phase**: Storage + sharing complete, CMS in development
+**Current Phase**: Core features complete, CMS in development
 
-- Authentication system: Complete (18 endpoints, comprehensive test coverage)
-- Storage system: Complete (7 endpoints, pagination, path security)
-- Share links: Complete (5 endpoints, public access, analytics)
+- Authentication system: Complete (21 endpoints, comprehensive test coverage)
+- Storage system: Complete (file CRUD, bulk operations, content preview/edit)
+- Share links: Complete (public access, password protection, analytics)
+- User quotas & permissions: Complete
+- Index rebuild system: Complete (filesystem-database sync)
+- ETag caching: Complete
+- Admin file access: Complete (access any user's files with audit logging)
+- File audit logging: Complete (track all admin file operations)
+- GoToSocial integration: Complete
+- Web UI: Complete
 - Content management: In progress (markdown rendering with Spellbook)
 - CLI client: Planned
 

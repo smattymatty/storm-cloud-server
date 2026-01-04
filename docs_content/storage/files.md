@@ -793,6 +793,7 @@ New content goes here."
 
 ## Next Steps
 
+- [Admin File Access](./admin-file-access.md) - Manage any user's files (admin only)
+- [Bulk Operations](./bulk-operations.md) - Batch file operations
 - [Share Links API](../share-links-api.md) - Create public download links
 - [Authentication Guide](../accounts/authentication.md) - Get your API key
-- [CLI Tool](../cli-usage.md) - Use the `stormcloud` CLI

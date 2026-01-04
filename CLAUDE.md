@@ -335,6 +335,197 @@ curl -X PATCH /api/v1/admin/users/123/permissions/ \
   -d '{"can_upload": false, "can_delete": false, "max_share_links": 5}'
 ```
 
+## Admin File Access
+
+Admins can access and manage any user's files. All admin file operations are logged to `FileAuditLog` for compliance and debugging.
+
+**Base URL:** `/api/v1/admin/users/{user_id}/`
+
+### Directory Operations
+
+```bash
+# List user's root directory
+curl /api/v1/admin/users/123/dirs/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# List subdirectory
+curl /api/v1/admin/users/123/dirs/documents/projects/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Create directory
+curl -X POST /api/v1/admin/users/123/dirs/new-folder/create/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+```
+
+### File Operations
+
+```bash
+# Get file metadata
+curl /api/v1/admin/users/123/files/report.pdf/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Download file
+curl /api/v1/admin/users/123/files/report.pdf/download/ \
+  -H "Authorization: Bearer ADMIN_KEY" -o report.pdf
+
+# Upload file to user's storage
+curl -X POST /api/v1/admin/users/123/files/docs/report.pdf/upload/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -F "file=@report.pdf"
+
+# Delete file (recursive for directories)
+curl -X DELETE /api/v1/admin/users/123/files/old-file.txt/delete/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Preview text file content
+curl /api/v1/admin/users/123/files/readme.md/content/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Edit text file content
+curl -X PUT /api/v1/admin/users/123/files/readme.md/content/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: text/plain" \
+  -d "# Updated content"
+```
+
+### Bulk Operations
+
+```bash
+# Bulk delete user's files
+curl -X POST /api/v1/admin/users/123/bulk/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"delete","paths":["old1.txt","old2.txt"]}'
+
+# Bulk move
+curl -X POST /api/v1/admin/users/123/bulk/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"move","paths":["file1.txt"],"options":{"destination":"archive"}}'
+
+# Bulk copy
+curl -X POST /api/v1/admin/users/123/bulk/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"operation":"copy","paths":["template.txt"],"options":{"destination":"backup"}}'
+```
+
+**Response includes `target_user` context:**
+```json
+{
+  "operation": "delete",
+  "total": 2,
+  "succeeded": 2,
+  "failed": 0,
+  "results": [...],
+  "target_user": {"id": 123, "username": "alice"}
+}
+```
+
+---
+
+## File Audit Logging
+
+All admin file operations are logged to `FileAuditLog` for compliance, debugging, and security monitoring.
+
+### Logged Actions
+
+| Action | Description |
+|--------|-------------|
+| `list` | Directory listing |
+| `upload` | File upload |
+| `download` | File download |
+| `delete` | File/directory deletion |
+| `move` | File/directory move |
+| `copy` | File/directory copy |
+| `edit` | Text file content edit |
+| `preview` | Text file content preview |
+| `create_dir` | Directory creation |
+| `bulk_delete` | Bulk delete operation |
+| `bulk_move` | Bulk move operation |
+| `bulk_copy` | Bulk copy operation |
+
+### Query Audit Logs
+
+```bash
+# List all audit logs (paginated)
+curl /api/v1/admin/audit/files/ \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by target user
+curl "/api/v1/admin/audit/files/?user_id=123" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by admin who performed action
+curl "/api/v1/admin/audit/files/?performed_by=1" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by action type
+curl "/api/v1/admin/audit/files/?action=delete" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter admin-only actions (exclude user self-actions)
+curl "/api/v1/admin/audit/files/?admin_only=true" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by success/failure
+curl "/api/v1/admin/audit/files/?success=false" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by path (contains)
+curl "/api/v1/admin/audit/files/?path=documents" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Filter by date range
+curl "/api/v1/admin/audit/files/?from=2024-01-01T00:00:00Z&to=2024-12-31T23:59:59Z" \
+  -H "Authorization: Bearer ADMIN_KEY"
+
+# Pagination
+curl "/api/v1/admin/audit/files/?page=2&page_size=50" \
+  -H "Authorization: Bearer ADMIN_KEY"
+```
+
+### Audit Log Entry Fields
+
+```json
+{
+  "id": 1,
+  "performed_by": 1,
+  "target_user": 123,
+  "is_admin_action": true,
+  "action": "delete",
+  "path": "documents/report.pdf",
+  "destination_path": null,
+  "paths_affected": null,
+  "success": true,
+  "error_code": null,
+  "error_message": null,
+  "ip_address": "192.168.1.100",
+  "user_agent": "curl/7.68.0",
+  "file_size": 1048576,
+  "content_type": "application/pdf",
+  "created_at": "2024-12-15T10:30:00Z"
+}
+```
+
+### Key Fields
+
+| Field | Description |
+|-------|-------------|
+| `performed_by` | User ID who performed the action |
+| `target_user` | User ID whose files were affected |
+| `is_admin_action` | `true` if admin accessing another user's files |
+| `action` | One of the action types above |
+| `path` | Primary file/directory path |
+| `destination_path` | For move/copy operations |
+| `paths_affected` | Array of paths for bulk operations |
+| `success` | Whether operation succeeded |
+| `error_code` | Error code if failed (e.g., `FILE_NOT_FOUND`) |
+| `ip_address` | Client IP address |
+| `user_agent` | Client user agent string |
+
+---
+
 ## User Permission Flags
 
 Granular per-user permissions stored on `UserProfile`:
@@ -362,7 +553,6 @@ Granular per-user permissions stored on `UserProfile`:
 
 ## Not Building Yet
 
-- Web dashboard
 - Backblaze B2 backend
 - Custom SpellBlocks
 - Versioning

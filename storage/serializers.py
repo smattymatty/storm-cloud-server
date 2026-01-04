@@ -5,7 +5,7 @@ import re
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import ShareLink, StoredFile
+from .models import FileAuditLog, ShareLink, StoredFile
 
 
 class StoredFileSerializer(serializers.ModelSerializer):
@@ -254,3 +254,44 @@ class BulkOperationStatusResponseSerializer(serializers.Serializer):
     results = BulkOperationResultSerializer(many=True, required=False)
     error = serializers.CharField(required=False, allow_null=True)
     progress = serializers.DictField(required=False, allow_null=True)
+
+
+# =============================================================================
+# Audit Log Serializers
+# =============================================================================
+
+
+class FileAuditLogSerializer(serializers.ModelSerializer):
+    """Serializer for file audit log entries."""
+
+    performed_by_username = serializers.CharField(
+        source="performed_by.username", read_only=True, allow_null=True
+    )
+    target_user_username = serializers.CharField(
+        source="target_user.username", read_only=True, allow_null=True
+    )
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        model = FileAuditLog
+        fields = [
+            "id",
+            "created_at",
+            "performed_by",
+            "performed_by_username",
+            "target_user",
+            "target_user_username",
+            "is_admin_action",
+            "action",
+            "action_display",
+            "path",
+            "destination_path",
+            "paths_affected",
+            "success",
+            "error_code",
+            "error_message",
+            "ip_address",
+            "file_size",
+            "content_type",
+        ]
+        read_only_fields = fields

@@ -1,4 +1,5 @@
 import uuid
+from typing import List, Tuple
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -256,3 +257,126 @@ class ShareLink(AbstractBaseModel):
     def __str__(self):
         key = self.get_public_url_key()
         return f"{self.owner.username}: {self.file_path} ({key})"
+
+
+class FileAuditLog(AbstractBaseModel):
+    """
+    Complete audit trail for all file operations.
+
+    Tracks who did what to which file, when, and with what result.
+    Designed for security auditing, compliance, and troubleshooting.
+
+    Key distinction:
+    - performed_by: The user who actually performed the action (e.g., an admin)
+    - target_user: The user whose files were affected
+    - is_admin_action: True when an admin acts on another user's files
+    """
+
+    # Action type constants
+    ACTION_LIST = "list"
+    ACTION_UPLOAD = "upload"
+    ACTION_DOWNLOAD = "download"
+    ACTION_DELETE = "delete"
+    ACTION_MOVE = "move"
+    ACTION_COPY = "copy"
+    ACTION_EDIT = "edit"
+    ACTION_PREVIEW = "preview"
+    ACTION_CREATE_DIR = "create_dir"
+    ACTION_BULK_DELETE = "bulk_delete"
+    ACTION_BULK_MOVE = "bulk_move"
+    ACTION_BULK_COPY = "bulk_copy"
+
+    ACTION_CHOICES: List[Tuple[str, str]] = [
+        (ACTION_LIST, "List directory"),
+        (ACTION_UPLOAD, "Upload file"),
+        (ACTION_DOWNLOAD, "Download file"),
+        (ACTION_DELETE, "Delete file"),
+        (ACTION_MOVE, "Move file"),
+        (ACTION_COPY, "Copy file"),
+        (ACTION_EDIT, "Edit content"),
+        (ACTION_PREVIEW, "Preview content"),
+        (ACTION_CREATE_DIR, "Create directory"),
+        (ACTION_BULK_DELETE, "Bulk delete"),
+        (ACTION_BULK_MOVE, "Bulk move"),
+        (ACTION_BULK_COPY, "Bulk copy"),
+    ]
+
+    # Who performed the action (the admin for admin actions, or the user for regular actions)
+    performed_by = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="file_actions_performed",
+        help_text="User who performed the action (admin for admin actions)",
+    )
+
+    # Whose files were affected (the target user)
+    target_user = models.ForeignKey(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="file_actions_received",
+        help_text="User whose files were affected",
+    )
+
+    # Is this an admin action (acting on behalf of another user)?
+    is_admin_action = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True if admin acted on another user's files",
+    )
+
+    # The action performed
+    action = models.CharField(
+        max_length=20,
+        choices=ACTION_CHOICES,
+        db_index=True,
+    )
+
+    # File/path information
+    path = models.CharField(
+        max_length=1024,
+        help_text="Primary path affected",
+    )
+    destination_path = models.CharField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        help_text="Destination path for move/copy operations",
+    )
+
+    # For bulk operations - list of paths affected
+    paths_affected = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="List of paths for bulk operations",
+    )
+
+    # Result
+    success = models.BooleanField(default=True)
+    error_code = models.CharField(max_length=50, blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+
+    # Request metadata
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True, null=True)
+
+    # File metadata at time of action (for forensics)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    content_type = models.CharField(max_length=100, blank=True, null=True)
+
+    class Meta:
+        verbose_name = "File Audit Log"
+        verbose_name_plural = "File Audit Logs"
+        indexes = [
+            models.Index(fields=["performed_by", "-created_at"]),
+            models.Index(fields=["target_user", "-created_at"]),
+            models.Index(fields=["action", "-created_at"]),
+            models.Index(fields=["-created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        admin_marker = "[ADMIN] " if self.is_admin_action else ""
+        performer = self.performed_by.username if self.performed_by else "N/A"
+        return f"{admin_marker}{performer}: {self.action} {self.path}"

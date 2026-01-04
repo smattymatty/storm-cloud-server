@@ -15,11 +15,29 @@ RED='\033[0;31m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-BACKUP_DIR="./backups"
+# Auto-detect environment paths
+if [ -n "$BACKUPS_PATH" ]; then
+    BACKUP_DIR="$BACKUPS_PATH"
+elif [ -d "/var/stormcloud/backups" ]; then
+    BACKUP_DIR="/var/stormcloud/backups"
+else
+    BACKUP_DIR="./backups"
+fi
+
+if [ -n "$UPLOADS_PATH" ]; then
+    UPLOADS_DIR="$UPLOADS_PATH"
+elif [ -d "/var/stormcloud/uploads" ]; then
+    UPLOADS_DIR="/var/stormcloud/uploads"
+else
+    UPLOADS_DIR="./uploads"
+fi
 
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Storm Cloud Server - Restore Backup${NC}"
 echo -e "${GREEN}============================================${NC}"
+echo ""
+echo "Backup source:      $BACKUP_DIR"
+echo "Uploads destination: $UPLOADS_DIR"
 echo ""
 
 # List available backups
@@ -121,7 +139,8 @@ fi
 # Restore uploads
 if [ -f "$BACKUP_DIR/${BACKUP_NAME}_uploads.tar.gz" ]; then
     echo -e "${YELLOW}2/2${NC} Restoring uploads directory..."
-    tar -xzf "$BACKUP_DIR/${BACKUP_NAME}_uploads.tar.gz" 2>/dev/null || true
+    echo "    Destination: $UPLOADS_DIR"
+    tar -xzf "$BACKUP_DIR/${BACKUP_NAME}_uploads.tar.gz" -C "$(dirname "$UPLOADS_DIR")" 2>/dev/null || true
     echo -e "${GREEN}✓${NC} Uploads restored"
 else
     echo -e "${YELLOW}⚠${NC} No uploads backup found, skipping..."

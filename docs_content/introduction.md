@@ -45,6 +45,7 @@ See [Architecture Decision Records](../architecture/records/) for detailed desig
 - Path traversal protection
 - User-isolated storage paths
 - Pluggable storage backend (local filesystem, future: S3)
+- Admin file access with full audit logging
 
 ### Share Links
 - Public file sharing with unique URLs
@@ -131,21 +132,24 @@ stormcloud share sensitive-doc.pdf --password "team2025" --expiry 7
 **Version:** Alpha (in active development)
 
 **Complete:**
-- ✅ Authentication system (18 endpoints, full test coverage)
-- ✅ Storage system (7 endpoints, pagination, path security)
-- ✅ Share links (5 endpoints, public access, analytics)
+- ✅ Authentication system (21 endpoints, full test coverage)
+- ✅ Storage system (file CRUD, bulk operations, content preview/edit)
+- ✅ Share links (public access, password protection, analytics)
+- ✅ Admin file access (access any user's files)
+- ✅ File audit logging (track all admin operations)
+- ✅ User quotas & permissions
+- ✅ Index rebuild system (filesystem-database sync)
+- ✅ ETag caching
+- ✅ Web UI
 
 **In Progress:**
 - 🚧 Content management system (markdown rendering)
 - 🚧 CLI client
 
 **Planned:**
-- 📋 Web dashboard
 - 📋 Backblaze B2 backend
 - 📋 Custom SpellBlocks
-- 📋 Advanced permissions
 - 📋 File versioning
-- 📋 Storage quotas
 - 📋 Server-side encryption
 
 ---
@@ -154,6 +158,8 @@ stormcloud share sensitive-doc.pdf --password "team2025" --expiry 7
 
 - [Setup Guide](setup.md) - Get started in 5 minutes
 - [Storage API](storage/files.md) - File upload/download docs
+- [Bulk Operations](storage/bulk-operations.md) - Batch file operations
+- [Admin File Access](storage/admin-file-access.md) - Manage any user's files
 - [Share Links API](share-links-api.md) - Public sharing docs
 - [Accounts API](accounts/authentication.md) - Auth endpoints
 - [Architecture Decisions](../architecture/records/) - Design rationale

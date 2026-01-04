@@ -56,3 +56,6 @@ logs/security.log
 
 # Deployment secrets
 deploy/config.yml
+
+# Local backups (downloaded from server)
+deploy/local_backups/

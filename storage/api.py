@@ -1,7 +1,6 @@
 """API views for storage app."""
 
 import uuid
-from base64 import b64decode, b64encode
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Optional, Union, cast
@@ -45,106 +44,14 @@ from .serializers import (
     ShareLinkResponseSerializer,
     StoredFileSerializer,
 )
-from .utils import generate_etag, get_share_link_by_token
-
-
-def get_user_storage_path(user: User) -> str:
-    """Get storage path prefix for user."""
-    return f"{user.id}"
-
-
-# Text MIME types allowed for content preview
-TEXT_PREVIEW_MIME_TYPES: frozenset[str] = frozenset([
-    # Plain text
-    "text/plain",
-    # Markup/Markdown
-    "text/markdown",
-    "text/x-markdown",
-    "text/html",
-    "text/xml",
-    "text/css",
-    # Code files
-    "text/x-python",
-    "text/x-python-script",
-    "application/x-python-code",
-    "text/javascript",
-    "application/javascript",
-    "application/json",
-    "text/x-java-source",
-    "text/x-c",
-    "text/x-c++",
-    "text/x-go",
-    "text/x-rust",
-    "text/x-ruby",
-    "text/x-php",
-    "text/x-sh",
-    "text/x-shellscript",
-    "application/x-sh",
-    "text/x-yaml",
-    "application/x-yaml",
-    "text/x-toml",
-    "application/xml",
-    "application/toml",
-    "text/csv",
-    "text/tab-separated-values",
-])
-
-# File extensions treated as text for preview
-TEXT_EXTENSIONS: frozenset[str] = frozenset([
-    ".txt", ".md", ".markdown", ".rst", ".asciidoc",
-    ".py", ".pyw", ".pyi",
-    ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".json", ".jsonl", ".json5",
-    ".html", ".htm", ".xml", ".xhtml", ".svg",
-    ".css", ".scss", ".sass", ".less",
-    ".java", ".kt", ".kts", ".scala",
-    ".c", ".h", ".cpp", ".hpp", ".cc", ".hh", ".cxx",
-    ".go", ".rs", ".rb", ".php",
-    ".sh", ".bash", ".zsh", ".fish",
-    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
-    ".csv", ".tsv",
-    ".sql", ".graphql", ".gql",
-    ".env",
-])
-
-# Known filenames without extensions that are text
-TEXT_FILENAMES: frozenset[str] = frozenset([
-    "makefile", "dockerfile", "gemfile", "rakefile",
-    "readme", "license", "changelog", "contributing",
-    ".gitignore", ".dockerignore", ".editorconfig",
-    ".env", ".env.example", ".env.local",
-])
-
-
-def is_text_file(file_path: str, content_type: Optional[str]) -> bool:
-    """
-    Determine if a file should be treated as text for preview.
-
-    Uses a whitelist approach:
-    1. Check content_type against known text MIME types
-    2. Fall back to extension-based detection
-    3. Check known text filenames without extensions
-    """
-    # Check MIME type first
-    if content_type:
-        ct_lower = content_type.lower().split(";")[0].strip()
-        if ct_lower in TEXT_PREVIEW_MIME_TYPES:
-            return True
-        # Any text/* is allowed
-        if ct_lower.startswith("text/"):
-            return True
-
-    # Check extension
-    ext = Path(file_path).suffix.lower()
-    if ext in TEXT_EXTENSIONS:
-        return True
-
-    # Check known filenames without extensions
-    name = Path(file_path).name.lower()
-    if name in TEXT_FILENAMES:
-        return True
-
-    return False
+from .services import (
+    DirectoryService,
+    FileService,
+    generate_etag,
+    get_user_storage_path,
+    is_text_file,
+)
+from .utils import get_share_link_by_token
 
 
 class DirectoryListBaseView(StormCloudBaseAPIView):
@@ -152,127 +59,36 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
 
     def list_directory(self, request: Request, dir_path: str = "") -> Response:
         """List directory contents with pagination."""
-        backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(cast(User, request.user))
+        service = DirectoryService(cast(User, request.user))
 
-        # Normalize and validate path
-        try:
-            dir_path = normalize_path(dir_path) if dir_path else ""
-        except PathValidationError as e:
-            return Response(
-                {
-                    "error": {
-                        "code": "INVALID_PATH",
-                        "message": str(e),
-                        "path": dir_path,
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Construct full storage path
-        full_path = f"{user_prefix}/{dir_path}" if dir_path else user_prefix
-
-        try:
-            entries = list(backend.list(full_path))
-        except FileNotFoundError:
-            # Auto-create user's root directory if it doesn't exist
-            if not dir_path:
-                backend.mkdir(full_path)
-                entries = []
-            else:
-                return Response(
-                    {
-                        "error": {
-                            "code": "DIRECTORY_NOT_FOUND",
-                            "message": f"Directory '{dir_path}' does not exist.",
-                            "path": dir_path,
-                            "recovery": "Check the path and try again.",
-                        }
-                    },
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        except NotADirectoryError:
-            return Response(
-                {
-                    "error": {
-                        "code": "PATH_IS_FILE",
-                        "message": f"Path '{dir_path}' is a file, not a directory.",
-                        "path": dir_path,
-                        "recovery": f"Use GET /api/v1/files/{dir_path}/ for file metadata.",
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Fetch metadata from database for entries (encryption_method + sort_position)
-        entry_paths = [entry.path.replace(f"{user_prefix}/", "") for entry in entries]
-        db_files = {
-            f.path: {
-                "encryption_method": f.encryption_method,
-                "sort_position": f.sort_position,
-            }
-            for f in StoredFile.objects.filter(owner=request.user, path__in=entry_paths)
-        }
-
-        # Build entry data with sort_position for sorting
-        entry_data = []
-        for entry in entries:
-            rel_path = entry.path.replace(f"{user_prefix}/", "")
-            db_info = db_files.get(rel_path, {})
-            entry_data.append(
-                {
-                    "name": entry.name,
-                    "path": rel_path,
-                    "size": entry.size,
-                    "is_directory": entry.is_directory,
-                    "content_type": entry.content_type,
-                    "modified_at": entry.modified_at,
-                    "encryption_method": db_info.get(
-                        "encryption_method", StoredFile.ENCRYPTION_NONE
-                    ),
-                    "sort_position": db_info.get("sort_position"),
-                }
-            )
-
-        # Sort: directories first, then by sort_position (nulls last), then alphabetically
-        entry_data = sorted(
-            entry_data,
-            key=lambda x: (
-                not x["is_directory"],
-                x["sort_position"] if x["sort_position"] is not None else float("inf"),
-                x["name"],
-            ),
-        )
-
-        # Pagination
         limit = min(int(request.query_params.get("limit", 50)), 200)
         cursor = request.query_params.get("cursor")
 
-        start_idx = 0
-        if cursor:
-            try:
-                start_idx = int(b64decode(cursor).decode())
-            except (ValueError, UnicodeDecodeError):
-                pass
+        result = service.list_directory(dir_path, limit=limit, cursor=cursor)
 
-        end_idx = start_idx + limit
-        page_entries = entry_data[start_idx:end_idx]
+        if not result.success:
+            error_status = status.HTTP_400_BAD_REQUEST
+            if result.error_code == "DIRECTORY_NOT_FOUND":
+                error_status = status.HTTP_404_NOT_FOUND
 
-        # Generate next cursor
-        next_cursor = None
-        if end_idx < len(entry_data):
-            next_cursor = b64encode(str(end_idx).encode()).decode()
+            return Response(
+                {
+                    "error": {
+                        "code": result.error_code,
+                        "message": result.error_message,
+                        "path": dir_path,
+                    }
+                },
+                status=error_status,
+            )
 
-        response_data = {
-            "path": dir_path,
-            "entries": page_entries,
-            "count": len(page_entries),
-            "total": len(entry_data),
-            "next_cursor": next_cursor,
-        }
-
-        return Response(response_data)
+        return Response({
+            "path": result.path,
+            "entries": result.entries,
+            "count": result.count,
+            "total": result.total,
+            "next_cursor": result.next_cursor,
+        })
 
 
 class DirectoryListRootView(DirectoryListBaseView):
@@ -336,77 +152,26 @@ class DirectoryCreateView(StormCloudBaseAPIView):
     )
     def post(self, request: Request, dir_path: str) -> Response:
         """Create directory."""
-        backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(cast(User, request.user))
+        service = DirectoryService(cast(User, request.user))
+        result = service.create_directory(dir_path)
 
-        # Normalize and validate path
-        try:
-            dir_path = normalize_path(dir_path)
-        except PathValidationError as e:
+        if not result.success:
+            error_status = status.HTTP_400_BAD_REQUEST
+            if result.error_code == "ALREADY_EXISTS":
+                error_status = status.HTTP_409_CONFLICT
+
             return Response(
                 {
                     "error": {
-                        "code": "INVALID_PATH",
-                        "message": str(e),
+                        "code": result.error_code,
+                        "message": result.error_message,
                         "path": dir_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=error_status,
             )
 
-        full_path = f"{user_prefix}/{dir_path}"
-
-        # Check if directory already exists
-        if backend.exists(full_path):
-            return Response(
-                {
-                    "error": {
-                        "code": "ALREADY_EXISTS",
-                        "message": f"Directory '{dir_path}' already exists.",
-                        "path": dir_path,
-                    }
-                },
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        file_info = backend.mkdir(full_path)
-
-        # Create database record
-        parent_path = str(Path(dir_path).parent) if dir_path != "." else ""
-
-        # Shift existing files down to make room at position 0
-        StoredFile.objects.filter(
-            owner=request.user,
-            parent_path=parent_path,
-            sort_position__isnull=False,
-        ).update(sort_position=F("sort_position") + 1)
-
-        StoredFile.objects.update_or_create(
-            owner=request.user,
-            path=dir_path,
-            defaults={
-                "name": file_info.name,
-                "size": 0,
-                "content_type": "",
-                "is_directory": True,
-                "parent_path": parent_path,
-                "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
-                "sort_position": 0,  # New directories go to top
-            },
-        )
-
-        response_data = {
-            "path": dir_path,
-            "name": file_info.name,
-            "size": 0,
-            "content_type": None,
-            "is_directory": True,
-            "created_at": file_info.modified_at,
-            "modified_at": file_info.modified_at,
-            "encryption_method": StoredFile.ENCRYPTION_NONE,
-        }
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(result.data, status=status.HTTP_201_CREATED)
 
 
 class DirectoryReorderView(StormCloudBaseAPIView):
@@ -527,86 +292,45 @@ class FileDetailView(StormCloudBaseAPIView):
     )
     def get(self, request: Request, file_path: str) -> Response:
         """Get file metadata."""
-        backend = LocalStorageBackend()
-        user_prefix = get_user_storage_path(cast(User, request.user))
+        service = FileService(cast(User, request.user))
+        result = service.get_info(file_path)
 
-        # Normalize and validate path
-        try:
-            file_path = normalize_path(file_path)
-        except PathValidationError as e:
+        if not result.success:
+            error_status = status.HTTP_400_BAD_REQUEST
+            if result.error_code == "FILE_NOT_FOUND":
+                error_status = status.HTTP_404_NOT_FOUND
+
             return Response(
                 {
                     "error": {
-                        "code": "INVALID_PATH",
-                        "message": str(e),
+                        "code": result.error_code,
+                        "message": result.error_message,
                         "path": file_path,
                     }
                 },
-                status=status.HTTP_400_BAD_REQUEST,
+                status=error_status,
             )
-
-        full_path = f"{user_prefix}/{file_path}"
-
-        try:
-            file_info = backend.info(full_path)
-        except FileNotFoundError:
-            return Response(
-                {
-                    "error": {
-                        "code": "FILE_NOT_FOUND",
-                        "message": f"File '{file_path}' does not exist.",
-                        "path": file_path,
-                        "recovery": "Check the path and try again.",
-                    }
-                },
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        if file_info.is_directory:
-            return Response(
-                {
-                    "error": {
-                        "code": "PATH_IS_DIRECTORY",
-                        "message": f"Path '{file_path}' is a directory, not a file.",
-                        "path": file_path,
-                        "recovery": f"Use GET /api/v1/dirs/{file_path}/ to list directory contents.",
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Try to get from database
-        try:
-            db_file = StoredFile.objects.get(owner=request.user, path=file_path)
-            created_at = db_file.created_at
-            encryption_method = db_file.encryption_method
-        except StoredFile.DoesNotExist:
-            created_at = file_info.modified_at
-            encryption_method = StoredFile.ENCRYPTION_NONE
-
-        response_data = {
-            "path": file_path,
-            "name": file_info.name,
-            "size": file_info.size,
-            "content_type": file_info.content_type,
-            "is_directory": False,
-            "created_at": created_at,
-            "modified_at": file_info.modified_at,
-            "encryption_method": encryption_method,
-        }
-
-        # Generate ETag from file metadata
-        etag = generate_etag(file_path, file_info.size, file_info.modified_at)
 
         # Check conditional request (If-None-Match header)
         if_none_match = request.headers.get("If-None-Match", "").strip('"')
-        if if_none_match == etag:
+        if if_none_match == result.etag:
             response = Response(status=status.HTTP_304_NOT_MODIFIED)
-            response["ETag"] = f'"{etag}"'
+            response["ETag"] = f'"{result.etag}"'
             return response
 
+        response_data = {
+            "path": result.path,
+            "name": result.name,
+            "size": result.size,
+            "content_type": result.content_type,
+            "is_directory": result.is_directory,
+            "created_at": result.created_at,
+            "modified_at": result.modified_at,
+            "encryption_method": result.encryption_method,
+        }
+
         response = Response(response_data)
-        response["ETag"] = f'"{etag}"'
+        response["ETag"] = f'"{result.etag}"'
         response["Cache-Control"] = "private, must-revalidate"
         return response
 

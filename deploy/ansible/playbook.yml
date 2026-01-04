@@ -277,6 +277,8 @@
         paths: /var/stormcloud/uploads
         recurse: yes
         file_type: file
+      become: true
+      become_user: "{{ app_user }}"
       register: uploads_files
       tags: [app, validation]
 
@@ -513,6 +515,42 @@
           when: backup_result is succeeded
       tags: [app, backup]
 
+    - name: Download backup to local machine
+      when:
+        - backup_before_deploy | default(false) | bool
+        - download_backup | default(true) | bool
+        - backup_result is defined
+        - backup_result is succeeded
+      block:
+        - name: Find latest backup files
+          ansible.builtin.find:
+            paths: /var/stormcloud/backups
+            patterns: "stormcloud_backup_*.sql,stormcloud_backup_*.tar.gz,stormcloud_backup_*.txt"
+            age: "-5m"
+          become: true
+          become_user: "{{ app_user }}"
+          register: backup_files
+
+        - name: Create local backup directory
+          ansible.builtin.file:
+            path: "{{ playbook_dir }}/../local_backups"
+            state: directory
+          delegate_to: localhost
+          become: false
+
+        - name: Download backup files
+          ansible.builtin.fetch:
+            src: "{{ item.path }}"
+            dest: "{{ playbook_dir }}/../local_backups/"
+            flat: yes
+          loop: "{{ backup_files.files }}"
+          when: backup_files.matched > 0
+
+        - name: Report downloaded files
+          ansible.builtin.debug:
+            msg: "✓ Downloaded {{ backup_files.matched }} backup files to deploy/local_backups/"
+      tags: [app, backup]
+
     # =========================================================================
     # Git Recovery - Handle broken deployment states
     # =========================================================================
@@ -721,6 +759,8 @@
         paths: /var/stormcloud/uploads
         recurse: yes
         file_type: file
+      become: true
+      become_user: "{{ app_user }}"
       register: uploads_after_deploy
       tags: [app, validation]
 

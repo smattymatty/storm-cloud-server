@@ -14,14 +14,33 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Configuration
-BACKUP_DIR="./backups"
+# Configuration - auto-detect environment
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="stormcloud_backup_${TIMESTAMP}"
+
+# Use environment variables if set, otherwise detect based on what exists
+if [ -n "$BACKUPS_PATH" ]; then
+    BACKUP_DIR="$BACKUPS_PATH"
+elif [ -d "/var/stormcloud/backups" ]; then
+    BACKUP_DIR="/var/stormcloud/backups"
+else
+    BACKUP_DIR="./backups"
+fi
+
+if [ -n "$UPLOADS_PATH" ]; then
+    UPLOADS_DIR="$UPLOADS_PATH"
+elif [ -d "/var/stormcloud/uploads" ]; then
+    UPLOADS_DIR="/var/stormcloud/uploads"
+else
+    UPLOADS_DIR="./uploads"
+fi
 
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}Storm Cloud Server - Backup${NC}"
 echo -e "${GREEN}============================================${NC}"
+echo ""
+echo "Backup destination: $BACKUP_DIR"
+echo "Uploads source:     $UPLOADS_DIR"
 echo ""
 
 # Create backup directory
@@ -42,8 +61,9 @@ fi
 
 # Backup uploads directory
 echo -e "${YELLOW}2/2${NC} Backing up uploads directory..."
-if [ -d "./uploads" ]; then
-    tar -czf "$BACKUP_DIR/${BACKUP_NAME}_uploads.tar.gz" ./uploads
+echo "    Source: $UPLOADS_DIR"
+if [ -d "$UPLOADS_DIR" ]; then
+    tar -czf "$BACKUP_DIR/${BACKUP_NAME}_uploads.tar.gz" -C "$(dirname "$UPLOADS_DIR")" "$(basename "$UPLOADS_DIR")"
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓${NC} Uploads backup created: ${BACKUP_NAME}_uploads.tar.gz"
     else
@@ -51,7 +71,7 @@ if [ -d "./uploads" ]; then
         exit 1
     fi
 else
-    echo -e "${YELLOW}⚠${NC} No uploads directory found, skipping..."
+    echo -e "${YELLOW}⚠${NC} No uploads directory found at $UPLOADS_DIR, skipping..."
 fi
 
 # Create backup manifest
@@ -61,6 +81,10 @@ Storm Cloud Server Backup
 Date: $(date)
 Timestamp: $TIMESTAMP
 
+Paths Used:
+- Backup directory: $BACKUP_DIR
+- Uploads source: $UPLOADS_DIR
+
 Files:
 - ${BACKUP_NAME}.sql (PostgreSQL database dump)
 - ${BACKUP_NAME}_uploads.tar.gz (Uploaded files)
@@ -68,9 +92,9 @@ Files:
 Restore Instructions:
 1. Stop the server: make down
 2. Restore database:
-   cat backups/${BACKUP_NAME}.sql | docker compose exec -T db psql -U stormcloud stormcloud
+   cat ${BACKUP_DIR}/${BACKUP_NAME}.sql | docker compose exec -T db psql -U stormcloud stormcloud
 3. Restore uploads:
-   tar -xzf backups/${BACKUP_NAME}_uploads.tar.gz
+   tar -xzf ${BACKUP_DIR}/${BACKUP_NAME}_uploads.tar.gz -C $(dirname "$UPLOADS_DIR")
 4. Start the server: make up
 EOF
 
