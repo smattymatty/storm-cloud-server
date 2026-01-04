@@ -569,6 +569,120 @@ class AdminFileUploadView(AdminFileBaseView):
         )
 
 
+class AdminFileCreateView(AdminFileBaseView):
+    """Create empty file in user's storage (admin)."""
+
+    @extend_schema(
+        summary="Create empty file for user (Admin)",
+        description="Create a new empty file in user's storage.",
+        responses={201: OpenApiResponse(description="File created")},
+        tags=["Admin - Files"],
+    )
+    def post(self, request: Request, user_id: int, file_path: str) -> Response:
+        """Create empty file."""
+        target_user = self.get_target_user(user_id)
+        backend = LocalStorageBackend()
+        user_prefix = get_target_user_storage_path(target_user)
+
+        try:
+            file_path = normalize_path(file_path)
+        except PathValidationError as e:
+            emit_admin_file_action(
+                self.__class__,
+                request,
+                target_user,
+                FileAuditLog.ACTION_UPLOAD,
+                file_path,
+                success=False,
+                error_code="INVALID_PATH",
+                error_message=str(e),
+            )
+            return Response(
+                {"error": {"code": "INVALID_PATH", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        full_path = f"{user_prefix}/{file_path}"
+
+        # Check if already exists
+        if backend.exists(full_path):
+            emit_admin_file_action(
+                self.__class__,
+                request,
+                target_user,
+                FileAuditLog.ACTION_UPLOAD,
+                file_path,
+                success=False,
+                error_code="ALREADY_EXISTS",
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "ALREADY_EXISTS",
+                        "message": f"File '{file_path}' already exists.",
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Ensure parent directory exists
+        parent_path = str(Path(full_path).parent)
+        if not backend.exists(parent_path):
+            backend.mkdir(parent_path)
+
+        # Create empty file
+        from io import BytesIO
+
+        empty_file = BytesIO(b"")
+        empty_file.name = Path(file_path).name
+        file_info = backend.save(full_path, empty_file)
+
+        # Determine content type from extension
+        import mimetypes
+
+        content_type = mimetypes.guess_type(file_path)[0] or "text/plain"
+
+        # Create database record
+        db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
+        stored_file = StoredFile.objects.create(
+            owner=target_user,
+            path=file_path,
+            name=Path(file_path).name,
+            size=0,
+            content_type=content_type,
+            is_directory=False,
+            parent_path=db_parent_path,
+            encryption_method=StoredFile.ENCRYPTION_NONE,
+        )
+
+        emit_admin_file_action(
+            self.__class__,
+            request,
+            target_user,
+            FileAuditLog.ACTION_UPLOAD,
+            file_path,
+            success=True,
+            file_size=0,
+            content_type=content_type,
+        )
+
+        return Response(
+            {
+                "detail": "File created",
+                "path": file_path,
+                "name": stored_file.name,
+                "size": 0,
+                "content_type": content_type,
+                "is_directory": False,
+                "created_at": stored_file.created_at,
+                "modified_at": file_info.modified_at,
+                "encryption_method": StoredFile.ENCRYPTION_NONE,
+                "target_user": {"id": target_user.id, "username": target_user.username},
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class AdminFileDownloadView(AdminFileBaseView):
     """Download file from user's storage (admin)."""
 

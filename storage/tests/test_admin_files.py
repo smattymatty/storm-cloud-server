@@ -318,6 +318,92 @@ class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
 
 
 # =============================================================================
+# File Create Tests
+# =============================================================================
+
+
+class AdminFileCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
+    """Tests for POST /api/v1/admin/users/{id}/files/{path}/create/"""
+
+    def setUp(self):
+        super().setUp()
+        self.target_user = UserWithProfileFactory(verified=True)
+
+    def test_admin_create_empty_file_for_user(self):
+        """Admin can create empty file in user's storage."""
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/files/newfile.txt/create/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["name"], "newfile.txt")
+        self.assertEqual(response.data["size"], 0)
+        self.assertIn("detail", response.data)
+
+        # Verify filesystem
+        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "newfile.txt"
+        self.assertTrue(file_path.exists())
+        self.assertEqual(file_path.read_text(), "")
+
+    def test_create_file_in_nested_directory(self):
+        """Parent directories auto-created."""
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/files/deep/nested/newfile.txt/create/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.id)
+            / "deep/nested/newfile.txt"
+        )
+        self.assertTrue(file_path.exists())
+
+    def test_create_existing_file_returns_409(self):
+        """Conflict if file already exists."""
+        self._create_file_for_user(self.target_user, "existing.txt", "content")
+
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/files/existing.txt/create/"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["error"]["code"], "ALREADY_EXISTS")
+
+    def test_non_admin_gets_403(self):
+        """Regular user cannot access."""
+        regular_user = UserWithProfileFactory(verified=True)
+        regular_key = APIKeyFactory(user=regular_user)
+        self.authenticate(api_key=regular_key)
+
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/files/file.txt/create/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_creates_audit_log_entry(self):
+        """Verify action=upload logged for file creation."""
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.target_user.id}/files/audit.txt/create/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self._assert_audit_log_created(
+            action=FileAuditLog.ACTION_UPLOAD,
+            path="audit.txt",
+            target_user=self.target_user,
+        )
+
+    def test_create_nonexistent_user_returns_404(self):
+        """Returns 404 for invalid user_id."""
+        response = self.client.post(
+            "/api/v1/admin/users/99999/files/file.txt/create/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+# =============================================================================
 # File Download Tests
 # =============================================================================
 

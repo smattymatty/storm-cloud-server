@@ -71,6 +71,7 @@ from storage.admin_api import (
     AdminDirectoryListView,
     AdminFileAuditLogListView,
     AdminFileContentView,
+    AdminFileCreateView,
     AdminFileDeleteView,
     AdminFileDetailView,
     AdminFileDownloadView,
@@ -240,6 +241,11 @@ urlpatterns = [
         "admin/users/<int:user_id>/files/<path:file_path>/upload/",
         AdminFileUploadView.as_view(),
         name="admin-user-file-upload",
+    ),
+    path(
+        "admin/users/<int:user_id>/files/<path:file_path>/create/",
+        AdminFileCreateView.as_view(),
+        name="admin-user-file-create",
     ),
     path(
         "admin/users/<int:user_id>/files/<path:file_path>/download/",
