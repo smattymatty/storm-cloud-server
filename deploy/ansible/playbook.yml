@@ -351,23 +351,27 @@
             msg: "✓ Migrated {{ old_uploads_files.matched }} files → /var/stormcloud/uploads/ now has {{ uploads_files_after_migration.matched }} files"
       tags: [app, validation, migration]
 
-    - name: Update uploads_files count after migration
-      ansible.builtin.set_fact:
-        uploads_files: "{{ uploads_files_after_migration }}"
-      when: uploads_files_after_migration is defined
-      tags: [app, validation, migration]
+    - name: Re-count uploads after potential migration
+      ansible.builtin.find:
+        paths: /var/stormcloud/uploads
+        recurse: yes
+        file_type: file
+      become: true
+      become_user: "{{ app_user }}"
+      register: uploads_final
+      tags: [app, validation]
 
     - name: Warn if uploads directory is empty
       ansible.builtin.pause:
         prompt: |
 
-          ⚠️  WARNING: /var/stormcloud/uploads contains {{ uploads_files.matched }} files.
+          ⚠️  WARNING: /var/stormcloud/uploads contains {{ uploads_final.matched }} files.
 
           If this is NOT a fresh deployment, this could indicate DATA LOSS.
 
           Continue deployment? Type 'yes' to continue or Ctrl+C to abort:
       when:
-        - uploads_files.matched == 0
+        - uploads_final.matched == 0
         - not (skip_empty_warning | default(false) | bool)
       register: empty_warning
       tags: [app, validation]
