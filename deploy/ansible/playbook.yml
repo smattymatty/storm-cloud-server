@@ -294,7 +294,7 @@
 
     - name: Check for files in storage_root (old Django default)
       ansible.builtin.find:
-        paths: "{{ install_path }}/storage_root"
+        paths: "{{ install_path }}/_core/storage_root"
         recurse: yes
         file_type: file
       become: true
@@ -339,14 +339,14 @@
 
         - name: Copy files from storage_root to persistent location
           ansible.builtin.shell: |
-            rsync -av --remove-source-files {{ install_path }}/storage_root/ /var/stormcloud/uploads/
+            rsync -av --remove-source-files {{ install_path }}/_core/storage_root/ /var/stormcloud/uploads/
           become: true
           become_user: "{{ app_user }}"
           register: rsync_storage_root
 
         - name: Clean up empty directories in storage_root
           ansible.builtin.shell: |
-            find {{ install_path }}/storage_root -type d -empty -delete 2>/dev/null || true
+            find {{ install_path }}/_core/storage_root -type d -empty -delete 2>/dev/null || true
           become: true
           become_user: "{{ app_user }}"
 
@@ -778,6 +778,7 @@
         dest: "{{ install_path }}"
         version: "{{ git_branch | default('main') }}"
         update: true
+        force: true  # Safe: user data already migrated to /var/stormcloud/uploads/
       become_user: "{{ app_user }}"
       register: git_result
       when:
