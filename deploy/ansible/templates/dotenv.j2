@@ -39,5 +39,8 @@ STORMCLOUD_CORS_ORIGINS={{ _cors_origins }}
 STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ _max_upload_size_mb }}
 
 # Persistent Data Paths (outside git repo to prevent data loss)
+# UPLOADS_PATH: Host path mounted to /app/uploads in container
+# STORMCLOUD_STORAGE_ROOT: Django setting for where files are stored (inside container)
 UPLOADS_PATH=/var/stormcloud/uploads
 BACKUPS_PATH=/var/stormcloud/backups
+STORMCLOUD_STORAGE_ROOT=/app/uploads

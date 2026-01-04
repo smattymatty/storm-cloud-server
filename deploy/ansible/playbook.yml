@@ -283,14 +283,27 @@
       tags: [app, validation]
 
     # =========================================================================
-    # DATA MIGRATION: Move files from old location (inside repo) to new location
+    # DATA MIGRATION: Move files from old locations (inside repo) to persistent storage
     # =========================================================================
-    # Previous versions stored uploads in ./uploads inside the git repo.
-    # Git operations would wipe this directory. This migration moves files
+    # Previous versions stored files in:
+    #   - ./storage_root/ (Django STORMCLOUD_STORAGE_ROOT default)
+    #   - ./uploads/ (some Docker setups)
+    # Git operations would wipe these directories. This migration moves files
     # to /var/stormcloud/uploads BEFORE any git operations happen.
     # =========================================================================
 
-    - name: Check for uploads in OLD location (inside repo)
+    - name: Check for files in storage_root (old Django default)
+      ansible.builtin.find:
+        paths: "{{ install_path }}/storage_root"
+        recurse: yes
+        file_type: file
+      become: true
+      become_user: "{{ app_user }}"
+      register: old_storage_root_files
+      failed_when: false
+      tags: [app, validation, migration]
+
+    - name: Check for files in uploads (old Docker mount)
       ansible.builtin.find:
         paths: "{{ install_path }}/uploads"
         recurse: yes
@@ -301,18 +314,60 @@
       failed_when: false
       tags: [app, validation, migration]
 
-    - name: Migrate uploads from old location to new location
+    - name: Migrate from storage_root to persistent location
       when:
-        - old_uploads_files.matched is defined
-        - old_uploads_files.matched > 0
+        - old_storage_root_files.matched is defined
+        - old_storage_root_files.matched > 0
         - uploads_files.matched == 0
       block:
-        - name: Notify about migration
+        - name: Notify about storage_root migration
           ansible.builtin.debug:
             msg: |
 
               ══════════════════════════════════════════════════════════════
-              📦 MIGRATING {{ old_uploads_files.matched }} FILES
+              📦 MIGRATING {{ old_storage_root_files.matched }} FILES FROM storage_root
+              ══════════════════════════════════════════════════════════════
+
+              Moving files from:
+                {{ install_path }}/storage_root/
+
+              To persistent location:
+                /var/stormcloud/uploads/
+
+              This prevents data loss during git operations.
+              ══════════════════════════════════════════════════════════════
+
+        - name: Copy files from storage_root to persistent location
+          ansible.builtin.shell: |
+            rsync -av --remove-source-files {{ install_path }}/storage_root/ /var/stormcloud/uploads/
+          become: true
+          become_user: "{{ app_user }}"
+          register: rsync_storage_root
+
+        - name: Clean up empty directories in storage_root
+          ansible.builtin.shell: |
+            find {{ install_path }}/storage_root -type d -empty -delete 2>/dev/null || true
+          become: true
+          become_user: "{{ app_user }}"
+
+        - name: Report storage_root migration
+          ansible.builtin.debug:
+            msg: "✓ Migrated {{ old_storage_root_files.matched }} files from storage_root"
+      tags: [app, validation, migration]
+
+    - name: Migrate from uploads to persistent location
+      when:
+        - old_uploads_files.matched is defined
+        - old_uploads_files.matched > 0
+        - uploads_files.matched == 0
+        - (old_storage_root_files.matched | default(0)) == 0
+      block:
+        - name: Notify about uploads migration
+          ansible.builtin.debug:
+            msg: |
+
+              ══════════════════════════════════════════════════════════════
+              📦 MIGRATING {{ old_uploads_files.matched }} FILES FROM uploads
               ══════════════════════════════════════════════════════════════
 
               Moving files from:
@@ -324,31 +379,22 @@
               This prevents data loss during git operations.
               ══════════════════════════════════════════════════════════════
 
-        - name: Copy files from old to new location (preserving structure)
+        - name: Copy files from uploads to persistent location
           ansible.builtin.shell: |
             rsync -av --remove-source-files {{ install_path }}/uploads/ /var/stormcloud/uploads/
           become: true
           become_user: "{{ app_user }}"
-          register: rsync_result
+          register: rsync_uploads
 
-        - name: Clean up empty directories in old location
+        - name: Clean up empty directories in uploads
           ansible.builtin.shell: |
             find {{ install_path }}/uploads -type d -empty -delete 2>/dev/null || true
           become: true
           become_user: "{{ app_user }}"
 
-        - name: Verify migration
-          ansible.builtin.find:
-            paths: /var/stormcloud/uploads
-            recurse: yes
-            file_type: file
-          become: true
-          become_user: "{{ app_user }}"
-          register: uploads_files_after_migration
-
-        - name: Report migration result
+        - name: Report uploads migration
           ansible.builtin.debug:
-            msg: "✓ Migrated {{ old_uploads_files.matched }} files → /var/stormcloud/uploads/ now has {{ uploads_files_after_migration.matched }} files"
+            msg: "✓ Migrated {{ old_uploads_files.matched }} files from uploads"
       tags: [app, validation, migration]
 
     - name: Re-count uploads after potential migration

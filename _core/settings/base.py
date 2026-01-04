@@ -215,7 +215,10 @@ STORMCLOUD_STORAGE_BACKEND = config(
     'STORMCLOUD_STORAGE_BACKEND',
     default='core.storage.local.LocalStorageBackend'
 )
-STORMCLOUD_STORAGE_ROOT = BASE_DIR / 'storage_root'
+STORMCLOUD_STORAGE_ROOT = Path(config(
+    'STORMCLOUD_STORAGE_ROOT',
+    default=str(BASE_DIR / 'storage_root')
+))
 
 # Registration
 STORMCLOUD_ALLOW_REGISTRATION = config(
