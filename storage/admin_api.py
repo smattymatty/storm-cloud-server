@@ -329,7 +329,8 @@ class AdminDirectoryCreateView(AdminFileBaseView):
 
         full_path = f"{user_prefix}/{dir_path}"
 
-        if backend.exists(full_path):
+        # Check if exists on filesystem OR in database
+        if backend.exists(full_path) or StoredFile.objects.filter(owner=target_user, path=dir_path).exists():
             emit_admin_file_action(
                 self.__class__,
                 request,
@@ -351,17 +352,19 @@ class AdminDirectoryCreateView(AdminFileBaseView):
 
         backend.mkdir(full_path)
 
-        # Create database record
+        # Create database record (use get_or_create for safety)
         parent_path = str(Path(dir_path).parent) if "/" in dir_path else ""
-        StoredFile.objects.create(
+        StoredFile.objects.get_or_create(
             owner=target_user,
             path=dir_path,
-            name=Path(dir_path).name,
-            size=0,
-            content_type="",
-            is_directory=True,
-            parent_path=parent_path,
-            encryption_method=StoredFile.ENCRYPTION_NONE,
+            defaults={
+                "name": Path(dir_path).name,
+                "size": 0,
+                "content_type": "",
+                "is_directory": True,
+                "parent_path": parent_path,
+                "encryption_method": StoredFile.ENCRYPTION_NONE,
+            },
         )
 
         emit_admin_file_action(

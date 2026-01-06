@@ -63,6 +63,7 @@ from storage.api import (
     PublicShareInfoView,
     ShareLinkDetailView,
     ShareLinkListCreateView,
+    UserAuditLogView,
 )
 from storage.admin_api import (
     AdminBulkOperationView,
@@ -330,6 +331,8 @@ urlpatterns = [
     path("bulk/status/<uuid:task_id>/", BulkStatusView.as_view(), name="bulk-status"),
     # Index management (admin)
     path("index/rebuild/", IndexRebuildView.as_view(), name="index-rebuild"),
+    # User audit log
+    path("audit/me/", UserAuditLogView.as_view(), name="audit-me"),
     # CMS
     path("cms/", ManagedContentListView.as_view(), name="cms-list"),
     path("cms/add/", ManagedContentAddView.as_view(), name="cms-add"),

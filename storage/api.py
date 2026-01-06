@@ -11,7 +11,10 @@ from django.db.models import F, Sum
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
+from datetime import datetime
+
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FileUploadParser, MultiPartParser
 from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
@@ -33,9 +36,11 @@ from accounts.permissions import (
     check_user_permission,
 )
 
-from .models import ShareLink, StoredFile
+from .models import FileAuditLog, ShareLink, StoredFile
+from .signals import file_action_performed
 from .serializers import (
     DirectoryListResponseSerializer,
+    FileAuditLogSerializer,
     FileInfoResponseSerializer,
     FileListItemSerializer,
     FileUploadSerializer,
@@ -52,6 +57,32 @@ from .services import (
     is_text_file,
 )
 from .utils import get_share_link_by_token
+
+
+def emit_user_file_action(
+    sender: Any,
+    request: Request,
+    action: str,
+    path: str,
+    success: bool = True,
+    **kwargs: Any,
+) -> None:
+    """Emit file action signal for user operations.
+
+    Creates audit log entry for regular user file operations.
+    For admin operations, use emit_admin_file_action() in admin_api.py.
+    """
+    file_action_performed.send(
+        sender=sender,
+        performed_by=request.user,
+        target_user=request.user,  # User is acting on their own files
+        is_admin_action=False,
+        action=action,
+        path=path,
+        success=success,
+        request=request,
+        **kwargs,
+    )
 
 
 class DirectoryListBaseView(StormCloudBaseAPIView):
@@ -160,6 +191,17 @@ class DirectoryCreateView(StormCloudBaseAPIView):
             if result.error_code == "ALREADY_EXISTS":
                 error_status = status.HTTP_409_CONFLICT
 
+            # Log failed directory creation
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_CREATE_DIR,
+                path=dir_path,
+                success=False,
+                error_code=result.error_code,
+                error_message=result.error_message,
+            )
+
             return Response(
                 {
                     "error": {
@@ -170,6 +212,14 @@ class DirectoryCreateView(StormCloudBaseAPIView):
                 },
                 status=error_status,
             )
+
+        # Log successful directory creation
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_CREATE_DIR,
+            path=dir_path,
+        )
 
         return Response(result.data, status=status.HTTP_201_CREATED)
 
@@ -372,6 +422,15 @@ class FileCreateView(StormCloudBaseAPIView):
 
         # Check if file already exists
         if backend.exists(full_path):
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_UPLOAD,
+                path=file_path,
+                success=False,
+                error_code="ALREADY_EXISTS",
+                error_message=f"File '{file_path}' already exists.",
+            )
             return Response(
                 {
                     "error": {
@@ -434,6 +493,16 @@ class FileCreateView(StormCloudBaseAPIView):
             "encryption_method": stored_file.encryption_method,
         }
 
+        # Log successful file creation
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_UPLOAD,
+            path=file_path,
+            file_size=0,
+            content_type=content_type,
+        )
+
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
@@ -477,6 +546,16 @@ class FileUploadView(StormCloudBaseAPIView):
         # P0-3: Validate file size against global limit
         max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if uploaded_file.size > max_size:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_UPLOAD,
+                path=file_path,
+                success=False,
+                error_code="FILE_TOO_LARGE",
+                error_message="File size exceeds maximum allowed size",
+                file_size=uploaded_file.size,
+            )
             return Response(
                 {
                     "error": {
@@ -540,6 +619,16 @@ class FileUploadView(StormCloudBaseAPIView):
                 space_needed = (current_usage + size_delta - quota_bytes) / (
                     1024 * 1024
                 )
+                emit_user_file_action(
+                    sender=self.__class__,
+                    request=request,
+                    action=FileAuditLog.ACTION_UPLOAD,
+                    path=file_path,
+                    success=False,
+                    error_code="QUOTA_EXCEEDED",
+                    error_message="Upload would exceed your storage quota",
+                    file_size=uploaded_file.size,
+                )
                 return Response(
                     {
                         "error": {
@@ -599,6 +688,16 @@ class FileUploadView(StormCloudBaseAPIView):
             "encryption_method": stored_file.encryption_method,
         }
 
+        # Log successful file upload
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_UPLOAD,
+            path=file_path,
+            file_size=file_info.size,
+            content_type=file_info.content_type,
+        )
+
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
@@ -642,6 +741,15 @@ class FileDownloadView(StormCloudBaseAPIView):
         try:
             file_info = backend.info(full_path)
         except FileNotFoundError:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_DOWNLOAD,
+                path=file_path,
+                success=False,
+                error_code="FILE_NOT_FOUND",
+                error_message=f"File '{file_path}' does not exist.",
+            )
             return Response(
                 {
                     "error": {
@@ -675,6 +783,16 @@ class FileDownloadView(StormCloudBaseAPIView):
 
         # Only open file if we actually need to send content
         file_handle = backend.open(full_path)
+
+        # Log successful download
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_DOWNLOAD,
+            path=file_path,
+            file_size=file_info.size,
+            content_type=file_info.content_type,
+        )
 
         response = FileResponse(file_handle)
         response["ETag"] = f'"{etag}"'
@@ -735,6 +853,15 @@ class FileContentView(StormCloudBaseAPIView):
         try:
             file_info = backend.info(full_path)
         except FileNotFoundError:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_PREVIEW,
+                path=file_path,
+                success=False,
+                error_code="FILE_NOT_FOUND",
+                error_message=f"File '{file_path}' does not exist.",
+            )
             return Response(
                 {
                     "error": {
@@ -799,6 +926,16 @@ class FileContentView(StormCloudBaseAPIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+        # Log successful preview
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_PREVIEW,
+            path=file_path,
+            file_size=file_info.size,
+            content_type=file_info.content_type,
+        )
+
         # Return as plain text (not attachment download)
         response = HttpResponse(content, content_type="text/plain; charset=utf-8")
         response["X-Content-Type-Original"] = file_info.content_type or "text/plain"
@@ -854,6 +991,15 @@ class FileContentView(StormCloudBaseAPIView):
         try:
             old_info = backend.info(full_path)
         except FileNotFoundError:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_EDIT,
+                path=file_path,
+                success=False,
+                error_code="FILE_NOT_FOUND",
+                error_message=f"File '{file_path}' does not exist.",
+            )
             return Response(
                 {
                     "error": {
@@ -886,6 +1032,16 @@ class FileContentView(StormCloudBaseAPIView):
         # Check global upload limit
         max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if new_size > max_size:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_EDIT,
+                path=file_path,
+                success=False,
+                error_code="FILE_TOO_LARGE",
+                error_message="Content exceeds maximum allowed size.",
+                file_size=new_size,
+            )
             return Response(
                 {
                     "error": {
@@ -912,6 +1068,16 @@ class FileContentView(StormCloudBaseAPIView):
             size_delta = new_size - old_size
 
             if current_usage + size_delta > quota_bytes:
+                emit_user_file_action(
+                    sender=self.__class__,
+                    request=request,
+                    action=FileAuditLog.ACTION_EDIT,
+                    path=file_path,
+                    success=False,
+                    error_code="QUOTA_EXCEEDED",
+                    error_message="Edit would exceed your storage quota.",
+                    file_size=new_size,
+                )
                 return Response(
                     {
                         "error": {
@@ -952,6 +1118,16 @@ class FileContentView(StormCloudBaseAPIView):
             "modified_at": file_info.modified_at,
             "encryption_method": stored_file.encryption_method,
         }
+
+        # Log successful edit
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_EDIT,
+            path=file_path,
+            file_size=file_info.size,
+            content_type=file_info.content_type,
+        )
 
         return Response(response_data)
 
@@ -996,6 +1172,15 @@ class FileDeleteView(StormCloudBaseAPIView):
         try:
             backend.delete(full_path)
         except FileNotFoundError:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_DELETE,
+                path=file_path,
+                success=False,
+                error_code="FILE_NOT_FOUND",
+                error_message=f"File '{file_path}' does not exist.",
+            )
             return Response(
                 {
                     "error": {
@@ -1009,6 +1194,14 @@ class FileDeleteView(StormCloudBaseAPIView):
 
         # Delete from database
         StoredFile.objects.filter(owner=request.user, path=file_path).delete()
+
+        # Log successful delete
+        emit_user_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_DELETE,
+            path=file_path,
+        )
 
         return Response({"message": "File deleted successfully", "path": file_path})
 
@@ -1598,12 +1791,37 @@ class BulkOperationView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Map operation to audit log action
+        action_map = {
+            "delete": FileAuditLog.ACTION_BULK_DELETE,
+            "move": FileAuditLog.ACTION_BULK_MOVE,
+            "copy": FileAuditLog.ACTION_BULK_COPY,
+        }
+        audit_action = action_map.get(operation, operation)
+
         # Check if async
         if isinstance(result, dict) and result.get("async"):
+            # For async operations, log that the operation was queued
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=audit_action,
+                path=options.get("destination", ""),
+                paths_affected=paths,
+                destination_path=options.get("destination"),
+            )
             async_serializer = BulkOperationAsyncResponseSerializer(result)
             return Response(async_serializer.data, status=status.HTTP_202_ACCEPTED)
         else:
-            # Sync result
+            # Sync result - log with success/failure counts
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=audit_action,
+                path=options.get("destination", ""),
+                paths_affected=paths,
+                destination_path=options.get("destination"),
+            )
             sync_serializer = BulkOperationResponseSerializer(result)
             return Response(sync_serializer.data)
 
@@ -1684,3 +1902,111 @@ class BulkStatusView(StormCloudBaseAPIView):
 
         serializer = BulkOperationStatusResponseSerializer(response_data)
         return Response(serializer.data)
+
+
+# =============================================================================
+# User Audit Log
+# =============================================================================
+
+
+class UserAuditLogPagination(PageNumberPagination):
+    """Pagination for user audit logs."""
+
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
+class UserAuditLogView(StormCloudBaseAPIView):
+    """View own file activity (user)."""
+
+    pagination_class = UserAuditLogPagination
+
+    @extend_schema(
+        summary="View own file activity",
+        description="Query your own file audit logs. Only shows activity for your account.",
+        parameters=[
+            OpenApiParameter(
+                name="action",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by action type (upload, download, delete, preview, edit, etc.)",
+            ),
+            OpenApiParameter(
+                name="success",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filter by success/failure",
+            ),
+            OpenApiParameter(
+                name="path",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by path (contains match, for search)",
+            ),
+            OpenApiParameter(
+                name="exact_path",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by exact path (for per-file view)",
+            ),
+            OpenApiParameter(
+                name="from",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter from date (ISO format)",
+            ),
+            OpenApiParameter(
+                name="to",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter to date (ISO format)",
+            ),
+        ],
+        responses={200: FileAuditLogSerializer(many=True)},
+        tags=["Audit"],
+    )
+    def get(self, request: Request) -> Response:
+        """Get current user's audit logs."""
+        # Always filter to current user's activity
+        queryset = FileAuditLog.objects.filter(target_user=request.user)
+
+        # Apply filters
+        action = request.query_params.get("action")
+        if action:
+            queryset = queryset.filter(action=action)
+
+        success = request.query_params.get("success")
+        if success is not None:
+            queryset = queryset.filter(success=success.lower() == "true")
+
+        path = request.query_params.get("path")
+        if path:
+            queryset = queryset.filter(path__icontains=path)
+
+        exact_path = request.query_params.get("exact_path")
+        if exact_path:
+            queryset = queryset.filter(path=exact_path)
+
+        from_date = request.query_params.get("from")
+        if from_date:
+            try:
+                from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+                queryset = queryset.filter(created_at__gte=from_dt)
+            except ValueError:
+                pass
+
+        to_date = request.query_params.get("to")
+        if to_date:
+            try:
+                to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+                queryset = queryset.filter(created_at__lte=to_dt)
+            except ValueError:
+                pass
+
+        # Paginate
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(queryset, request)
+
+        serializer = FileAuditLogSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
