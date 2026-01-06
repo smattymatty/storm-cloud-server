@@ -7,7 +7,7 @@ from typing import Any, Optional, Union, cast
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
 from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -1968,8 +1968,11 @@ class UserAuditLogView(StormCloudBaseAPIView):
     )
     def get(self, request: Request) -> Response:
         """Get current user's audit logs."""
-        # Always filter to current user's activity
-        queryset = FileAuditLog.objects.filter(target_user=request.user)
+        # Return logs where user is either the actor OR the target
+        # This allows users to see admin actions on their files
+        queryset = FileAuditLog.objects.filter(
+            Q(performed_by=request.user) | Q(target_user=request.user)
+        ).distinct()
 
         # Apply filters
         action = request.query_params.get("action")
