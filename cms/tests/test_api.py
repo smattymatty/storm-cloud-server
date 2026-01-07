@@ -84,7 +84,8 @@ class MappingReportTests(StormCloudAPITestCase):
             {"page_path": "/", "file_paths": ["test.md"]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        # DRF returns 403 when auth required but no credentials provided
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_report_requires_file_paths(self):
         """Report fails without file_paths."""
