@@ -1562,7 +1562,9 @@ class PublicShareInfoView(StormCloudBaseAPIView):
         }
 
         serializer = PublicShareInfoSerializer(response_data)
-        return Response(serializer.data)
+        response = Response(serializer.data)
+        response["Cache-Control"] = "public, max-age=3600"  # 1 hour browser/CDN cache
+        return response
 
 
 class PublicShareDownloadView(StormCloudBaseAPIView):
@@ -1677,6 +1679,7 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
         filename = stored_file.name
         response = FileResponse(file_handle, content_type=content_type)
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "public, max-age=3600"  # 1 hour browser/CDN cache
         return response
 
 

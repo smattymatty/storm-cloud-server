@@ -2,7 +2,9 @@
 
 ## Project
 
-Storm Cloud Server - Open source cloud storage with markdown CMS. Django 6.0, DRF.
+Storm Cloud Server - Open source cloud storage with markdown CMS. Django 6.0, DRF. This is deployed on a VPS using the makefile, docker, and Ansible. Remember to refer to the makefile, particularly make deploy, and the ansible playbook, particularly where it involves docker.
+
+Do not run make commands, and do not run tests, only suggest that I should manually, and give the command to do so.
 
 ## Architecture Decisions
 

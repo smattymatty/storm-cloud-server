@@ -5,7 +5,7 @@ import time
 from django.conf import settings
 from django.db import connection
 from django.http import JsonResponse
-from django.urls import path
+from django.urls import include, path
 
 from accounts.api import (
     AdminAPIKeyListView,
@@ -36,13 +36,6 @@ from accounts.api import (
     # Registration & Email Verification
     RegistrationView,
     ResendVerificationView,
-)
-from cms.api import (
-    ManagedContentAddView,
-    ManagedContentListView,
-    ManagedContentRemoveView,
-    ManagedContentRenderBulkView,
-    ManagedContentRenderView,
 )
 from storage.api import (
     BulkOperationView,
@@ -333,20 +326,8 @@ urlpatterns = [
     path("index/rebuild/", IndexRebuildView.as_view(), name="index-rebuild"),
     # User audit log
     path("audit/me/", UserAuditLogView.as_view(), name="audit-me"),
-    # CMS
-    path("cms/", ManagedContentListView.as_view(), name="cms-list"),
-    path("cms/add/", ManagedContentAddView.as_view(), name="cms-add"),
-    path(
-        "cms/<uuid:content_id>/remove/",
-        ManagedContentRemoveView.as_view(),
-        name="cms-remove",
-    ),
-    path(
-        "cms/<uuid:content_id>/render/",
-        ManagedContentRenderView.as_view(),
-        name="cms-render",
-    ),
-    path("cms/render/", ManagedContentRenderBulkView.as_view(), name="cms-render-bulk"),
+    # CMS (page-file mappings)
+    path("cms/", include("cms.urls")),
     # =========================================================================
     # Share Links
     # =========================================================================
