@@ -58,6 +58,8 @@ from .services import (
 )
 from .utils import get_share_link_by_token
 
+from accounts.services.webhook import trigger_webhook
+
 
 def emit_user_file_action(
     sender: Any,
@@ -503,6 +505,9 @@ class FileCreateView(StormCloudBaseAPIView):
             content_type=content_type,
         )
 
+        # Trigger webhook notification
+        trigger_webhook(request.auth, "file.created", file_path)
+
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
@@ -697,6 +702,10 @@ class FileUploadView(StormCloudBaseAPIView):
             file_size=file_info.size,
             content_type=file_info.content_type,
         )
+
+        # Trigger webhook notification
+        event = "file.created" if created else "file.updated"
+        trigger_webhook(request.auth, event, file_path)
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -1129,6 +1138,9 @@ class FileContentView(StormCloudBaseAPIView):
             content_type=file_info.content_type,
         )
 
+        # Trigger webhook notification
+        trigger_webhook(request.auth, "file.updated", file_path)
+
         return Response(response_data)
 
 
@@ -1202,6 +1214,9 @@ class FileDeleteView(StormCloudBaseAPIView):
             action=FileAuditLog.ACTION_DELETE,
             path=file_path,
         )
+
+        # Trigger webhook notification
+        trigger_webhook(request.auth, "file.deleted", file_path)
 
         return Response({"message": "File deleted successfully", "path": file_path})
 

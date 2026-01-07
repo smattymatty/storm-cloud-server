@@ -36,6 +36,10 @@ from accounts.api import (
     # Registration & Email Verification
     RegistrationView,
     ResendVerificationView,
+    # Webhook Configuration
+    WebhookConfigView,
+    WebhookRegenerateSecretView,
+    WebhookTestView,
 )
 from storage.api import (
     BulkOperationView,
@@ -153,6 +157,14 @@ urlpatterns = [
     # Account Management
     path("auth/deactivate/", DeactivateAccountView.as_view(), name="auth-deactivate"),
     path("auth/delete/", DeleteAccountView.as_view(), name="auth-delete"),
+    # Webhook Configuration
+    path("account/webhook/", WebhookConfigView.as_view(), name="webhook-config"),
+    path(
+        "account/webhook/regenerate-secret/",
+        WebhookRegenerateSecretView.as_view(),
+        name="webhook-regenerate",
+    ),
+    path("account/webhook/test/", WebhookTestView.as_view(), name="webhook-test"),
     # =========================================================================
     # Admin Endpoints
     # =========================================================================

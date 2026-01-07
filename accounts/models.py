@@ -164,19 +164,70 @@ class APIKey(AbstractBaseModel):
         help_text="Timestamp when key was revoked. Set alongside is_active=False."
     )
 
+    # Webhook configuration
+    webhook_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL to POST when content changes. Leave blank to disable."
+    )
+    webhook_secret = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="HMAC secret for signing webhook payloads. Auto-generated."
+    )
+    webhook_enabled = models.BooleanField(
+        default=False,
+        help_text="Whether webhook notifications are active."
+    )
+    webhook_last_triggered = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="Last time webhook was triggered."
+    )
+    webhook_last_status = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        choices=[
+            ('success', 'Success'),
+            ('failed', 'Failed'),
+            ('timeout', 'Timeout'),
+        ],
+        help_text="Status of last webhook delivery."
+    )
+
     class Meta:
         verbose_name = "API Key"
         verbose_name_plural = "API Keys"
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
-        """Generate key on first save."""
+        """Generate key on first save and handle webhook secret."""
         if not self.key:
             self.key = secrets.token_urlsafe(48)
+
+        # Auto-generate webhook secret when URL is set
+        if self.webhook_url and not self.webhook_secret:
+            self.generate_webhook_secret()
+
+        # Auto-enable/disable based on URL presence
+        if self.webhook_url:
+            self.webhook_enabled = True
+        else:
+            self.webhook_enabled = False
+            self.webhook_secret = None
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.user.username})"
+
+    def generate_webhook_secret(self) -> str:
+        """Generate a new webhook secret."""
+        self.webhook_secret = secrets.token_hex(32)
+        return self.webhook_secret
 
     def revoke(self) -> None:
         """Revoke this API key."""

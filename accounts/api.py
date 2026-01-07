@@ -1581,3 +1581,299 @@ class AdminAPIKeyRevokeView(StormCloudBaseAPIView):
                 "revoked_at": api_key.revoked_at,
             }
         )
+
+
+# =============================================================================
+# Webhook Configuration
+# =============================================================================
+
+
+class WebhookConfigView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/account/webhook/
+    PUT /api/v1/account/webhook/
+    DELETE /api/v1/account/webhook/
+
+    Manage webhook configuration for the current API key.
+    """
+
+    @extend_schema(
+        summary="Get webhook configuration",
+        description="Get webhook settings for the current API key.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "webhook_last_triggered": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": True,
+                    },
+                    "webhook_last_status": {"type": "string", "nullable": True},
+                },
+            },
+        },
+        tags=["Account"],
+    )
+    def get(self, request):
+        api_key = request.auth  # The APIKey instance from authentication
+
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "webhook_last_triggered": api_key.webhook_last_triggered,
+                "webhook_last_status": api_key.webhook_last_status,
+            }
+        )
+
+    @extend_schema(
+        summary="Update webhook configuration",
+        description="Set or update webhook URL for the current API key.",
+        request={
+            "type": "object",
+            "properties": {
+                "webhook_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Webhook URL. Set to null or empty to disable.",
+                },
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "message": {"type": "string"},
+                },
+            },
+        },
+        tags=["Account"],
+    )
+    def put(self, request):
+        api_key = request.auth
+        webhook_url = request.data.get("webhook_url", "")
+        if isinstance(webhook_url, str):
+            webhook_url = webhook_url.strip() or None
+        else:
+            webhook_url = None
+
+        # Validate URL if provided
+        if webhook_url:
+            from django.core.validators import URLValidator
+            from django.core.exceptions import ValidationError
+
+            validator = URLValidator(schemes=["http", "https"])
+            try:
+                validator(webhook_url)
+            except ValidationError:
+                return Response(
+                    {"error": "Invalid URL format"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Update webhook URL (save() handles secret generation)
+        old_url = api_key.webhook_url
+        api_key.webhook_url = webhook_url
+        api_key.save()
+
+        if webhook_url and not old_url:
+            message = "Webhook configured. Secret generated."
+        elif webhook_url and old_url != webhook_url:
+            message = "Webhook URL updated."
+        elif not webhook_url:
+            message = "Webhook disabled."
+        else:
+            message = "No changes."
+
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "message": message,
+            }
+        )
+
+    @extend_schema(
+        summary="Disable webhook",
+        description="Remove webhook configuration for the current API key.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                },
+            },
+        },
+        tags=["Account"],
+    )
+    def delete(self, request):
+        api_key = request.auth
+        api_key.webhook_url = None
+        api_key.save()
+
+        return Response(
+            {
+                "message": "Webhook disabled and secret cleared.",
+            }
+        )
+
+
+class WebhookRegenerateSecretView(StormCloudBaseAPIView):
+    """
+    POST /api/v1/account/webhook/regenerate-secret/
+
+    Generate a new webhook secret. Invalidates old secret immediately.
+    """
+
+    @extend_schema(
+        summary="Regenerate webhook secret",
+        description="Generate a new HMAC secret for webhook signatures.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_secret": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
+        },
+        tags=["Account"],
+    )
+    def post(self, request):
+        api_key = request.auth
+
+        if not api_key.webhook_url:
+            return Response(
+                {"error": "No webhook configured. Set a webhook URL first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_secret = api_key.generate_webhook_secret()
+        api_key.save()
+
+        return Response(
+            {
+                "webhook_secret": new_secret,
+                "message": "New secret generated. Update your client configuration.",
+            }
+        )
+
+
+class WebhookTestView(StormCloudBaseAPIView):
+    """
+    POST /api/v1/account/webhook/test/
+
+    Send a test webhook to verify configuration.
+    """
+
+    @extend_schema(
+        summary="Test webhook",
+        description="Send a test ping to the configured webhook URL.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "status_code": {"type": "integer", "nullable": True},
+                    "message": {"type": "string"},
+                },
+            },
+        },
+        tags=["Account"],
+    )
+    def post(self, request):
+        import hashlib
+        import hmac
+        import json
+
+        import requests
+        from django.utils import timezone
+
+        api_key = request.auth
+
+        if not api_key.webhook_url:
+            return Response(
+                {"error": "No webhook configured."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build test payload
+        payload = {
+            "event": "test",
+            "timestamp": timezone.now().isoformat(),
+            "api_key_id": str(api_key.id),
+            "message": "Webhook test from Storm Cloud Server",
+        }
+
+        # Sign payload
+        payload_bytes = json.dumps(payload, sort_keys=True).encode()
+        signature = hmac.new(
+            api_key.webhook_secret.encode(), payload_bytes, hashlib.sha256
+        ).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Storm-Signature": signature,
+            "X-Storm-Event": "test",
+        }
+
+        try:
+            response = requests.post(
+                api_key.webhook_url,
+                json=payload,
+                headers=headers,
+                timeout=10,
+            )
+
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "success" if response.ok else "failed"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response(
+                {
+                    "success": response.ok,
+                    "status_code": response.status_code,
+                    "message": f"Webhook returned {response.status_code}",
+                }
+            )
+
+        except requests.Timeout:
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "timeout"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "status_code": None,
+                    "message": "Webhook timed out (10s)",
+                }
+            )
+
+        except requests.RequestException as e:
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "failed"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "status_code": None,
+                    "message": f"Request failed: {str(e)}",
+                }
+            )
