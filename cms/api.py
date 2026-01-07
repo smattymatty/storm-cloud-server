@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.db import transaction
 from django_spellbook.parsers import spellbook_render
-from django.db.models import Count, Max, Min
+from django.db.models import Count, F, Max, Min
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from core.views import StormCloudBaseAPIView
 
-from .models import PageFileMapping
+from .models import PageFileMapping, PageStats
 from .serializers import (
     MappingReportSerializer,
     PageSummarySerializer,
@@ -77,12 +77,23 @@ class MappingReportView(StormCloudBaseAPIView):
                 else:
                     updated_count += 1
 
+            # Increment page view count
+            PageStats.objects.get_or_create(owner=owner, page_path=page_path)
+            PageStats.objects.filter(owner=owner, page_path=page_path).update(
+                view_count=F("view_count") + 1,
+                last_viewed=timezone.now(),
+            )
+
+        # Get current view count for response
+        stats = PageStats.objects.get(owner=owner, page_path=page_path)
+
         return Response(
             {
                 "status": "ok",
                 "page_path": page_path,
                 "created": created_count,
                 "updated": updated_count,
+                "view_count": stats.view_count,
             },
             status=status.HTTP_200_OK,
         )
@@ -150,12 +161,31 @@ class PageListView(StormCloudBaseAPIView):
             "path": "page_path",
             "last_seen": "last_seen",
             "file_count": "file_count",
+            "views": "view_count",
         }
         order_by = sort_map.get(sort_field, "last_seen")
         if sort_order == "desc":
             order_by = f"-{order_by}"
 
-        pages = pages.order_by(order_by)
+        # Get view counts for all pages
+        stats_map = {
+            s.page_path: s.view_count
+            for s in PageStats.objects.filter(owner=owner)
+        }
+
+        # Sort pages (handle view_count sort specially since it's from different table)
+        pages = list(pages)
+        if sort_field == "views":
+            pages.sort(
+                key=lambda p: stats_map.get(p["page_path"], 0),
+                reverse=(sort_order == "desc"),
+            )
+        else:
+            pages = sorted(
+                pages,
+                key=lambda p: p[sort_map.get(sort_field, "last_seen")],
+                reverse=(sort_order == "desc"),
+            )
 
         # Build response
         result = []
@@ -179,6 +209,7 @@ class PageListView(StormCloudBaseAPIView):
                     "last_seen": page["last_seen"],
                     "is_stale": is_stale,
                     "staleness_hours": staleness_hours,
+                    "view_count": stats_map.get(page["page_path"], 0),
                 }
             )
 
@@ -246,6 +277,13 @@ class PageDetailView(StormCloudBaseAPIView):
             if page_last_seen is None or mapping.last_seen > page_last_seen:
                 page_last_seen = mapping.last_seen
 
+        # Get view count
+        try:
+            stats = PageStats.objects.get(owner=owner, page_path=page_path)
+            view_count = stats.view_count
+        except PageStats.DoesNotExist:
+            view_count = 0
+
         return Response(
             {
                 "page_path": page_path,
@@ -253,6 +291,7 @@ class PageDetailView(StormCloudBaseAPIView):
                 "first_seen": page_first_seen,
                 "last_seen": page_last_seen,
                 "is_stale": page_last_seen < threshold,
+                "view_count": view_count,
             }
         )
 

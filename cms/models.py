@@ -110,3 +110,51 @@ class PageFileMapping(AbstractBaseModel):
         threshold = timezone.now() - timedelta(hours=hours)
         deleted, _ = cls.objects.filter(owner=owner, last_seen__lt=threshold).delete()
         return deleted
+
+
+class PageStats(AbstractBaseModel):
+    """
+    Tracks view counts per page.
+
+    Incremented each time Glue middleware reports a page→files mapping.
+    """
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="page_stats",
+        help_text="User who owns this page (identified by API key)",
+    )
+
+    page_path = models.CharField(
+        max_length=500,
+        db_index=True,
+        help_text="URL path of the page (e.g., '/about/')",
+    )
+
+    view_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this page has been viewed",
+    )
+
+    first_viewed = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When this page was first viewed",
+    )
+
+    last_viewed = models.DateTimeField(
+        auto_now=True,
+        help_text="When this page was last viewed",
+    )
+
+    class Meta:
+        verbose_name = "Page Stats"
+        verbose_name_plural = "Page Stats"
+        unique_together = ["owner", "page_path"]
+        ordering = ["-view_count"]
+        indexes = [
+            models.Index(fields=["owner", "page_path"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.page_path} ({self.view_count} views)"

@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 
 from core.tests.base import StormCloudAPITestCase
-from cms.models import PageFileMapping
+from cms.models import PageFileMapping, PageStats
 
 
 class MappingReportTests(StormCloudAPITestCase):
@@ -428,3 +428,113 @@ class MarkdownPreviewTests(StormCloudAPITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PageViewCountTests(StormCloudAPITestCase):
+    """Tests for page view count tracking."""
+
+    def test_report_increments_view_count(self):
+        """Each mapping report increments the page view count."""
+        self.authenticate()
+
+        # First report
+        response = self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 1)
+
+        # Second report (same page)
+        response = self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 2)
+
+        # Third report
+        response = self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+        self.assertEqual(response.data["view_count"], 3)
+
+    def test_page_list_includes_view_count(self):
+        """Page list includes view_count for each page."""
+        self.authenticate()
+
+        # Create mappings and views
+        self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/", "file_paths": ["home.md"]},
+            format="json",
+        )
+        self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+        # View about page again
+        self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+
+        response = self.client.get("/api/v1/cms/pages/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pages = {p["page_path"]: p for p in response.data["pages"]}
+        self.assertEqual(pages["/"]["view_count"], 1)
+        self.assertEqual(pages["/about/"]["view_count"], 2)
+
+    def test_page_detail_includes_view_count(self):
+        """Page detail includes view_count."""
+        self.authenticate()
+
+        # Create mapping with multiple views
+        for _ in range(5):
+            self.client.post(
+                "/api/v1/cms/mappings/report/",
+                {"page_path": "/about/", "file_paths": ["about.md"]},
+                format="json",
+            )
+
+        response = self.client.get("/api/v1/cms/pages/about//")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 5)
+
+    def test_page_stats_created_on_first_report(self):
+        """PageStats record is created on first mapping report."""
+        self.authenticate()
+
+        self.assertEqual(PageStats.objects.count(), 0)
+
+        self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/new/", "file_paths": ["new.md"]},
+            format="json",
+        )
+
+        self.assertEqual(PageStats.objects.count(), 1)
+        stats = PageStats.objects.get(owner=self.user, page_path="/new/")
+        self.assertEqual(stats.view_count, 1)
+
+    def test_view_count_zero_for_page_without_stats(self):
+        """Page detail returns view_count 0 if no PageStats exists."""
+        self.authenticate()
+
+        # Create mapping directly without going through report
+        PageFileMapping.objects.create(
+            owner=self.user, page_path="/legacy/", file_path="legacy.md"
+        )
+
+        response = self.client.get("/api/v1/cms/pages/legacy//")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 0)
