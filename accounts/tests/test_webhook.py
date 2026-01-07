@@ -323,3 +323,150 @@ class AdminWebhookConfigTests(TestCase):
             f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/"
         )
         self.assertEqual(response.status_code, 403)
+
+
+class UserKeyWebhookTests(TestCase):
+    """Tests for user per-key webhook endpoints."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser", email="test@example.com", password="testpass"
+        )
+        UserProfile.objects.create(user=self.user, is_email_verified=True)
+        self.key1 = APIKey.objects.create(user=self.user, name="key1")
+        self.key2 = APIKey.objects.create(user=self.user, name="key2")
+
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.key1.key}")
+
+    def test_get_webhook_config_empty(self):
+        """User can get empty webhook config."""
+        response = self.client.get(f"/api/v1/auth/tokens/{self.key1.id}/webhook/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["webhook_url"])
+        self.assertFalse(response.data["webhook_enabled"])
+
+    def test_get_other_users_key_fails(self):
+        """Cannot access another user's key."""
+        other_user = User.objects.create_user(username="other", password="pass")
+        UserProfile.objects.create(user=other_user, is_email_verified=True)
+        other_key = APIKey.objects.create(user=other_user, name="other-key")
+
+        response = self.client.get(f"/api/v1/auth/tokens/{other_key.id}/webhook/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_get_revoked_key_fails(self):
+        """Cannot access revoked key."""
+        self.key2.revoke()
+
+        response = self.client.get(f"/api/v1/auth/tokens/{self.key2.id}/webhook/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_set_url_without_secret_fails(self):
+        """Cannot set URL on key without existing secret."""
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key1.id}/webhook/",
+            {"webhook_url": "https://example.com/webhook/"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "NO_SECRET")
+
+    def test_set_url_with_existing_secret(self):
+        """Can set URL if key already has secret."""
+        # Admin has previously configured this key
+        self.key1.webhook_url = "https://old.example.com/webhook/"
+        self.key1.generate_webhook_secret()
+        self.key1.save()
+
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key1.id}/webhook/",
+            {"webhook_url": "https://new.example.com/webhook/"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["webhook_url"], "https://new.example.com/webhook/")
+        self.assertTrue(response.data["webhook_enabled"])
+
+    def test_copy_secret_from_another_key(self):
+        """Can copy webhook config from another key."""
+        # key1 has webhook configured
+        self.key1.webhook_url = "https://example.com/webhook/"
+        self.key1.generate_webhook_secret()
+        self.key1.save()
+        original_secret = self.key1.webhook_secret
+
+        # Copy to key2
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key2.id}/webhook/",
+            {
+                "webhook_url": "https://example.com/webhook/",
+                "source_key_id": str(self.key1.id),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["webhook_secret"], original_secret)
+        self.assertTrue(response.data["webhook_enabled"])
+
+    def test_copy_from_key_without_webhook_fails(self):
+        """Cannot copy from key that has no webhook."""
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key2.id}/webhook/",
+            {
+                "webhook_url": "https://example.com/webhook/",
+                "source_key_id": str(self.key1.id),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "SOURCE_NOT_FOUND")
+
+    def test_copy_from_other_users_key_fails(self):
+        """Cannot copy from another user's key."""
+        other_user = User.objects.create_user(username="other", password="pass")
+        UserProfile.objects.create(user=other_user, is_email_verified=True)
+        other_key = APIKey.objects.create(
+            user=other_user,
+            name="other-key",
+            webhook_url="https://example.com/webhook/",
+        )
+
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key1.id}/webhook/",
+            {
+                "webhook_url": "https://example.com/webhook/",
+                "source_key_id": str(other_key.id),
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "SOURCE_NOT_FOUND")
+
+    def test_disable_webhook_with_empty_url(self):
+        """Can disable webhook by setting empty URL."""
+        self.key1.webhook_url = "https://example.com/webhook/"
+        self.key1.generate_webhook_secret()
+        self.key1.save()
+
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key1.id}/webhook/",
+            {"webhook_url": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["webhook_url"])
+        self.assertFalse(response.data["webhook_enabled"])
+
+    def test_invalid_url_rejected(self):
+        """Invalid URL format is rejected."""
+        self.key1.generate_webhook_secret()
+        self.key1.save()
+
+        response = self.client.put(
+            f"/api/v1/auth/tokens/{self.key1.id}/webhook/",
+            {"webhook_url": "not-a-url"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"]["code"], "INVALID_URL")

@@ -2172,3 +2172,141 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
                 "status_code": None,
                 "message": f"Request failed: {str(e)}",
             })
+
+
+class UserKeyWebhookView(StormCloudBaseAPIView):
+    """
+    GET/PUT /api/v1/auth/tokens/{key_id}/webhook/
+
+    User management of webhook config for their own API keys.
+    Read-only for secret, can only set URL (copies existing secret if available).
+    """
+
+    def get_api_key(self, request, key_id) -> APIKey | None:
+        """Get user's own APIKey or None."""
+        try:
+            return APIKey.objects.get(id=key_id, user=request.user, is_active=True)
+        except APIKey.DoesNotExist:
+            return None
+
+    @extend_schema(
+        summary="Get webhook config for own key",
+        description="View webhook configuration for one of your API keys.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "webhook_last_triggered": {"type": "string", "nullable": True},
+                    "webhook_last_status": {"type": "string", "nullable": True},
+                },
+            },
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Authentication"],
+    )
+    def get(self, request: Request, key_id) -> Response:
+        api_key = self.get_api_key(request, key_id)
+        if not api_key:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "webhook_secret": api_key.webhook_secret,
+            "webhook_last_triggered": api_key.webhook_last_triggered,
+            "webhook_last_status": api_key.webhook_last_status,
+        })
+
+    @extend_schema(
+        summary="Set webhook URL for own key",
+        description="Set webhook URL for one of your API keys. If copying from another key, include source_key_id to copy the secret.",
+        request={
+            "type": "object",
+            "properties": {
+                "webhook_url": {"type": "string", "description": "Webhook URL"},
+                "source_key_id": {"type": "string", "description": "Optional: copy secret from this key"},
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "message": {"type": "string"},
+                },
+            },
+            400: OpenApiResponse(description="Invalid URL or source key"),
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Authentication"],
+    )
+    def put(self, request: Request, key_id) -> Response:
+        api_key = self.get_api_key(request, key_id)
+        if not api_key:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        webhook_url = request.data.get("webhook_url", "").strip() or None
+        source_key_id = request.data.get("source_key_id")
+
+        # Validate URL if provided
+        if webhook_url:
+            from django.core.validators import URLValidator
+            from django.core.exceptions import ValidationError
+
+            validator = URLValidator(schemes=["http", "https"])
+            try:
+                validator(webhook_url)
+            except ValidationError:
+                return Response(
+                    {"error": {"code": "INVALID_URL", "message": "Invalid URL format."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # If copying from another key, get that key's secret
+        if source_key_id and webhook_url:
+            try:
+                source_key = APIKey.objects.get(
+                    id=source_key_id,
+                    user=request.user,
+                    is_active=True,
+                    webhook_secret__isnull=False
+                )
+                # Copy the secret from source key
+                api_key.webhook_secret = source_key.webhook_secret
+            except APIKey.DoesNotExist:
+                return Response(
+                    {"error": {"code": "SOURCE_NOT_FOUND", "message": "Source key not found or has no webhook."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # If no source and no existing secret, user can't set webhook (admin must do it)
+        if webhook_url and not api_key.webhook_secret and not source_key_id:
+            return Response(
+                {"error": {"code": "NO_SECRET", "message": "Contact administrator to configure webhook for this key."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        api_key.webhook_url = webhook_url
+        if webhook_url:
+            api_key.webhook_enabled = True
+        else:
+            api_key.webhook_enabled = False
+        api_key.save()
+
+        return Response({
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "webhook_secret": api_key.webhook_secret,
+            "message": "Webhook configured." if webhook_url else "Webhook disabled.",
+        })

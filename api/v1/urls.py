@@ -44,6 +44,8 @@ from accounts.api import (
     AdminUserKeyWebhookView,
     AdminUserKeyWebhookRegenerateView,
     AdminUserKeyWebhookTestView,
+    # User Per-Key Webhook
+    UserKeyWebhookView,
 )
 from storage.api import (
     BulkOperationView,
@@ -157,6 +159,11 @@ urlpatterns = [
         "auth/tokens/<uuid:key_id>/revoke/",
         APIKeyRevokeView.as_view(),
         name="auth-tokens-revoke",
+    ),
+    path(
+        "auth/tokens/<uuid:key_id>/webhook/",
+        UserKeyWebhookView.as_view(),
+        name="user-key-webhook",
     ),
     # Account Management
     path("auth/deactivate/", DeactivateAccountView.as_view(), name="auth-deactivate"),
