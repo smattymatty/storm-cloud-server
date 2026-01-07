@@ -40,6 +40,10 @@ from accounts.api import (
     WebhookConfigView,
     WebhookRegenerateSecretView,
     WebhookTestView,
+    # Admin Webhook Management
+    AdminUserKeyWebhookView,
+    AdminUserKeyWebhookRegenerateView,
+    AdminUserKeyWebhookTestView,
 )
 from storage.api import (
     BulkOperationView,
@@ -216,6 +220,22 @@ urlpatterns = [
         "admin/keys/<uuid:key_id>/revoke/",
         AdminAPIKeyRevokeView.as_view(),
         name="admin-keys-revoke",
+    ),
+    # Admin Webhook Management (per user's key)
+    path(
+        "admin/users/<int:user_id>/keys/<uuid:key_id>/webhook/",
+        AdminUserKeyWebhookView.as_view(),
+        name="admin-user-key-webhook",
+    ),
+    path(
+        "admin/users/<int:user_id>/keys/<uuid:key_id>/webhook/regenerate-secret/",
+        AdminUserKeyWebhookRegenerateView.as_view(),
+        name="admin-user-key-webhook-regenerate",
+    ),
+    path(
+        "admin/users/<int:user_id>/keys/<uuid:key_id>/webhook/test/",
+        AdminUserKeyWebhookTestView.as_view(),
+        name="admin-user-key-webhook-test",
     ),
     # -------------------------------------------------------------------------
     # Admin File Operations (act on user's files)

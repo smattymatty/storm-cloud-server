@@ -212,3 +212,114 @@ class WebhookTestEndpointTests(TestCase):
         response = self.client.post("/api/v1/account/webhook/test/")
         self.assertEqual(response.status_code, 400)
         self.assertIn("No webhook configured", response.data["error"])
+
+
+class AdminWebhookConfigTests(TestCase):
+    """Tests for admin webhook configuration endpoints."""
+
+    def setUp(self):
+        # Create admin user
+        self.admin = User.objects.create_superuser(
+            username="admin", email="admin@example.com", password="adminpass"
+        )
+        UserProfile.objects.create(user=self.admin, is_email_verified=True)
+        self.admin_key = APIKey.objects.create(user=self.admin, name="admin-key")
+
+        # Create target user
+        self.user = User.objects.create_user(
+            username="testuser", email="test@example.com", password="testpass"
+        )
+        UserProfile.objects.create(user=self.user, is_email_verified=True)
+        self.user_key = APIKey.objects.create(user=self.user, name="user-key")
+
+        self.client = APIClient()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_key.key}")
+
+    def test_get_webhook_config_empty(self):
+        """Admin can get empty webhook config."""
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["webhook_url"])
+        self.assertFalse(response.data["webhook_enabled"])
+
+    def test_get_webhook_config_not_found(self):
+        """Returns 404 for non-existent key."""
+        import uuid
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.user.id}/keys/{uuid.uuid4()}/webhook/"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_set_webhook_url(self):
+        """Admin can set webhook URL."""
+        response = self.client.put(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/",
+            {"webhook_url": "https://example.com/webhook/"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["webhook_url"], "https://example.com/webhook/")
+        self.assertTrue(response.data["webhook_enabled"])
+        self.assertIsNotNone(response.data["webhook_secret"])
+
+    def test_set_invalid_url_rejected(self):
+        """Admin cannot set invalid URL."""
+        response = self.client.put(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/",
+            {"webhook_url": "not-a-url"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_disable_webhook(self):
+        """Admin can disable webhook via DELETE."""
+        # First set a webhook
+        self.user_key.webhook_url = "https://example.com/webhook/"
+        self.user_key.save()
+
+        response = self.client.delete(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/"
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.user_key.refresh_from_db()
+        self.assertIsNone(self.user_key.webhook_url)
+        self.assertFalse(self.user_key.webhook_enabled)
+
+    def test_regenerate_secret(self):
+        """Admin can regenerate webhook secret."""
+        self.user_key.webhook_url = "https://example.com/webhook/"
+        self.user_key.save()
+        old_secret = self.user_key.webhook_secret
+
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/regenerate-secret/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.data["webhook_secret"], old_secret)
+
+    def test_regenerate_without_webhook_fails(self):
+        """Can't regenerate secret without webhook URL."""
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/regenerate-secret/"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_test_webhook_without_url_fails(self):
+        """Can't test webhook without URL configured."""
+        response = self.client.post(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/test/"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_requires_admin(self):
+        """Non-admin cannot access admin webhook endpoints."""
+        # Use non-admin credentials
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.user_key.key}")
+
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.user.id}/keys/{self.user_key.id}/webhook/"
+        )
+        self.assertEqual(response.status_code, 403)

@@ -1877,3 +1877,298 @@ class WebhookTestView(StormCloudBaseAPIView):
                     "message": f"Request failed: {str(e)}",
                 }
             )
+
+
+class AdminUserKeyWebhookView(StormCloudBaseAPIView):
+    """
+    GET/PUT/DELETE /api/v1/admin/users/{user_id}/keys/{key_id}/webhook/
+
+    Admin management of webhook config for any user's API key.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get_api_key(self, user_id: int, key_id) -> APIKey | None:
+        """Get APIKey or None if not found."""
+        try:
+            return APIKey.objects.get(id=key_id, user_id=user_id)
+        except APIKey.DoesNotExist:
+            return None
+
+    @extend_schema(
+        summary="Admin: Get webhook config",
+        description="Get webhook configuration for a user's API key.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "webhook_last_triggered": {"type": "string", "nullable": True},
+                    "webhook_last_status": {"type": "string", "nullable": True},
+                },
+            },
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Administration"],
+    )
+    def get(self, request: Request, user_id: int, key_id) -> Response:
+        api_key = self.get_api_key(user_id, key_id)
+        if not api_key:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "webhook_secret": api_key.webhook_secret,
+            "webhook_last_triggered": api_key.webhook_last_triggered,
+            "webhook_last_status": api_key.webhook_last_status,
+        })
+
+    @extend_schema(
+        summary="Admin: Set webhook URL",
+        description="Configure webhook URL for a user's API key. Secret is auto-generated.",
+        request={
+            "type": "object",
+            "properties": {
+                "webhook_url": {"type": "string", "description": "Webhook URL or empty to disable"},
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_url": {"type": "string", "nullable": True},
+                    "webhook_enabled": {"type": "boolean"},
+                    "webhook_secret": {"type": "string", "nullable": True},
+                    "message": {"type": "string"},
+                },
+            },
+            400: OpenApiResponse(description="Invalid URL"),
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Administration"],
+    )
+    def put(self, request: Request, user_id: int, key_id) -> Response:
+        api_key = self.get_api_key(user_id, key_id)
+        if not api_key:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        webhook_url = request.data.get("webhook_url", "").strip() or None
+
+        # Validate URL if provided
+        if webhook_url:
+            from django.core.validators import URLValidator
+            from django.core.exceptions import ValidationError
+
+            validator = URLValidator(schemes=["http", "https"])
+            try:
+                validator(webhook_url)
+            except ValidationError:
+                return Response(
+                    {"error": {"code": "INVALID_URL", "message": "Invalid URL format."}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        api_key.webhook_url = webhook_url
+        api_key.save()
+
+        return Response({
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "webhook_secret": api_key.webhook_secret,
+            "message": "Webhook configured." if webhook_url else "Webhook disabled.",
+        })
+
+    @extend_schema(
+        summary="Admin: Disable webhook",
+        description="Disable webhook for a user's API key.",
+        responses={
+            200: OpenApiResponse(description="Webhook disabled"),
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Administration"],
+    )
+    def delete(self, request: Request, user_id: int, key_id) -> Response:
+        api_key = self.get_api_key(user_id, key_id)
+        if not api_key:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        api_key.webhook_url = None
+        api_key.save()
+
+        return Response({"message": "Webhook disabled."})
+
+
+class AdminUserKeyWebhookRegenerateView(StormCloudBaseAPIView):
+    """
+    POST /api/v1/admin/users/{user_id}/keys/{key_id}/webhook/regenerate-secret/
+
+    Regenerate webhook secret for a user's API key.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Regenerate webhook secret",
+        description="Generate a new webhook secret for a user's API key.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "webhook_secret": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
+            400: OpenApiResponse(description="No webhook configured"),
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Administration"],
+    )
+    def post(self, request: Request, user_id: int, key_id) -> Response:
+        try:
+            api_key = APIKey.objects.get(id=key_id, user_id=user_id)
+        except APIKey.DoesNotExist:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not api_key.webhook_url:
+            return Response(
+                {"error": {"code": "NO_WEBHOOK", "message": "No webhook configured."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_secret = api_key.generate_webhook_secret()
+        api_key.save()
+
+        return Response({
+            "webhook_secret": new_secret,
+            "message": "Secret regenerated.",
+        })
+
+
+class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
+    """
+    POST /api/v1/admin/users/{user_id}/keys/{key_id}/webhook/test/
+
+    Test webhook for a user's API key.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    @extend_schema(
+        summary="Admin: Test webhook",
+        description="Send a test ping to the webhook URL configured for a user's API key.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "status_code": {"type": "integer", "nullable": True},
+                    "message": {"type": "string"},
+                },
+            },
+            400: OpenApiResponse(description="No webhook configured"),
+            404: OpenApiResponse(description="API key not found"),
+        },
+        tags=["Administration"],
+    )
+    def post(self, request: Request, user_id: int, key_id) -> Response:
+        import hashlib
+        import hmac
+        import json
+
+        import requests
+        from django.utils import timezone
+
+        try:
+            api_key = APIKey.objects.get(id=key_id, user_id=user_id)
+        except APIKey.DoesNotExist:
+            return Response(
+                {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not api_key.webhook_url:
+            return Response(
+                {"error": {"code": "NO_WEBHOOK", "message": "No webhook configured."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Build test payload
+        payload = {
+            "event": "test",
+            "timestamp": timezone.now().isoformat(),
+            "api_key_id": str(api_key.id),
+            "message": "Webhook test from Storm Cloud Server (admin)",
+        }
+
+        # Sign payload
+        payload_bytes = json.dumps(payload, sort_keys=True).encode()
+        signature = hmac.new(
+            api_key.webhook_secret.encode(), payload_bytes, hashlib.sha256
+        ).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-Storm-Signature": signature,
+            "X-Storm-Event": "test",
+        }
+
+        try:
+            response = requests.post(
+                api_key.webhook_url,
+                json=payload,
+                headers=headers,
+                timeout=10,
+            )
+
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "success" if response.ok else "failed"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response({
+                "success": response.ok,
+                "status_code": response.status_code,
+                "message": f"Webhook returned {response.status_code}",
+            })
+
+        except requests.Timeout:
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "timeout"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response({
+                "success": False,
+                "status_code": None,
+                "message": "Webhook timed out (10s)",
+            })
+
+        except requests.RequestException as e:
+            api_key.webhook_last_triggered = timezone.now()
+            api_key.webhook_last_status = "failed"
+            api_key.save(
+                update_fields=["webhook_last_triggered", "webhook_last_status"]
+            )
+
+            return Response({
+                "success": False,
+                "status_code": None,
+                "message": f"Request failed: {str(e)}",
+            })
