@@ -1829,7 +1829,7 @@ class WebhookTestView(StormCloudBaseAPIView):
         try:
             response = requests.post(
                 api_key.webhook_url,
-                json=payload,
+                data=payload_bytes,  # Use exact bytes we signed
                 headers=headers,
                 timeout=10,
             )
@@ -2130,7 +2130,7 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
         try:
             response = requests.post(
                 api_key.webhook_url,
-                json=payload,
+                data=payload_bytes,  # Use exact bytes we signed
                 headers=headers,
                 timeout=10,
             )

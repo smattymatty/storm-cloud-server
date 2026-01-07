@@ -89,7 +89,7 @@ def _deliver_webhook(
     try:
         response = requests.post(
             api_key.webhook_url,
-            json=payload,
+            data=payload_bytes,  # Use exact bytes we signed, not re-serialized
             headers=headers,
             timeout=10,
         )
