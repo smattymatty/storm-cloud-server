@@ -368,3 +368,63 @@ class StalenessModelTests(StormCloudAPITestCase):
             owner=self.user, page_path="/", file_path="test.md"
         )
         self.assertIsNone(mapping.staleness_hours)
+
+
+class MarkdownPreviewTests(StormCloudAPITestCase):
+    """Tests for POST /api/v1/cms/preview/"""
+
+    def test_preview_renders_markdown(self):
+        """Preview converts markdown to HTML."""
+        self.authenticate()
+        response = self.client.post(
+            "/api/v1/cms/preview/",
+            {"content": "# Hello World"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("<h1", response.data["html"])
+        self.assertIn("Hello World", response.data["html"])
+
+    def test_preview_renders_spellblocks(self):
+        """Preview renders SpellBlock syntax."""
+        self.authenticate()
+        response = self.client.post(
+            "/api/v1/cms/preview/",
+            {"content": "{~ alert type=\"info\" ~}\nTest alert\n{~~}"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # SpellBlock should produce some HTML output
+        self.assertIn("html", response.data)
+        self.assertTrue(len(response.data["html"]) > 0)
+
+    def test_preview_empty_content(self):
+        """Preview handles empty content."""
+        self.authenticate()
+        response = self.client.post(
+            "/api/v1/cms/preview/",
+            {"content": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("html", response.data)
+
+    def test_preview_missing_content(self):
+        """Preview handles missing content field."""
+        self.authenticate()
+        response = self.client.post(
+            "/api/v1/cms/preview/",
+            {},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("html", response.data)
+
+    def test_preview_requires_auth(self):
+        """Preview endpoint requires authentication."""
+        response = self.client.post(
+            "/api/v1/cms/preview/",
+            {"content": "# Test"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

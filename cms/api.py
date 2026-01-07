@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.db import transaction
+from django_spellbook.parsers import spellbook_render
 from django.db.models import Count, Max, Min
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -397,3 +398,42 @@ class StaleCleanupView(StormCloudBaseAPIView):
                 "threshold_hours": hours,
             }
         )
+
+
+class MarkdownPreviewView(StormCloudBaseAPIView):
+    """
+    POST /api/v1/cms/preview/
+
+    Render markdown to HTML using Django Spellbook.
+    Supports SpellBlocks like {~ card ~}, {~ alert ~}, etc.
+    """
+
+    @extend_schema(
+        summary="Preview markdown",
+        description=(
+            "Render markdown content to HTML using Django Spellbook. "
+            "Supports all SpellBlocks for live preview in CMS editor."
+        ),
+        request={
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "Markdown content to render",
+                },
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "html": {"type": "string"},
+                },
+            },
+        },
+        tags=["CMS"],
+    )
+    def post(self, request):
+        content = request.data.get("content", "")
+        html = spellbook_render(content)
+        return Response({"html": html})

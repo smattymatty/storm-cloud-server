@@ -25,4 +25,6 @@ urlpatterns = [
     ),
     # Cleanup stale mappings
     path("cleanup/", api.StaleCleanupView.as_view(), name="cleanup"),
+    # Markdown preview (Django Spellbook rendering)
+    path("preview/", api.MarkdownPreviewView.as_view(), name="markdown-preview"),
 ]
