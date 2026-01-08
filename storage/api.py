@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from core.services.encryption import DecryptionError
 from core.storage.local import LocalStorageBackend
 from core.throttling import (
     DownloadRateThrottle,
@@ -677,7 +678,10 @@ class FileUploadView(StormCloudBaseAPIView):
                 "content_type": file_info.content_type or "",
                 "is_directory": False,
                 "parent_path": db_parent_path,
-                "encryption_method": StoredFile.ENCRYPTION_NONE,  # ADR 006: Default to no encryption
+                # Encryption metadata from backend (ADR 010)
+                "encryption_method": file_info.encryption_method,
+                "key_id": file_info.encryption_key_id,
+                "encrypted_size": file_info.encrypted_size,
                 "sort_position": 0,  # New files go to top
             },
         )
@@ -791,7 +795,28 @@ class FileDownloadView(StormCloudBaseAPIView):
             return response
 
         # Only open file if we actually need to send content
-        file_handle = backend.open(full_path)
+        try:
+            file_handle = backend.open(full_path)
+        except DecryptionError:
+            emit_user_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_DOWNLOAD,
+                path=file_path,
+                success=False,
+                error_code="DECRYPTION_FAILED",
+                error_message="Unable to decrypt file",
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Unable to decrypt file",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         # Log successful download
         emit_user_file_action(
@@ -929,6 +954,17 @@ class FileContentView(StormCloudBaseAPIView):
             file_handle = backend.open(full_path)
             content = file_handle.read()
             file_handle.close()
+        except DecryptionError:
+            return Response(
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Unable to decrypt file",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         except Exception as e:
             return Response(
                 {"error": {"code": "READ_ERROR", "message": str(e)}},
@@ -1682,6 +1718,16 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
                     }
                 },
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        except DecryptionError:
+            return Response(
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Unable to decrypt file",
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         # Increment download count

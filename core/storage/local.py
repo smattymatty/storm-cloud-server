@@ -1,5 +1,6 @@
 """Local filesystem storage backend."""
 
+from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO, Iterator
 from datetime import datetime
@@ -9,6 +10,7 @@ from fnmatch import fnmatch
 from django.conf import settings
 
 from .base import AbstractStorageBackend, FileInfo
+from core.services.encryption import EncryptionService
 
 
 class LocalStorageBackend(AbstractStorageBackend):
@@ -32,6 +34,9 @@ class LocalStorageBackend(AbstractStorageBackend):
 
         # Ensure storage root exists
         self.storage_root.mkdir(parents=True, exist_ok=True)
+
+        # Encryption service (ADR 010)
+        self.encryption = EncryptionService()
 
     def _resolve_path(self, path: str) -> Path:
         """
@@ -83,7 +88,7 @@ class LocalStorageBackend(AbstractStorageBackend):
         )
 
     def save(self, path: str, content: BinaryIO) -> FileInfo:
-        """Save file content to path."""
+        """Save file content to path with encryption if enabled."""
         full_path = self._resolve_path(path)
 
         # Check if path is a directory
@@ -94,15 +99,32 @@ class LocalStorageBackend(AbstractStorageBackend):
         if not full_path.parent.exists():
             raise FileNotFoundError(f"Parent directory does not exist: {path}")
 
-        # Write file
-        with full_path.open('wb') as f:
-            for chunk in iter(lambda: content.read(8192), b''):
-                f.write(chunk)
+        # Read all content for encryption
+        plaintext = content.read()
+        original_size = len(plaintext)
 
-        return self._file_info(full_path, path)
+        # Encrypt content (returns unchanged if encryption disabled)
+        encrypted = self.encryption.encrypt_file(plaintext)
+
+        # Write encrypted content
+        full_path.write_bytes(encrypted)
+
+        stat = full_path.stat()
+        return FileInfo(
+            path=path,
+            name=full_path.name,
+            size=original_size,  # Original plaintext size
+            is_directory=False,
+            modified_at=datetime.fromtimestamp(stat.st_mtime),
+            content_type=mimetypes.guess_type(full_path.name)[0],
+            # Encryption metadata (ADR 010)
+            encrypted_size=len(encrypted) if self.encryption.is_enabled else None,
+            encryption_method=self.encryption.method,
+            encryption_key_id=self.encryption.key_id,
+        )
 
     def open(self, path: str) -> BinaryIO:
-        """Open file for reading."""
+        """Open file for reading, decrypting if needed."""
         full_path = self._resolve_path(path)
 
         if not full_path.exists():
@@ -111,7 +133,24 @@ class LocalStorageBackend(AbstractStorageBackend):
         if full_path.is_dir():
             raise IsADirectoryError(f"Path is a directory: {path}")
 
-        return full_path.open('rb')
+        # Read encrypted content and decrypt
+        encrypted = full_path.read_bytes()
+        plaintext = self.encryption.decrypt_file(encrypted)
+
+        # Return as file-like object
+        return BytesIO(plaintext)
+
+    def open_raw(self, path: str) -> BinaryIO:
+        """Open file without decryption (for migration, debugging)."""
+        full_path = self._resolve_path(path)
+
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        if full_path.is_dir():
+            raise IsADirectoryError(f"Path is a directory: {path}")
+
+        return full_path.open("rb")
 
     def delete(self, path: str) -> None:
         """Delete file or empty directory."""

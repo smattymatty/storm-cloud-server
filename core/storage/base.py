@@ -11,10 +11,14 @@ class FileInfo:
     """File metadata returned by storage backend operations."""
     path: str
     name: str
-    size: int
+    size: int  # Original/plaintext size
     is_directory: bool
     modified_at: datetime
     content_type: str | None = None
+    # Encryption metadata (ADR 010)
+    encrypted_size: int | None = None  # Size on disk including encryption overhead
+    encryption_method: str = "none"  # none, server, server-user, client
+    encryption_key_id: str | None = None  # Key ID for rotation tracking
 
 
 class AbstractStorageBackend(ABC):

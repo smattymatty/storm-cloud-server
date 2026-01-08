@@ -14,6 +14,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import F, Sum
 
+from core.services.encryption import DecryptionError
 from core.storage.local import LocalStorageBackend
 from core.utils import PathValidationError, normalize_path
 
@@ -500,7 +501,10 @@ class FileService:
                 "content_type": file_info.content_type or "",
                 "is_directory": False,
                 "parent_path": db_parent_path,
-                "encryption_method": StoredFile.ENCRYPTION_NONE,
+                # Encryption metadata from backend (ADR 010)
+                "encryption_method": file_info.encryption_method,
+                "key_id": file_info.encryption_key_id,
+                "encrypted_size": file_info.encrypted_size,
                 "sort_position": 0,
             },
         )
@@ -561,8 +565,15 @@ class FileService:
                 data={"not_modified": True, "etag": etag},
             )
 
-        # Open file
-        file_handle = self.backend.open(full_path)
+        # Open file (with decryption)
+        try:
+            file_handle = self.backend.open(full_path)
+        except DecryptionError:
+            return ServiceResult(
+                success=False,
+                error_code="DECRYPTION_FAILED",
+                error_message="Unable to decrypt file.",
+            )
 
         return ServiceResult(
             success=True,
@@ -657,13 +668,19 @@ class FileService:
                 error_message="File is binary and cannot be previewed as text.",
             )
 
-        # Read content
+        # Read content (with decryption)
         try:
             file_handle = self.backend.open(full_path)
             content = file_handle.read()
             file_handle.close()
             if isinstance(content, bytes):
                 content = content.decode("utf-8", errors="replace")
+        except DecryptionError:
+            return FileContentResult(
+                success=False,
+                error_code="DECRYPTION_FAILED",
+                error_message="Unable to decrypt file.",
+            )
         except Exception as e:
             return FileContentResult(
                 success=False,

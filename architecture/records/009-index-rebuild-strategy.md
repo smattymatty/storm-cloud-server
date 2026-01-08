@@ -66,12 +66,19 @@ Multiple Interfaces:
 class IndexSyncService:
     def __init__(self, storage_backend=None, user_id=None):
         # User filtering optional
-        
+        self.encryption_service = EncryptionService()  # For detecting encryption state
+
     def sync(self, mode='audit', dry_run=False, force=False) -> IndexSyncStats:
         # audit: Report only
         # sync: Add missing DB records, update stale metadata
         # clean: Delete orphaned DB records (requires force=True)
         # full: sync + clean (requires force=True)
+
+    def _detect_encryption_state(self, file_path: str) -> tuple[str, int]:
+        """Detect encryption method from file header (version byte).
+        Returns (encryption_method, original_size)."""
+        # Check version byte: 0x01 = AES-256-GCM (server-side encrypted)
+        # No version byte = plaintext
 ```
 
 ### Django Task
@@ -194,7 +201,7 @@ INFO: Deleting 'bonko1.png' (will CASCADE delete 1 ShareLink(s))
 - Database can be rebuilt from filesystem at any time (ADR 000 enforcement)
 - Multiple safe modes prevent accidental data loss
 - Automated audit catches desync early
-- Metadata updates (file size, content_type) handled automatically
+- Metadata updates (file size, content_type, encryption_method) handled automatically
 - **CASCADE deletions handled automatically** - Django's `on_delete=models.CASCADE` removes related ShareLinks when files are deleted (filesystem wins absolutely)
 - Idempotent operations (safe to run multiple times)
 - Supports both system-wide and per-user reconciliation
@@ -220,7 +227,8 @@ INFO: Deleting 'bonko1.png' (will CASCADE delete 1 ShareLink(s))
 - `clean` and `full` modes must require `force=True` to execute
 - Filesystem wins: if file exists on disk but not in DB, DB must be updated (not file deleted)
 - **Filesystem wins (absolute)**: if file is deleted from filesystem, DB record AND related ShareLinks must be deleted (Django CASCADE handles this automatically)
-- Metadata updates must check both size and content_type (stale detection)
+- Metadata updates must check size, content_type, and encryption_method (stale detection)
+- Sync mode must detect and set encryption_method from file header (version byte)
 - API endpoint must return task_id and serializable results
 - Management command must succeed even if zero changes needed
 - Startup audit must not block container launch
@@ -238,6 +246,8 @@ INFO: Deleting 'bonko1.png' (will CASCADE delete 1 ShareLink(s))
 - ADR 002: Storage Backend Strategy - Works with abstract storage interface
 - ADR 004: API Versioning - Endpoint under `/api/v1/`
 - ADR 005: CLI-First Development - Management command designed for CLI workflow
+- ADR 006: Encryption Strategy - Index rebuild must detect and store encryption_method
+- ADR 010: Encryption Implementation - Defines file format with version byte for detection
 
 ## References
 

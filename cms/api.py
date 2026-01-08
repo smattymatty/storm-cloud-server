@@ -27,13 +27,18 @@ class MappingReportView(StormCloudBaseAPIView):
 
     Receive page→files mapping from Glue middleware.
     Creates or updates PageFileMapping records.
+
+    file_paths is optional:
+    - If provided: Update page-file mappings + increment view count
+    - If omitted: Just increment view count (view ping)
     """
 
     @extend_schema(
-        summary="Report page-file mapping",
+        summary="Report page-file mapping or view ping",
         description=(
             "Receive page→files mapping from Storm Cloud Glue middleware. "
-            "Creates or updates PageFileMapping records for the authenticated user."
+            "Creates or updates PageFileMapping records for the authenticated user. "
+            "If file_paths is omitted, just increments view count (view ping)."
         ),
         request=MappingReportSerializer,
         responses={
@@ -42,6 +47,8 @@ class MappingReportView(StormCloudBaseAPIView):
                 "properties": {
                     "status": {"type": "string"},
                     "page_path": {"type": "string"},
+                    "view_count": {"type": "integer"},
+                    "mapping_updated": {"type": "boolean"},
                     "created": {"type": "integer"},
                     "updated": {"type": "integer"},
                 },
@@ -54,7 +61,7 @@ class MappingReportView(StormCloudBaseAPIView):
         serializer.is_valid(raise_exception=True)
 
         page_path = serializer.validated_data["page_path"]
-        file_paths = serializer.validated_data["file_paths"]
+        file_paths = serializer.validated_data.get("file_paths")
         owner = request.user
 
         # Normalize page_path to have leading slash
@@ -63,21 +70,25 @@ class MappingReportView(StormCloudBaseAPIView):
 
         created_count = 0
         updated_count = 0
+        mapping_updated = False
 
         with transaction.atomic():
-            for file_path in file_paths:
-                mapping, created = PageFileMapping.objects.update_or_create(
-                    owner=owner,
-                    page_path=page_path,
-                    file_path=file_path,
-                    defaults={"last_seen": timezone.now()},
-                )
-                if created:
-                    created_count += 1
-                else:
-                    updated_count += 1
+            # Only update mappings if file_paths provided
+            if file_paths:
+                mapping_updated = True
+                for file_path in file_paths:
+                    mapping, created = PageFileMapping.objects.update_or_create(
+                        owner=owner,
+                        page_path=page_path,
+                        file_path=file_path,
+                        defaults={"last_seen": timezone.now()},
+                    )
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
 
-            # Increment page view count
+            # Always increment page view count
             PageStats.objects.get_or_create(owner=owner, page_path=page_path)
             PageStats.objects.filter(owner=owner, page_path=page_path).update(
                 view_count=F("view_count") + 1,
@@ -91,9 +102,10 @@ class MappingReportView(StormCloudBaseAPIView):
             {
                 "status": "ok",
                 "page_path": page_path,
+                "view_count": stats.view_count,
+                "mapping_updated": mapping_updated,
                 "created": created_count,
                 "updated": updated_count,
-                "view_count": stats.view_count,
             },
             status=status.HTTP_200_OK,
         )

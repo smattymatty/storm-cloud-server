@@ -2,6 +2,8 @@
 
 **Status:** Accepted
 
+**Extended by:** ADR 006 (Encryption Strategy), ADR 010 (Encryption Implementation)
+
 ## Context
 
 Storm Cloud needs to store user files somewhere. The choice affects self-hosting viability, production scalability, and vendor lock-in.
@@ -40,6 +42,7 @@ Pluggable backend (Option 3) with local filesystem as default, Backblaze B2 as f
 - Development and testing use local storage (fast, no network)
 - Production uses B2 (scalable, durable, cheap)
 - No vendor lock-in to AWS ecosystem
+- Encryption integrates at backend level - transparent to all callers (ADR 010)
 
 **Negative:**
 
@@ -60,8 +63,17 @@ Pluggable backend (Option 3) with local filesystem as default, Backblaze B2 as f
 - Test suite runs against both local and B2 backends in CI
 - Storage interface methods must have consistent return types across all backends
 - No backend-specific code outside of backend implementation files
+- All backends must use `EncryptionService` for encrypt/decrypt operations (ADR 010)
+- Backend `save()` must return encryption metadata (method, key_id, encrypted_size)
 
 **Manual Reviews:**
 
 - New storage backend implementations require architecture review
 - Any changes to storage interface contract require review of all existing backends
+- Encryption integration changes require security review
+
+## Related Decisions
+
+- ADR 006: Encryption Strategy - Encryption happens at backend level, transparent to callers
+- ADR 009: Index Rebuild Strategy - Works with abstract storage interface
+- ADR 010: Encryption Implementation - Defines `EncryptionService` integration in backends

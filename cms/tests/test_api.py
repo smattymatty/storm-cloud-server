@@ -87,25 +87,75 @@ class MappingReportTests(StormCloudAPITestCase):
         # DRF returns 403 when auth required but no credentials provided
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_report_requires_file_paths(self):
-        """Report fails without file_paths."""
+    def test_view_ping_without_file_paths(self):
+        """View ping without file_paths only increments view count."""
         self.authenticate()
+
+        # First, create a mapping
+        PageFileMapping.objects.create(
+            owner=self.user, page_path="/about/", file_path="about.md"
+        )
+
+        # View ping (no file_paths)
         response = self.client.post(
             "/api/v1/cms/mappings/report/",
             {"page_path": "/about/"},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_report_rejects_empty_file_paths(self):
-        """Report fails with empty file_paths list."""
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 1)
+        self.assertFalse(response.data["mapping_updated"])
+        self.assertEqual(response.data["created"], 0)
+        self.assertEqual(response.data["updated"], 0)
+
+    def test_view_ping_creates_page_stats(self):
+        """View ping creates PageStats if page not seen before."""
         self.authenticate()
+
+        # No mappings, no stats - just a view ping
+        response = self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/new-page/"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 1)
+        self.assertFalse(response.data["mapping_updated"])
+
+        # PageStats should exist
+        self.assertTrue(
+            PageStats.objects.filter(owner=self.user, page_path="/new-page/").exists()
+        )
+
+    def test_view_ping_with_empty_file_paths(self):
+        """View ping with empty file_paths list acts as view ping."""
+        self.authenticate()
+
         response = self.client.post(
             "/api/v1/cms/mappings/report/",
             {"page_path": "/about/", "file_paths": []},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 1)
+        self.assertFalse(response.data["mapping_updated"])
+
+    def test_mapping_report_sets_mapping_updated_true(self):
+        """Report with file_paths returns mapping_updated=true."""
+        self.authenticate()
+
+        response = self.client.post(
+            "/api/v1/cms/mappings/report/",
+            {"page_path": "/about/", "file_paths": ["about.md"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["mapping_updated"])
+        self.assertEqual(response.data["created"], 1)
 
 
 class PageListTests(StormCloudAPITestCase):

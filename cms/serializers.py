@@ -28,13 +28,20 @@ class ManagedContentSerializer(serializers.ModelSerializer):
 
 
 class MappingReportSerializer(serializers.Serializer):
-    """Incoming mapping report from Glue middleware."""
+    """Incoming mapping report from Glue middleware.
+
+    file_paths is optional:
+    - If provided: Update page-file mappings + increment view count
+    - If omitted: Just increment view count (view ping)
+    """
 
     page_path = serializers.CharField(max_length=500)
     file_paths = serializers.ListField(
         child=serializers.CharField(max_length=500),
-        min_length=1,
         max_length=100,  # Reasonable limit per page
+        required=False,
+        allow_null=True,
+        default=None,
     )
 
 

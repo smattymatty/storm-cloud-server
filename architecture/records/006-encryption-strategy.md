@@ -2,6 +2,8 @@
 
 **Status:** Accepted
 
+**Implementation:** ADR 010 (Encryption Implementation)
+
 ## Context
 
 Storm Cloud Server stores user files. Encryption at rest protects data confidentiality. The strategy affects security posture, implementation complexity, and future monetization options.
@@ -35,7 +37,7 @@ Phased approach (Option 4) — server-side encryption as default, with architect
 
 **Future Client-Side Design Constraints:**
 
-- File metadata must store: `encryption_method` (none/server/client), `key_id` (nullable), `encrypted_filename` (nullable)
+- File metadata must store: `encryption_method` (none/server/server-user/client), `key_id` (nullable), `encrypted_filename` (nullable), `encrypted_size` (nullable)
 - API responses must not assume server can read file contents
 - CLI must be designed to handle local encryption/decryption path
 
@@ -72,4 +74,8 @@ Phased approach (Option 4) — server-side encryption as default, with architect
 
 - Any feature requiring server-side file content access requires architecture review
 - Client-side encryption implementation requires security review before release
-- Key management strategy requires dedicated ADR before implementation
+- Key management strategy: See ADR 010
+
+## Related Decisions
+
+- ADR 010: Encryption Implementation (Phase 1 server-side)

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Dict, List
 from django.contrib.auth import get_user_model
+from core.services.encryption import DecryptionError, EncryptionService
 from core.storage.base import AbstractStorageBackend
 from core.storage.local import LocalStorageBackend
 from storage.models import StoredFile
@@ -53,6 +54,7 @@ class IndexSyncService:
     ):
         self.backend = backend or LocalStorageBackend()
         self.user_id = user_id
+        self.encryption = EncryptionService()
         
     def sync(
         self,
@@ -252,7 +254,9 @@ class IndexSyncService:
     def _create_db_record(self, user, path: str, file_info: dict):
         """
         Create or update StoredFile record for filesystem file.
-        
+
+        Detects encryption state from file header per ADR 010.
+
         Returns:
             Tuple of (object, created) where created is True if new record
         """
@@ -260,18 +264,66 @@ class IndexSyncService:
         parent_path = str(Path(path).parent) if "/" in path else ""
         if parent_path == ".":
             parent_path = ""
-        
+
+        # Default encryption values
+        encryption_method = StoredFile.ENCRYPTION_NONE
+        key_id = None
+        encrypted_size = None
+        original_size = file_info['size']
+
+        # Detect encryption for files (not directories)
+        if not file_info['is_directory']:
+            user_prefix = str(user.id)
+            full_path = f"{user_prefix}/{path}"
+
+            try:
+                # Read file header using open_raw (bypasses decryption)
+                raw_handle = self.backend.open_raw(full_path)
+                header = raw_handle.read(32)  # Enough for version byte detection
+                raw_handle.close()
+
+                detected_method = self.encryption.detect_encryption(header)
+
+                if detected_method == 'server':
+                    encryption_method = StoredFile.ENCRYPTION_SERVER
+                    key_id = self.encryption.key_id
+                    encrypted_size = file_info['size']  # On-disk size
+
+                    # Get original size by decrypting
+                    try:
+                        raw_handle = self.backend.open_raw(full_path)
+                        encrypted_data = raw_handle.read()
+                        raw_handle.close()
+
+                        plaintext = self.encryption.decrypt_file(encrypted_data)
+                        original_size = len(plaintext)
+                    except DecryptionError:
+                        logger.warning(f"Cannot decrypt {path} for size detection")
+                        # Keep on-disk size as fallback
+                        original_size = file_info['size']
+                        encrypted_size = None
+                    except Exception as e:
+                        logger.error(f"Error reading {path} for encryption detection: {e}")
+
+            except FileNotFoundError:
+                # File may have been deleted between scan and record creation
+                pass
+            except Exception as e:
+                logger.error(f"Error detecting encryption for {path}: {e}")
+
         # Idempotent: update_or_create handles race conditions
         return StoredFile.objects.update_or_create(
             owner=user,
             path=path,
             defaults={
                 'name': file_info['name'],
-                'size': file_info['size'],
+                'size': original_size,
                 'content_type': file_info['content_type'],
                 'is_directory': file_info['is_directory'],
                 'parent_path': parent_path,
-                'encryption_method': StoredFile.ENCRYPTION_NONE,
+                'encryption_method': encryption_method,
+                'key_id': key_id,
+                'encrypted_size': encrypted_size,
                 'sort_position': None,  # Alphabetical
             }
         )

@@ -24,6 +24,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from core.services.bulk import BulkOperationService
+from core.services.encryption import DecryptionError
 from core.storage.local import LocalStorageBackend
 from core.utils import PathValidationError, normalize_path
 from core.views import StormCloudBaseAPIView
@@ -744,7 +745,29 @@ class AdminFileDownloadView(AdminFileBaseView):
             response["ETag"] = f'"{etag}"'
             return response
 
-        file_handle = backend.open(full_path)
+        try:
+            file_handle = backend.open(full_path)
+        except DecryptionError:
+            emit_admin_file_action(
+                self.__class__,
+                request,
+                target_user,
+                FileAuditLog.ACTION_DOWNLOAD,
+                file_path,
+                success=False,
+                error_code="DECRYPTION_FAILED",
+                error_message="Unable to decrypt file",
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Unable to decrypt file",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         emit_admin_file_action(
             self.__class__,
@@ -919,10 +942,32 @@ class AdminFileContentView(AdminFileBaseView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        with backend.open(full_path) as f:
-            content = f.read()
-            if isinstance(content, bytes):
-                content = content.decode("utf-8", errors="replace")
+        try:
+            with backend.open(full_path) as f:
+                content = f.read()
+                if isinstance(content, bytes):
+                    content = content.decode("utf-8", errors="replace")
+        except DecryptionError:
+            emit_admin_file_action(
+                self.__class__,
+                request,
+                target_user,
+                FileAuditLog.ACTION_PREVIEW,
+                file_path,
+                success=False,
+                error_code="DECRYPTION_FAILED",
+                error_message="Unable to decrypt file",
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Unable to decrypt file",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         emit_admin_file_action(
             self.__class__,

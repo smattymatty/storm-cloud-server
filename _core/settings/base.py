@@ -221,6 +221,20 @@ STORMCLOUD_STORAGE_ROOT = Path(config(
     default=str(BASE_DIR / 'storage_root')
 ))
 
+# Encryption (ADR 006, ADR 010)
+STORAGE_ENCRYPTION_METHOD = config(
+    'STORAGE_ENCRYPTION_METHOD',
+    default='none'
+)
+STORAGE_ENCRYPTION_KEY = config(
+    'STORAGE_ENCRYPTION_KEY',
+    default=''
+)
+STORAGE_ENCRYPTION_KEY_ID = config(
+    'STORAGE_ENCRYPTION_KEY_ID',
+    default='1'
+)
+
 # Registration
 STORMCLOUD_ALLOW_REGISTRATION = config(
     'STORMCLOUD_ALLOW_REGISTRATION',

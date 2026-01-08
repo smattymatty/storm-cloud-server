@@ -18,14 +18,16 @@ class StoredFile(AbstractBaseModel):
     Encryption metadata is stored per ADR 006 to support future encryption features.
     """
 
-    # Encryption method choices (ADR 006)
+    # Encryption method choices (ADR 006, ADR 010)
     ENCRYPTION_NONE = "none"
     ENCRYPTION_SERVER = "server"
-    ENCRYPTION_CLIENT = "client"
+    ENCRYPTION_SERVER_USER = "server-user"  # Future: per-user derived keys
+    ENCRYPTION_CLIENT = "client"  # Future: user-held keys
     ENCRYPTION_CHOICES = [
         (ENCRYPTION_NONE, "No encryption"),
-        (ENCRYPTION_SERVER, "Server-side encryption"),
-        (ENCRYPTION_CLIENT, "Client-side encryption"),
+        (ENCRYPTION_SERVER, "Server-side (master key)"),
+        (ENCRYPTION_SERVER_USER, "Server-side (per-user key)"),
+        (ENCRYPTION_CLIENT, "Client-side (user holds key)"),
     ]
 
     owner = models.ForeignKey(
@@ -68,6 +70,11 @@ class StoredFile(AbstractBaseModel):
         blank=True,
         null=True,
         help_text="Encrypted filename for client-side encrypted files",
+    )
+    encrypted_size = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="Size on disk including encryption overhead (ADR 010)",
     )
 
     class Meta:

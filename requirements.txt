@@ -4,6 +4,9 @@ drf-spectacular>=0.29.0
 python-decouple>=3.8
 requests>=2.31.0
 
+# Encryption (ADR 010)
+cryptography>=42.0.0
+
 # Production server
 gunicorn>=22.0.0
 psycopg2-binary>=2.9.9

@@ -13,7 +13,7 @@ Do not run make commands, and do not run tests, only suggest that I should manua
 3. **API Key Auth** - `Authorization: Bearer <key>` header.
 4. **URL Versioning** - All endpoints under `/api/v1/`.
 5. **CLI-First** - API serves the CLI. If an endpoint is awkward to consume, fix the API.
-6. **Encryption Metadata** - All files have encryption metadata (ADR 006). Currently `encryption_method='none'`. Server-side and client-side encryption will be implemented in future phases.
+6. **Encryption at Rest** - Server-side AES-256-GCM encryption (ADR 006, ADR 010). Files transparently encrypted on upload, decrypted on download. Enable via `STORAGE_ENCRYPTION_METHOD=server`. Mixed mode supports plaintext files uploaded before encryption was enabled.
 7. **Filesystem Wins** - Database is rebuildable index (ADR 000, ADR 009). Filesystem is source of truth. Index rebuild available via management command, API, and automated on startup.
 
 ## Virtual Environment
@@ -300,6 +300,49 @@ curl -X POST /api/v1/bulk/ \
 
 ---
 
+## Encryption at Rest (ADR 010)
+
+Server-side AES-256-GCM encryption. Files transparently encrypted on upload, decrypted on download.
+
+**Configuration:**
+```bash
+# .env
+STORAGE_ENCRYPTION_METHOD=server  # 'none' (default) or 'server'
+STORAGE_ENCRYPTION_KEY=           # Required when method=server (32 bytes base64-urlsafe)
+STORAGE_ENCRYPTION_KEY_ID=1       # For key rotation tracking
+```
+
+**Generate encryption key:**
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**Encrypt existing files:**
+```bash
+# Audit - list unencrypted files
+python manage.py encrypt_existing_files --mode audit
+
+# Preview encryption
+python manage.py encrypt_existing_files --mode encrypt --dry-run
+
+# Encrypt all files
+python manage.py encrypt_existing_files --mode encrypt --force
+
+# Encrypt specific user's files
+python manage.py encrypt_existing_files --mode encrypt --user-id 1 --force
+```
+
+**Mixed Mode:**
+- When encryption is enabled, plaintext files uploaded before remain readable
+- Version byte (0x01) in file header identifies encrypted files
+- Index sync detects encryption state and updates database accordingly
+
+**Error Handling:**
+- `DECRYPTION_FAILED` error code returned if decryption fails
+- Generic error message prevents oracle attacks
+
+---
+
 ## Security & Quotas (P0 Fixes - Dec 2024)
 
 **File Upload Limits:**
@@ -558,7 +601,7 @@ Granular per-user permissions stored on `UserProfile`:
 - Backblaze B2 backend
 - Custom SpellBlocks
 - Versioning
-- Encryption (metadata in place, implementation pending)
+- Client-side encryption (user-held keys)
 
 ## Related Libraries
 
