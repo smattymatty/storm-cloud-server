@@ -1,5 +1,7 @@
 """Serializers for CMS app."""
 
+from typing import Any
+
 from rest_framework import serializers
 
 from .models import ContentFlag, ContentFlagHistory, ManagedContent, PageFileMapping
@@ -65,6 +67,10 @@ class FileOnPageSerializer(serializers.Serializer):
     last_seen = serializers.DateTimeField()
     is_stale = serializers.BooleanField()
     staleness_hours = serializers.IntegerField(allow_null=True)
+    flags = serializers.DictField(
+        child=serializers.BooleanField(),
+        help_text="Content flags (ai_generated, user_approved)",
+    )
 
 
 class PageDetailSerializer(serializers.Serializer):
@@ -127,7 +133,7 @@ class SetFlagSerializer(serializers.Serializer):
     is_active = serializers.BooleanField()
     metadata = serializers.JSONField(required=False, default=dict)
 
-    def validate(self, data):
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
         flag_type = self.context.get("flag_type")
         if not flag_type:
             raise serializers.ValidationError("flag_type must be provided in context")

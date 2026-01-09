@@ -1,6 +1,9 @@
 """API views for CMS page-file mapping."""
 
 from datetime import timedelta
+from typing import Any, cast
+
+from django.contrib.auth.models import User
 
 from django.db import transaction
 from django_spellbook.parsers import spellbook_render
@@ -8,6 +11,7 @@ from django.db.models import Count, F, Max, Min
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
+from rest_framework.request import Request
 from rest_framework.response import Response
 
 from core.views import StormCloudBaseAPIView
@@ -61,7 +65,7 @@ class MappingReportView(StormCloudBaseAPIView):
         },
         tags=["CMS"],
     )
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         serializer = MappingReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -149,7 +153,7 @@ class PageListView(StormCloudBaseAPIView):
         responses={200: PageSummarySerializer(many=True)},
         tags=["CMS"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         owner = request.user
         threshold = timezone.now() - timedelta(hours=24)
 
@@ -191,15 +195,15 @@ class PageListView(StormCloudBaseAPIView):
         }
 
         # Sort pages (handle view_count sort specially since it's from different table)
-        pages = list(pages)
+        pages_list: list[dict[str, Any]] = list(pages)
         if sort_field == "views":
-            pages.sort(
+            pages_list.sort(
                 key=lambda p: stats_map.get(p["page_path"], 0),
                 reverse=(sort_order == "desc"),
             )
         else:
-            pages = sorted(
-                pages,
+            pages_list = sorted(
+                pages_list,
                 key=lambda p: p[sort_map.get(sort_field, "last_seen")],
                 reverse=(sort_order == "desc"),
             )
@@ -208,7 +212,7 @@ class PageListView(StormCloudBaseAPIView):
         result = []
         stale_count = 0
 
-        for page in pages:
+        for page in pages_list:
             is_stale = page["last_seen"] < threshold
             if is_stale:
                 stale_count += 1
@@ -253,7 +257,7 @@ class PageDetailView(StormCloudBaseAPIView):
         responses={200: PageDetailSerializer},
         tags=["CMS"],
     )
-    def get(self, request, page_path: str):
+    def get(self, request: Request, page_path: str) -> Response:
         # Ensure leading slash
         if not page_path.startswith("/"):
             page_path = f"/{page_path}"
@@ -271,6 +275,13 @@ class PageDetailView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Collect file paths and prefetch StoredFiles with their flags
+        file_paths = [m.file_path for m in mappings]
+        stored_files = StoredFile.objects.filter(
+            owner=owner, path__in=file_paths
+        ).prefetch_related("content_flags")
+        stored_file_map = {sf.path: sf for sf in stored_files}
+
         files = []
         page_first_seen = None
         page_last_seen = None
@@ -279,6 +290,13 @@ class PageDetailView(StormCloudBaseAPIView):
             is_stale = mapping.last_seen < threshold
             staleness_hours = mapping.staleness_hours
 
+            # Get flags for this file
+            file_flags = {}
+            stored_file = stored_file_map.get(mapping.file_path)
+            if stored_file:
+                for flag in stored_file.content_flags.all():
+                    file_flags[flag.flag_type] = flag.is_active
+
             files.append(
                 {
                     "file_path": mapping.file_path,
@@ -286,6 +304,10 @@ class PageDetailView(StormCloudBaseAPIView):
                     "last_seen": mapping.last_seen,
                     "is_stale": is_stale,
                     "staleness_hours": staleness_hours,
+                    "flags": {
+                        "ai_generated": file_flags.get("ai_generated", False),
+                        "user_approved": file_flags.get("user_approved", False),
+                    },
                 }
             )
 
@@ -307,7 +329,7 @@ class PageDetailView(StormCloudBaseAPIView):
                 "files": files,
                 "first_seen": page_first_seen,
                 "last_seen": page_last_seen,
-                "is_stale": page_last_seen < threshold,
+                "is_stale": page_last_seen is not None and page_last_seen < threshold,
                 "view_count": view_count,
             }
         )
@@ -326,7 +348,7 @@ class PageDetailView(StormCloudBaseAPIView):
         },
         tags=["CMS"],
     )
-    def delete(self, request, page_path: str):
+    def delete(self, request: Request, page_path: str) -> Response:
         if not page_path.startswith("/"):
             page_path = f"/{page_path}"
 
@@ -363,7 +385,7 @@ class FileDetailView(StormCloudBaseAPIView):
         responses={200: FileDetailSerializer},
         tags=["CMS"],
     )
-    def get(self, request, file_path: str):
+    def get(self, request: Request, file_path: str) -> Response:
         owner = request.user
         threshold = timezone.now() - timedelta(hours=24)
 
@@ -430,7 +452,7 @@ class StaleCleanupView(StormCloudBaseAPIView):
         },
         tags=["CMS"],
     )
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         hours = request.data.get("hours", 168)
 
         try:
@@ -489,7 +511,7 @@ class MarkdownPreviewView(StormCloudBaseAPIView):
         },
         tags=["CMS"],
     )
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         content = request.data.get("content", "")
         html = spellbook_render(content)
         return Response({"html": html})
@@ -524,7 +546,7 @@ class FileFlagsView(StormCloudBaseAPIView):
         },
         tags=["CMS Flags"],
     )
-    def get(self, request, path: str):
+    def get(self, request: Request, path: str) -> Response:
         # Find the file owned by the user
         try:
             stored_file = StoredFile.objects.get(owner=request.user, path=path)
@@ -537,7 +559,7 @@ class FileFlagsView(StormCloudBaseAPIView):
         flags = ContentFlag.objects.filter(stored_file=stored_file)
 
         # Build response with all flag types (even if not set)
-        flag_data = {}
+        flag_data: dict[str, Any] = {}
         for flag in flags:
             flag_data[flag.flag_type] = ContentFlagSerializer(flag).data
 
@@ -579,7 +601,7 @@ class SetFlagView(StormCloudBaseAPIView):
         responses={200: ContentFlagSerializer},
         tags=["CMS Flags"],
     )
-    def put(self, request, path: str, flag_type: str):
+    def put(self, request: Request, path: str, flag_type: str) -> Response:
         # Validate flag_type
         valid_types = [t[0] for t in ContentFlag.FlagType.choices]
         if flag_type not in valid_types:
@@ -611,14 +633,14 @@ class SetFlagView(StormCloudBaseAPIView):
             defaults={
                 "is_active": serializer.validated_data["is_active"],
                 "metadata": serializer.validated_data.get("metadata", {}),
-                "changed_by": request.user,
+                "changed_by": cast(User, request.user),
             },
         )
 
         if not created:
             flag.is_active = serializer.validated_data["is_active"]
             flag.metadata = serializer.validated_data.get("metadata", {})
-            flag.changed_by = request.user
+            flag.changed_by = cast(User, request.user)
             flag.save()  # Triggers history creation
 
         return Response(ContentFlagSerializer(flag).data)
@@ -645,7 +667,7 @@ class FlagHistoryView(StormCloudBaseAPIView):
         },
         tags=["CMS Flags"],
     )
-    def get(self, request, path: str, flag_type: str):
+    def get(self, request: Request, path: str, flag_type: str) -> Response:
         # Validate flag_type
         valid_types = [t[0] for t in ContentFlag.FlagType.choices]
         if flag_type not in valid_types:
@@ -732,7 +754,7 @@ class FlagListView(StormCloudBaseAPIView):
         },
         tags=["CMS Flags"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         owner = request.user
 
         # Get query parameters
@@ -794,6 +816,85 @@ class FlagListView(StormCloudBaseAPIView):
         )
 
 
+class PageFlagsView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/cms/pages/flags/
+
+    Get aggregated flag counts per page.
+    """
+
+    @extend_schema(
+        summary="Get flag counts per page",
+        description="Returns aggregated content flag counts for each page.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "pages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "page_path": {"type": "string"},
+                                "flags": {
+                                    "type": "object",
+                                    "properties": {
+                                        "ai_generated": {"type": "integer"},
+                                        "user_approved": {"type": "integer"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        tags=["CMS Flags"],
+    )
+    def get(self, request):
+        owner = request.user
+
+        # Get all pages for this user
+        pages = PageFileMapping.objects.filter(
+            owner=owner
+        ).values('page_path').distinct()
+
+        result = []
+        for page in pages:
+            page_path = page['page_path']
+
+            # Get file paths on this page
+            file_paths = PageFileMapping.objects.filter(
+                owner=owner,
+                page_path=page_path
+            ).values_list('file_path', flat=True)
+
+            # Count active flags on those files
+            ai_count = ContentFlag.objects.filter(
+                stored_file__owner=owner,
+                stored_file__path__in=file_paths,
+                flag_type='ai_generated',
+                is_active=True
+            ).count()
+
+            approved_count = ContentFlag.objects.filter(
+                stored_file__owner=owner,
+                stored_file__path__in=file_paths,
+                flag_type='user_approved',
+                is_active=True
+            ).count()
+
+            result.append({
+                'page_path': page_path,
+                'flags': {
+                    'ai_generated': ai_count,
+                    'user_approved': approved_count,
+                }
+            })
+
+        return Response({'pages': result})
+
+
 class PendingReviewView(StormCloudBaseAPIView):
     """
     GET /api/v1/cms/flags/pending/
@@ -818,7 +919,7 @@ class PendingReviewView(StormCloudBaseAPIView):
         },
         tags=["CMS Flags"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         owner = request.user
 
         # Files with ai_generated=True

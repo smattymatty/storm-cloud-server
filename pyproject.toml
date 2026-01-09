@@ -98,6 +98,19 @@ warn_return_any = true
 module = "core.services.bulk"
 disable_error_code = ["misc"]        # Suppress TYPE_CHECKING User vs AbstractBaseUser ORM lookups
 
+[[tool.mypy.overrides]]
+module = "cms.api"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_return_any = true
+disable_error_code = ["misc"]        # Suppress django-stubs false positives
+
+[[tool.mypy.overrides]]
+module = "cms.serializers"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_return_any = true
+
 # =============================================================================
 # Per-Library Overrides (Third-party compatibility)
 # =============================================================================

@@ -11,6 +11,8 @@ urlpatterns = [
     path("mappings/report/", api.MappingReportView.as_view(), name="mapping-report"),
     # Pages list
     path("pages/", api.PageListView.as_view(), name="page-list"),
+    # Page-level flag aggregation (must come before page detail regex)
+    path("pages/flags/", api.PageFlagsView.as_view(), name="page-flags"),
     # Page detail and delete (path can contain slashes)
     re_path(
         r"^pages/(?P<page_path>.+)/$",
