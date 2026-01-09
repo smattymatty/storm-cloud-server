@@ -5,6 +5,7 @@ from rest_framework.test import APITestCase
 from django_mercury import monitor
 from accounts.tests.factories import UserWithProfileFactory, APIKeyFactory
 from storage.models import ShareLink
+from storage.tests.factories import ShareLinkFactory
 
 
 class PublicShareAccessPerformance(APITestCase):

@@ -46,6 +46,9 @@
       ansible.builtin.set_fact:
         postgres_password: "{{ lookup('env', 'STORMCLOUD_POSTGRES_PASSWORD') }}"
         secret_key_input: "{{ lookup('env', 'STORMCLOUD_SECRET_KEY') }}"
+        storage_encryption_key: "{{ lookup('env', 'STORMCLOUD_ENCRYPTION_KEY') | default('', true) }}"
+        storage_encryption_method: "{{ 'server' if (lookup('env', 'STORMCLOUD_ENCRYPTION_KEY') | default('', true) | length > 0) else 'none' }}"
+        storage_encryption_key_id: "{{ lookup('env', 'STORMCLOUD_ENCRYPTION_KEY_ID') | default('1', true) }}"
       no_log: true
       tags: [always]
 
@@ -812,6 +815,8 @@
         keys:
           - SECRET_KEY
           - POSTGRES_PASSWORD
+          - STORAGE_ENCRYPTION_KEY
+          - STORAGE_ENCRYPTION_METHOD
         required: false
       register: existing_secrets
       when: env_check.stat.exists
@@ -833,6 +838,102 @@
         db_password: "{{ postgres_password }}"
       when: db_password is not defined
       no_log: true
+      tags: [app, env]
+
+    # -------------------------------------------------------------------------
+    # Encryption Key Safety Checks (ADR 010)
+    # -------------------------------------------------------------------------
+
+    - name: Check for encryption key mismatch (CRITICAL SAFETY CHECK)
+      ansible.builtin.fail:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ⛔ ENCRYPTION KEY MISMATCH - DEPLOYMENT BLOCKED
+          ══════════════════════════════════════════════════════════════
+
+          The server has encryption ENABLED with an existing key, but you
+          are deploying with a DIFFERENT key (or no key).
+
+          This would make all encrypted files UNREADABLE!
+
+          Options:
+            1. Set the CORRECT key:
+               export STORMCLOUD_ENCRYPTION_KEY="your-existing-key"
+
+            2. If you lost the key and accept data loss, SSH to server and
+               manually disable encryption in {{ install_path }}/.env
+
+          ══════════════════════════════════════════════════════════════
+      when:
+        - env_check.stat.exists
+        - existing_secrets.values.STORAGE_ENCRYPTION_KEY is defined
+        - existing_secrets.values.STORAGE_ENCRYPTION_KEY | length > 0
+        - storage_encryption_key != existing_secrets.values.STORAGE_ENCRYPTION_KEY
+      tags: [app, env]
+
+    - name: Warn if disabling encryption on encrypted server
+      ansible.builtin.fail:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ⛔ CANNOT DISABLE ENCRYPTION - DEPLOYMENT BLOCKED
+          ══════════════════════════════════════════════════════════════
+
+          The server has encryption ENABLED, but you are deploying
+          WITHOUT an encryption key (STORMCLOUD_ENCRYPTION_KEY not set).
+
+          This would disable encryption and make existing files UNREADABLE!
+
+          Options:
+            1. Set your encryption key:
+               export STORMCLOUD_ENCRYPTION_KEY="your-existing-key"
+
+            2. If you intentionally want to disable encryption (DATA LOSS!),
+               SSH to server and manually clear STORAGE_ENCRYPTION_KEY in
+               {{ install_path }}/.env first.
+
+          ══════════════════════════════════════════════════════════════
+      when:
+        - env_check.stat.exists
+        - existing_secrets.values.STORAGE_ENCRYPTION_METHOD is defined
+        - existing_secrets.values.STORAGE_ENCRYPTION_METHOD == 'server'
+        - storage_encryption_key | length == 0
+      tags: [app, env]
+
+    - name: Preserve existing encryption key (if not explicitly provided)
+      ansible.builtin.set_fact:
+        storage_encryption_key: "{{ existing_secrets.values.STORAGE_ENCRYPTION_KEY }}"
+        storage_encryption_method: "{{ existing_secrets.values.STORAGE_ENCRYPTION_METHOD }}"
+      when:
+        - env_check.stat.exists
+        - existing_secrets.values.STORAGE_ENCRYPTION_KEY is defined
+        - existing_secrets.values.STORAGE_ENCRYPTION_KEY | length > 0
+        - storage_encryption_key | length == 0
+      no_log: true
+      tags: [app, env]
+
+    - name: Notify when enabling encryption for first time
+      ansible.builtin.debug:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          🔐 ENCRYPTION BEING ENABLED
+          ══════════════════════════════════════════════════════════════
+
+          You are enabling encryption for the first time on this server.
+
+          ⚠️  SAVE YOUR ENCRYPTION KEY SECURELY!
+
+          If you lose this key, encrypted files will be UNRECOVERABLE.
+
+          After deployment, encrypt existing files with:
+            make encrypt-files
+
+          ══════════════════════════════════════════════════════════════
+      when:
+        - storage_encryption_key | length > 0
+        - not env_check.stat.exists or existing_secrets.values.STORAGE_ENCRYPTION_KEY is not defined or existing_secrets.values.STORAGE_ENCRYPTION_KEY | length == 0
       tags: [app, env]
 
     - name: Write .env
@@ -934,6 +1035,24 @@
 
           ══════════════════════════════════════════════════════════════
       tags: [always]
+
+    # -------------------------------------------------------------------------
+    # Encryption Management (run with --tags encrypt)
+    # -------------------------------------------------------------------------
+
+    - name: Encrypt existing files
+      ansible.builtin.command:
+        cmd: docker compose exec -T app python manage.py encrypt_existing_files --mode {{ encrypt_mode | default('audit') }} {{ '--force' if encrypt_mode == 'encrypt' else '' }}
+        chdir: "{{ install_path }}"
+      become_user: "{{ app_user }}"
+      register: encrypt_result
+      tags: [encrypt, never]
+
+    - name: Show encryption result
+      ansible.builtin.debug:
+        msg: "{{ encrypt_result.stdout_lines }}"
+      when: encrypt_result is defined
+      tags: [encrypt, never]
 
   # ===========================================================================
   # HANDLERS

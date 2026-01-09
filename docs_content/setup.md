@@ -325,6 +325,40 @@ Key production requirements:
 
 ---
 
+## Encryption (Optional)
+
+Storm Cloud supports AES-256-GCM encryption at rest. All files are encrypted before writing to disk.
+
+### Enable Encryption
+
+1. **Generate encryption key:**
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+
+2. **Save the key securely** (password manager, secrets vault)
+
+3. **Set environment variable before deploying:**
+   ```bash
+   export STORMCLOUD_ENCRYPTION_KEY="your-generated-key"
+   make deploy
+   ```
+
+4. **Encrypt existing files (if any):**
+   ```bash
+   make encrypt-files
+   ```
+
+### Important
+
+- **Save your key!** Losing the encryption key means losing access to all encrypted files
+- Once encryption is enabled, it cannot be disabled
+- The deployment will block if you try to deploy with a different key
+
+See [Encryption Guide](storage/encryption.md) for full documentation.
+
+---
+
 ## Backup & Restore
 
 ### Create Backup

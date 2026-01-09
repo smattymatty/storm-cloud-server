@@ -44,3 +44,9 @@ STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ _max_upload_size_mb }}
 UPLOADS_PATH=/var/stormcloud/uploads
 BACKUPS_PATH=/var/stormcloud/backups
 STORMCLOUD_STORAGE_ROOT=/app/uploads
+
+# Encryption (ADR 010)
+# Generate key with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+STORAGE_ENCRYPTION_METHOD={{ storage_encryption_method | default('none') }}
+STORAGE_ENCRYPTION_KEY={{ storage_encryption_key | default('') }}
+STORAGE_ENCRYPTION_KEY_ID={{ storage_encryption_key_id | default('1') }}

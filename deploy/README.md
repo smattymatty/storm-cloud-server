@@ -83,6 +83,10 @@ export STORMCLOUD_POSTGRES_PASSWORD="CHANGE_ME"
 # Optional (will prompt if not set)
 export STORMCLOUD_SECRET_KEY=""  # Auto-generates if empty
 
+# Encryption (optional - enables server-side encryption at rest)
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+export STORMCLOUD_ENCRYPTION_KEY=""  # Leave empty to disable encryption
+
 # Deploy
 make deploy
 ```

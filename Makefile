@@ -12,6 +12,7 @@
 
 .PHONY: help setup build up down restart logs shell superuser api_key migrate backup clean \
         deploy deploy-check deploy-app deploy-nginx deploy-ssl \
+        encrypt-audit encrypt-files \
         destroy destroy-check destroy-app destroy-force
 
 # Colors
@@ -200,6 +201,36 @@ deploy-ssl: ## Renew/update SSL certificates
 		-i inventory.yml \
 		--extra-vars "@../config.yml" \
 		--tags ssl -K
+
+encrypt-audit: ## Audit unencrypted files on production
+	@echo "$(GREEN)Auditing unencrypted files...$(NC)"
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@cd deploy/ansible && ansible-playbook playbook.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "encrypt_mode=audit" \
+		--tags encrypt -K
+
+encrypt-files: ## Encrypt existing files on production (requires encryption key set)
+	@echo "$(GREEN)Encrypting existing files...$(NC)"
+	@if [ ! -f "$(CONFIG_FILE)" ]; then \
+		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)⚠️  This will encrypt all unencrypted files on the server.$(NC)"
+	@read -p "Continue? [y/N] " confirm; \
+	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+		echo "Aborted."; \
+		exit 1; \
+	fi
+	@cd deploy/ansible && ansible-playbook playbook.yml \
+		-i inventory.yml \
+		--extra-vars "@../config.yml" \
+		--extra-vars "encrypt_mode=encrypt" \
+		--tags encrypt -K
 
 # =============================================================================
 # DESTRUCTION 💀

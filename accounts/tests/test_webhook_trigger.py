@@ -1,5 +1,6 @@
 """Tests for webhook triggering on file operations."""
 
+import json
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -74,8 +75,8 @@ class WebhookTriggerTests(TestCase):
         self.assertIn("X-Storm-Signature", headers)
         self.assertEqual(headers["Content-Type"], "application/json")
 
-        # Check payload
-        payload = call_kwargs[1]["json"]
+        # Check payload (now sent as bytes, not json kwarg)
+        payload = json.loads(call_kwargs[1]["data"])
         self.assertEqual(payload["event"], "file.updated")
         self.assertEqual(payload["path"], "pages/about.md")
         self.assertIn("timestamp", payload)
@@ -127,18 +128,16 @@ class WebhookTriggerTests(TestCase):
         """Signature is valid HMAC-SHA256."""
         import hashlib
         import hmac
-        import json
 
         mock_post.return_value.ok = True
 
         _deliver_webhook(self.api_key.id, "file.updated", "pages/about.md")
 
         call_kwargs = mock_post.call_args
-        payload = call_kwargs[1]["json"]
+        payload_bytes = call_kwargs[1]["data"]
         signature = call_kwargs[1]["headers"]["X-Storm-Signature"]
 
-        # Verify signature
-        payload_bytes = json.dumps(payload, sort_keys=True).encode()
+        # Verify signature matches the exact bytes sent
         expected = hmac.new(
             self.api_key.webhook_secret.encode(),
             payload_bytes,
@@ -159,7 +158,7 @@ class WebhookTriggerTests(TestCase):
             extra_data={"old_path": "old/path.md"}
         )
 
-        payload = mock_post.call_args[1]["json"]
+        payload = json.loads(mock_post.call_args[1]["data"])
         self.assertEqual(payload["path"], "new/path.md")
         self.assertEqual(payload["old_path"], "old/path.md")
         self.assertEqual(payload["event"], "file.moved")
@@ -215,7 +214,7 @@ class WebhookEventTypesTests(TestCase):
 
         _deliver_webhook(self.api_key.id, "file.created", "new-file.md")
 
-        payload = mock_post.call_args[1]["json"]
+        payload = json.loads(mock_post.call_args[1]["data"])
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(payload["event"], "file.created")
         self.assertEqual(headers["X-Storm-Event"], "file.created")
@@ -227,7 +226,7 @@ class WebhookEventTypesTests(TestCase):
 
         _deliver_webhook(self.api_key.id, "file.updated", "existing.md")
 
-        payload = mock_post.call_args[1]["json"]
+        payload = json.loads(mock_post.call_args[1]["data"])
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(payload["event"], "file.updated")
         self.assertEqual(headers["X-Storm-Event"], "file.updated")
@@ -239,7 +238,7 @@ class WebhookEventTypesTests(TestCase):
 
         _deliver_webhook(self.api_key.id, "file.deleted", "removed.md")
 
-        payload = mock_post.call_args[1]["json"]
+        payload = json.loads(mock_post.call_args[1]["data"])
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(payload["event"], "file.deleted")
         self.assertEqual(headers["X-Storm-Event"], "file.deleted")
@@ -256,7 +255,7 @@ class WebhookEventTypesTests(TestCase):
             extra_data={"old_path": "old/location.md"}
         )
 
-        payload = mock_post.call_args[1]["json"]
+        payload = json.loads(mock_post.call_args[1]["data"])
         headers = mock_post.call_args[1]["headers"]
         self.assertEqual(payload["event"], "file.moved")
         self.assertEqual(payload["path"], "new/location.md")
