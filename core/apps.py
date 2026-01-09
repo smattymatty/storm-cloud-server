@@ -26,7 +26,8 @@ class CoreConfig(AppConfig):
                 )
 
             try:
-                key_bytes = base64.urlsafe_b64decode(key)
+                # Add padding - token_urlsafe() strips it but b64decode needs it
+                key_bytes = base64.urlsafe_b64decode(key + '==')
                 if len(key_bytes) != 32:
                     raise ValueError("Key must be 32 bytes")
             except Exception as e:

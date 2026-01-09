@@ -52,7 +52,8 @@ class EncryptionService:
         key_b64 = getattr(settings, "STORAGE_ENCRYPTION_KEY", "")
         if not key_b64:
             raise ValueError("STORAGE_ENCRYPTION_KEY not configured")
-        return base64.urlsafe_b64decode(key_b64)
+        # Add padding - token_urlsafe() strips it but b64decode needs it
+        return base64.urlsafe_b64decode(key_b64 + '==')
 
     @property
     def is_enabled(self) -> bool:

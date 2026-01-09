@@ -133,6 +133,40 @@
           ══════════════════════════════════════════════════════════════
       tags: [always]
 
+    - name: Validate encryption key format (early check)
+      ansible.builtin.command:
+        cmd: python3 -c "import base64; key=base64.urlsafe_b64decode('{{ storage_encryption_key }}' + '=='); assert len(key)==32, f'Key must be 32 bytes, got {len(key)}'"
+      delegate_to: localhost
+      register: key_validation_early
+      failed_when: false
+      changed_when: false
+      when: storage_encryption_key | default('') | length > 0
+      tags: [always]
+
+    - name: Fail early on invalid encryption key format
+      ansible.builtin.assert:
+        that:
+          - key_validation_early.rc == 0
+        fail_msg: |
+
+          ══════════════════════════════════════════════════════════════
+          ❌ INVALID ENCRYPTION KEY FORMAT
+          ══════════════════════════════════════════════════════════════
+
+          STORMCLOUD_ENCRYPTION_KEY is not valid base64url or wrong length.
+
+          Generate a valid key with:
+            python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+          Common issues:
+            - Extra whitespace or newline when copying
+            - Key was truncated
+            - Wrong characters in the key
+
+          ══════════════════════════════════════════════════════════════
+      when: storage_encryption_key | default('') | length > 0
+      tags: [always]
+
     - name: Check if nginx is already installed
       ansible.builtin.command: which nginx
       register: nginx_preinstalled
@@ -842,6 +876,7 @@
 
     # -------------------------------------------------------------------------
     # Encryption Key Safety Checks (ADR 010)
+    # Note: Key format validation happens early (before nginx/git) at line ~136
     # -------------------------------------------------------------------------
 
     - name: Check for encryption key mismatch (CRITICAL SAFETY CHECK)
