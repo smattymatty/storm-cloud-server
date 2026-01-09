@@ -1071,24 +1071,6 @@
           ══════════════════════════════════════════════════════════════
       tags: [always]
 
-    # -------------------------------------------------------------------------
-    # Encryption Management (run with --tags encrypt)
-    # -------------------------------------------------------------------------
-
-    - name: Encrypt existing files
-      ansible.builtin.command:
-        cmd: docker compose exec -T app python manage.py encrypt_existing_files --mode {{ encrypt_mode | default('audit') }} {{ '--force' if encrypt_mode == 'encrypt' else '' }}
-        chdir: "{{ install_path }}"
-      become_user: "{{ app_user }}"
-      register: encrypt_result
-      tags: [encrypt, never]
-
-    - name: Show encryption result
-      ansible.builtin.debug:
-        msg: "{{ encrypt_result.stdout_lines }}"
-      when: encrypt_result is defined
-      tags: [encrypt, never]
-
   # ===========================================================================
   # HANDLERS
   # ===========================================================================

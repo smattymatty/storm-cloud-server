@@ -204,33 +204,21 @@ deploy-ssl: ## Renew/update SSL certificates
 
 encrypt-audit: ## Audit unencrypted files on production
 	@echo "$(GREEN)Auditing unencrypted files...$(NC)"
-	@if [ ! -f "$(CONFIG_FILE)" ]; then \
-		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
-		exit 1; \
-	fi
-	@cd deploy/ansible && ansible-playbook playbook.yml \
-		-i inventory.yml \
-		--extra-vars "@../config.yml" \
-		--extra-vars "encrypt_mode=audit" \
-		--tags encrypt -K
+	@SERVER=$$(grep -A1 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_host | awk '{print $$2}'); \
+	USER=$$(grep -A2 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_user | awk '{print $$2}'); \
+	ssh $$USER@$$SERVER "cd /opt/stormcloud && docker compose exec -T web python manage.py encrypt_files --mode audit"
 
 encrypt-files: ## Encrypt existing files on production (requires encryption key set)
 	@echo "$(GREEN)Encrypting existing files...$(NC)"
-	@if [ ! -f "$(CONFIG_FILE)" ]; then \
-		echo "$(YELLOW)ERROR: $(CONFIG_FILE) not found$(NC)"; \
-		exit 1; \
-	fi
-	@echo "$(YELLOW)⚠️  This will encrypt all unencrypted files on the server.$(NC)"
+	@echo "$(YELLOW)This will encrypt all unencrypted files.$(NC)"
 	@read -p "Continue? [y/N] " confirm; \
 	if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
 		echo "Aborted."; \
 		exit 1; \
 	fi
-	@cd deploy/ansible && ansible-playbook playbook.yml \
-		-i inventory.yml \
-		--extra-vars "@../config.yml" \
-		--extra-vars "encrypt_mode=encrypt" \
-		--tags encrypt -K
+	@SERVER=$$(grep -A1 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_host | awk '{print $$2}'); \
+	USER=$$(grep -A2 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_user | awk '{print $$2}'); \
+	ssh $$USER@$$SERVER "cd /opt/stormcloud && docker compose exec -T web python manage.py encrypt_files --mode encrypt"
 
 # =============================================================================
 # DESTRUCTION 💀
