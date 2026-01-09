@@ -27,4 +27,26 @@ urlpatterns = [
     path("cleanup/", api.StaleCleanupView.as_view(), name="cleanup"),
     # Markdown preview (Django Spellbook rendering)
     path("preview/", api.MarkdownPreviewView.as_view(), name="markdown-preview"),
+    # ==========================================================================
+    # Content Flags
+    # ==========================================================================
+    # Flag list and pending review (static routes first)
+    path("flags/", api.FlagListView.as_view(), name="flag-list"),
+    path("flags/pending/", api.PendingReviewView.as_view(), name="pending-review"),
+    # File flags - history must come before set to avoid matching {flag_type}="history"
+    re_path(
+        r"^files/(?P<path>.+)/flags/(?P<flag_type>[a-z_]+)/history/$",
+        api.FlagHistoryView.as_view(),
+        name="flag-history",
+    ),
+    re_path(
+        r"^files/(?P<path>.+)/flags/(?P<flag_type>[a-z_]+)/$",
+        api.SetFlagView.as_view(),
+        name="set-flag",
+    ),
+    re_path(
+        r"^files/(?P<path>.+)/flags/$",
+        api.FileFlagsView.as_view(),
+        name="file-flags",
+    ),
 ]

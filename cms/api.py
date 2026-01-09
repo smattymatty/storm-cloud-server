@@ -11,13 +11,18 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from core.views import StormCloudBaseAPIView
+from storage.models import StoredFile
 
-from .models import PageFileMapping, PageStats
+from .models import ContentFlag, PageFileMapping, PageStats
 from .serializers import (
-    MappingReportSerializer,
-    PageSummarySerializer,
-    PageDetailSerializer,
+    ContentFlagSerializer,
+    FlagHistorySerializer,
     FileDetailSerializer,
+    FileWithFlagsSerializer,
+    MappingReportSerializer,
+    PageDetailSerializer,
+    PageSummarySerializer,
+    SetFlagSerializer,
 )
 
 
@@ -488,3 +493,370 @@ class MarkdownPreviewView(StormCloudBaseAPIView):
         content = request.data.get("content", "")
         html = spellbook_render(content)
         return Response({"html": html})
+
+
+# =============================================================================
+# Content Flag Views
+# =============================================================================
+
+
+class FileFlagsView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/cms/files/{path}/flags/
+
+    Get all flags for a file.
+    """
+
+    @extend_schema(
+        summary="Get all flags for a file",
+        description=(
+            "Get all flags for a file, including both set and unset flag types. "
+            "Each file can have multiple flags (one per type)."
+        ),
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "flags": {"type": "array", "items": {"$ref": "#/components/schemas/ContentFlag"}},
+                },
+            },
+        },
+        tags=["CMS Flags"],
+    )
+    def get(self, request, path: str):
+        # Find the file owned by the user
+        try:
+            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+        except StoredFile.DoesNotExist:
+            return Response(
+                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        flags = ContentFlag.objects.filter(stored_file=stored_file)
+
+        # Build response with all flag types (even if not set)
+        flag_data = {}
+        for flag in flags:
+            flag_data[flag.flag_type] = ContentFlagSerializer(flag).data
+
+        # Include inactive/unset flags
+        for flag_type, _ in ContentFlag.FlagType.choices:
+            if flag_type not in flag_data:
+                flag_data[flag_type] = {
+                    "flag_type": flag_type,
+                    "is_active": False,
+                    "metadata": {},
+                    "changed_by_username": None,
+                    "changed_at": None,
+                }
+
+        return Response(
+            {
+                "file_path": stored_file.path,
+                "flags": list(flag_data.values()),
+            }
+        )
+
+
+class SetFlagView(StormCloudBaseAPIView):
+    """
+    PUT /api/v1/cms/files/{path}/flags/{flag_type}/
+
+    Set a specific flag on a file.
+    """
+
+    @extend_schema(
+        summary="Set a flag on a file",
+        description=(
+            "Set a specific flag on a file. "
+            "Different flag types have different required metadata fields:\n"
+            "- ai_generated: requires 'model', optional 'prompt_context', 'notes'\n"
+            "- user_approved: optional 'notes'"
+        ),
+        request=SetFlagSerializer,
+        responses={200: ContentFlagSerializer},
+        tags=["CMS Flags"],
+    )
+    def put(self, request, path: str, flag_type: str):
+        # Validate flag_type
+        valid_types = [t[0] for t in ContentFlag.FlagType.choices]
+        if flag_type not in valid_types:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_FLAG_TYPE",
+                        "message": f"Invalid flag type. Must be one of: {valid_types}",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find the file owned by the user
+        try:
+            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+        except StoredFile.DoesNotExist:
+            return Response(
+                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = SetFlagSerializer(data=request.data, context={"flag_type": flag_type})
+        serializer.is_valid(raise_exception=True)
+
+        flag, created = ContentFlag.objects.get_or_create(
+            stored_file=stored_file,
+            flag_type=flag_type,
+            defaults={
+                "is_active": serializer.validated_data["is_active"],
+                "metadata": serializer.validated_data.get("metadata", {}),
+                "changed_by": request.user,
+            },
+        )
+
+        if not created:
+            flag.is_active = serializer.validated_data["is_active"]
+            flag.metadata = serializer.validated_data.get("metadata", {})
+            flag.changed_by = request.user
+            flag.save()  # Triggers history creation
+
+        return Response(ContentFlagSerializer(flag).data)
+
+
+class FlagHistoryView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/cms/files/{path}/flags/{flag_type}/history/
+
+    Get history for a specific flag.
+    """
+
+    @extend_schema(
+        summary="Get flag history",
+        description="Get the change history for a specific flag on a file.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "flag_type": {"type": "string"},
+                    "history": {"type": "array", "items": {"$ref": "#/components/schemas/ContentFlagHistory"}},
+                },
+            },
+        },
+        tags=["CMS Flags"],
+    )
+    def get(self, request, path: str, flag_type: str):
+        # Validate flag_type
+        valid_types = [t[0] for t in ContentFlag.FlagType.choices]
+        if flag_type not in valid_types:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_FLAG_TYPE",
+                        "message": f"Invalid flag type. Must be one of: {valid_types}",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Find the file owned by the user
+        try:
+            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+        except StoredFile.DoesNotExist:
+            return Response(
+                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            flag = ContentFlag.objects.get(stored_file=stored_file, flag_type=flag_type)
+        except ContentFlag.DoesNotExist:
+            return Response(
+                {
+                    "error": {
+                        "code": "FLAG_NOT_FOUND",
+                        "message": f"Flag '{flag_type}' not found for file: {path}",
+                    }
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        history = flag.history.all()
+
+        return Response(
+            {
+                "flag_type": flag_type,
+                "history": FlagHistorySerializer(history, many=True).data,
+            }
+        )
+
+
+class FlagListView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/cms/flags/
+
+    List files with flags, with optional filtering.
+    """
+
+    @extend_schema(
+        summary="List files with flags",
+        description=(
+            "List all files that have any flags. "
+            "Supports filtering by flag status."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="ai_generated",
+                type=str,
+                description="Filter by ai_generated flag: 'true' or 'false'",
+            ),
+            OpenApiParameter(
+                name="user_approved",
+                type=str,
+                description="Filter by user_approved flag: 'true' or 'false'",
+            ),
+            OpenApiParameter(
+                name="needs_review",
+                type=str,
+                description="Set to 'true' to show only files needing review (ai_generated=true AND user_approved!=true)",
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer"},
+                    "files": {"type": "array", "items": {"$ref": "#/components/schemas/FileWithFlags"}},
+                },
+            },
+        },
+        tags=["CMS Flags"],
+    )
+    def get(self, request):
+        owner = request.user
+
+        # Get query parameters
+        ai_generated_filter = request.query_params.get("ai_generated")
+        user_approved_filter = request.query_params.get("user_approved")
+        needs_review_filter = request.query_params.get("needs_review", "").lower() == "true"
+
+        # Build the file list with flag status
+        # Get all files for this user that have any flags
+        files_with_flags = StoredFile.objects.filter(
+            owner=owner,
+            content_flags__isnull=False,
+        ).distinct()
+
+        result = []
+        for stored_file in files_with_flags:
+            # Get flag status
+            ai_flag = stored_file.content_flags.filter(flag_type="ai_generated").first()
+            approved_flag = stored_file.content_flags.filter(flag_type="user_approved").first()
+
+            ai_generated = ai_flag.is_active if ai_flag else None
+            user_approved = approved_flag.is_active if approved_flag else None
+            needs_review = (ai_generated is True) and (user_approved is not True)
+
+            # Get last flag change time
+            last_flag = stored_file.content_flags.order_by("-changed_at").first()
+            last_flag_change = last_flag.changed_at if last_flag else None
+
+            # Apply filters
+            if ai_generated_filter is not None:
+                filter_val = ai_generated_filter.lower() == "true"
+                if ai_generated != filter_val:
+                    continue
+
+            if user_approved_filter is not None:
+                filter_val = user_approved_filter.lower() == "true"
+                if user_approved != filter_val:
+                    continue
+
+            if needs_review_filter and not needs_review:
+                continue
+
+            result.append(
+                {
+                    "file_path": stored_file.path,
+                    "file_name": stored_file.name,
+                    "ai_generated": ai_generated,
+                    "user_approved": user_approved,
+                    "needs_review": needs_review,
+                    "last_flag_change": last_flag_change,
+                }
+            )
+
+        return Response(
+            {
+                "count": len(result),
+                "files": result,
+            }
+        )
+
+
+class PendingReviewView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/cms/flags/pending/
+
+    Files that need review (ai_generated but not user_approved).
+    """
+
+    @extend_schema(
+        summary="List files pending review",
+        description=(
+            "Get files that need review: ai_generated=true AND user_approved!=true. "
+            "This is a convenience endpoint equivalent to /flags/?needs_review=true"
+        ),
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "count": {"type": "integer"},
+                    "files": {"type": "array", "items": {"$ref": "#/components/schemas/FileWithFlags"}},
+                },
+            },
+        },
+        tags=["CMS Flags"],
+    )
+    def get(self, request):
+        owner = request.user
+
+        # Files with ai_generated=True
+        ai_generated_files = ContentFlag.objects.filter(
+            stored_file__owner=owner,
+            flag_type="ai_generated",
+            is_active=True,
+        ).values_list("stored_file_id", flat=True)
+
+        # Files with user_approved=True
+        approved_files = ContentFlag.objects.filter(
+            stored_file__owner=owner,
+            flag_type="user_approved",
+            is_active=True,
+        ).values_list("stored_file_id", flat=True)
+
+        # Pending = AI generated but not approved
+        pending_file_ids = set(ai_generated_files) - set(approved_files)
+
+        files = StoredFile.objects.filter(id__in=pending_file_ids)
+
+        result = []
+        for stored_file in files:
+            ai_flag = stored_file.content_flags.filter(flag_type="ai_generated").first()
+            result.append(
+                {
+                    "file_path": stored_file.path,
+                    "file_name": stored_file.name,
+                    "ai_generated": True,
+                    "user_approved": False,
+                    "needs_review": True,
+                    "last_flag_change": ai_flag.changed_at if ai_flag else None,
+                }
+            )
+
+        return Response(
+            {
+                "count": len(result),
+                "files": result,
+            }
+        )

@@ -2,7 +2,8 @@
 
 from rest_framework import serializers
 
-from .models import ManagedContent, PageFileMapping
+from .models import ContentFlag, ContentFlagHistory, ManagedContent, PageFileMapping
+from .validators import validate_flag_metadata
 
 
 class ManagedContentSerializer(serializers.ModelSerializer):
@@ -91,3 +92,78 @@ class FileDetailSerializer(serializers.Serializer):
     file_path = serializers.CharField()
     pages = PageUsingFileSerializer(many=True)
     page_count = serializers.IntegerField()
+
+
+# =============================================================================
+# Content Flag Serializers
+# =============================================================================
+
+
+class ContentFlagSerializer(serializers.ModelSerializer):
+    """Read serializer for content flags."""
+
+    file_path = serializers.CharField(source="stored_file.path", read_only=True)
+    changed_by_username = serializers.CharField(
+        source="changed_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = ContentFlag
+        fields = [
+            "id",
+            "file_path",
+            "flag_type",
+            "is_active",
+            "metadata",
+            "changed_by_username",
+            "changed_at",
+        ]
+        read_only_fields = fields
+
+
+class SetFlagSerializer(serializers.Serializer):
+    """Write serializer for setting a flag."""
+
+    is_active = serializers.BooleanField()
+    metadata = serializers.JSONField(required=False, default=dict)
+
+    def validate(self, data):
+        flag_type = self.context.get("flag_type")
+        if not flag_type:
+            raise serializers.ValidationError("flag_type must be provided in context")
+
+        is_valid, error = validate_flag_metadata(flag_type, data.get("metadata", {}))
+        if not is_valid:
+            raise serializers.ValidationError({"metadata": error})
+        return data
+
+
+class FlagHistorySerializer(serializers.ModelSerializer):
+    """Serializer for flag history entries."""
+
+    changed_by_username = serializers.CharField(
+        source="changed_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = ContentFlagHistory
+        fields = [
+            "id",
+            "was_active",
+            "is_active",
+            "metadata",
+            "changed_by_username",
+            "changed_at",
+        ]
+        read_only_fields = fields
+
+
+class FileWithFlagsSerializer(serializers.Serializer):
+    """File summary with flag status for list views."""
+
+    file_path = serializers.CharField()
+    file_name = serializers.CharField()
+    ai_generated = serializers.BooleanField(allow_null=True)
+    user_approved = serializers.BooleanField(allow_null=True)
+    needs_review = serializers.BooleanField()
+    last_flag_change = serializers.DateTimeField(allow_null=True)

@@ -204,9 +204,10 @@ deploy-ssl: ## Renew/update SSL certificates
 
 encrypt-audit: ## Audit unencrypted files on production
 	@echo "$(GREEN)Auditing unencrypted files...$(NC)"
-	@SERVER=$$(grep -A1 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_host | awk '{print $$2}'); \
-	USER=$$(grep -A2 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_user | awk '{print $$2}'); \
-	ssh $$USER@$$SERVER "cd /opt/stormcloud && docker compose exec -T web python manage.py encrypt_files --mode audit"
+	@SERVER=$$(grep '^server_ip:' deploy/config.yml | sed 's/.*: *"\([^"]*\)".*/\1/'); \
+	USER=$$(grep '^ssh_user:' deploy/config.yml | sed 's/.*: *\([^ #]*\).*/\1/'); \
+	APP_USER=$$(grep '^app_user:' deploy/config.yml | sed 's/.*: *\([^ #]*\).*/\1/'); \
+	ssh -t $$USER@$$SERVER "sudo -u $$APP_USER bash -c 'cd /home/$$APP_USER/storm-cloud-server && docker compose exec -T web python manage.py encrypt_existing_files --mode audit'"
 
 encrypt-files: ## Encrypt existing files on production (requires encryption key set)
 	@echo "$(GREEN)Encrypting existing files...$(NC)"
@@ -216,9 +217,10 @@ encrypt-files: ## Encrypt existing files on production (requires encryption key 
 		echo "Aborted."; \
 		exit 1; \
 	fi
-	@SERVER=$$(grep -A1 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_host | awk '{print $$2}'); \
-	USER=$$(grep -A2 'stormcloud:' deploy/ansible/inventory.yml | grep ansible_user | awk '{print $$2}'); \
-	ssh $$USER@$$SERVER "cd /opt/stormcloud && docker compose exec -T web python manage.py encrypt_files --mode encrypt"
+	@SERVER=$$(grep '^server_ip:' deploy/config.yml | sed 's/.*: *"\([^"]*\)".*/\1/'); \
+	USER=$$(grep '^ssh_user:' deploy/config.yml | sed 's/.*: *\([^ #]*\).*/\1/'); \
+	APP_USER=$$(grep '^app_user:' deploy/config.yml | sed 's/.*: *\([^ #]*\).*/\1/'); \
+	ssh -t $$USER@$$SERVER "sudo -u $$APP_USER bash -c 'cd /home/$$APP_USER/storm-cloud-server && docker compose exec -T web python manage.py encrypt_existing_files --mode encrypt --force'"
 
 # =============================================================================
 # DESTRUCTION 💀
