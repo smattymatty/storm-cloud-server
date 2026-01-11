@@ -851,7 +851,7 @@ class PageFlagsView(StormCloudBaseAPIView):
         },
         tags=["CMS Flags"],
     )
-    def get(self, request):
+    def get(self, request: Request) -> Response:
         owner = request.user
 
         # Get all pages for this user

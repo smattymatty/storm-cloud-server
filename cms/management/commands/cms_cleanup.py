@@ -55,7 +55,7 @@ class Command(BaseCommand):
             user_ids = PageFileMapping.objects.values_list(
                 "owner_id", flat=True
             ).distinct()
-            users = User.objects.filter(id__in=user_ids)
+            users = list(User.objects.filter(id__in=user_ids))
 
         if not users:
             self.stdout.write("No users with mappings found.")
