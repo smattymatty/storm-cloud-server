@@ -1,6 +1,7 @@
 """Tests for admin CMS API endpoints."""
 
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -11,7 +12,10 @@ from cms.models import ContentFlag, ContentFlagHistory, PageFileMapping, PageSta
 from core.tests.base import StormCloudAdminTestCase
 from storage.models import StoredFile
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser as User
+else:
+    User = get_user_model()
 
 
 class AdminCmsTestMixin:
@@ -60,8 +64,8 @@ class AdminCmsTestMixin:
         stored_file: StoredFile,
         flag_type: str,
         is_active: bool = True,
-        changed_by: User = None,
-        metadata: dict = None,
+        changed_by: "User | None" = None,
+        metadata: dict | None = None,
     ) -> ContentFlag:
         """Create a ContentFlag for a file."""
         if metadata is None:

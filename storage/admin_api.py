@@ -105,6 +105,12 @@ class AdminDirectoryListRootView(AdminFileBaseView):
                 location=OpenApiParameter.QUERY,
                 description="Pagination cursor",
             ),
+            OpenApiParameter(
+                name="search",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by name (case-insensitive contains)",
+            ),
         ],
         responses={200: OpenApiResponse(description="Directory listing")},
         tags=["Admin - Files"],
@@ -226,6 +232,15 @@ class AdminDirectoryListRootView(AdminFileBaseView):
             ),
         )
 
+        # Filter by search term
+        search = request.query_params.get("search", "").strip()
+        if search:
+            search_lower = search.lower()
+            entry_data = [
+                e for e in entry_data
+                if search_lower in str(e["name"]).lower()
+            ]
+
         # Pagination
         limit = min(int(request.query_params.get("limit", 50)), 200)
         cursor = request.query_params.get("cursor")
@@ -284,6 +299,24 @@ class AdminDirectoryListView(AdminDirectoryListRootView):
                 type=str,
                 location=OpenApiParameter.PATH,
                 description="Directory path",
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description="Max entries per page (default 50, max 200)",
+            ),
+            OpenApiParameter(
+                name="cursor",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Pagination cursor",
+            ),
+            OpenApiParameter(
+                name="search",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter by name (case-insensitive contains)",
             ),
         ],
         responses={200: OpenApiResponse(description="Directory listing")},

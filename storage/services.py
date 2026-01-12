@@ -212,6 +212,7 @@ class DirectoryService:
         dir_path: str = "",
         limit: int = 50,
         cursor: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> DirectoryListResult:
         """List directory contents with pagination."""
         # Normalize and validate path
@@ -284,6 +285,14 @@ class DirectoryService:
                 x["name"],
             ),
         )
+
+        # Filter by search term
+        if search:
+            search_lower = search.lower()
+            entry_data = [
+                e for e in entry_data
+                if search_lower in str(e["name"]).lower()
+            ]
 
         # Pagination
         limit = min(limit, 200)

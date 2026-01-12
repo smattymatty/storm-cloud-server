@@ -5,10 +5,10 @@ These endpoints allow admins to browse and manage any user's CMS data
 """
 
 from datetime import timedelta
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Max, Min
+from django.db.models import Count, Max, Min, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -27,7 +27,10 @@ from .serializers import (
     SetFlagSerializer,
 )
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser as User
+else:
+    User = get_user_model()
 
 
 def _target_user_response(target_user: User) -> dict[str, Any]:
@@ -85,6 +88,11 @@ class AdminPageListView(AdminCmsBaseView):
                 type=str,
                 description="Sort order: 'asc' or 'desc' (default: desc)",
             ),
+            OpenApiParameter(
+                name="search",
+                type=str,
+                description="Filter pages by path (case-insensitive contains)",
+            ),
         ],
         responses={200: dict},
         tags=["Admin - CMS"],
@@ -93,9 +101,15 @@ class AdminPageListView(AdminCmsBaseView):
         target_user = self.get_target_user(user_id)
         threshold = timezone.now() - timedelta(hours=24)
 
+        # Build filter with optional search
+        base_filter = Q(owner=target_user)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            base_filter &= Q(page_path__icontains=search)
+
         # Aggregate by page_path
         pages = (
-            PageFileMapping.objects.filter(owner=target_user)
+            PageFileMapping.objects.filter(base_filter)
             .values("page_path")
             .annotate(
                 file_count=Count("id"),

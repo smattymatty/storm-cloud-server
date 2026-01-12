@@ -97,8 +97,9 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
 
         limit = min(int(request.query_params.get("limit", 50)), 200)
         cursor = request.query_params.get("cursor")
+        search = request.query_params.get("search", "").strip() or None
 
-        result = service.list_directory(dir_path, limit=limit, cursor=cursor)
+        result = service.list_directory(dir_path, limit=limit, cursor=cursor, search=search)
 
         if not result.success:
             error_status = status.HTTP_400_BAD_REQUEST
@@ -137,6 +138,9 @@ class DirectoryListRootView(DirectoryListBaseView):
                 "limit", int, description="Items per page (default 50, max 200)"
             ),
             OpenApiParameter("cursor", str, description="Pagination cursor"),
+            OpenApiParameter(
+                "search", str, description="Filter by name (case-insensitive contains)"
+            ),
         ],
         responses={
             200: DirectoryListResponseSerializer,
@@ -160,6 +164,9 @@ class DirectoryListView(DirectoryListBaseView):
                 "limit", int, description="Items per page (default 50, max 200)"
             ),
             OpenApiParameter("cursor", str, description="Pagination cursor"),
+            OpenApiParameter(
+                "search", str, description="Filter by name (case-insensitive contains)"
+            ),
         ],
         responses={
             200: DirectoryListResponseSerializer,

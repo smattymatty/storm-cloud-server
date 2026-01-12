@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 
 from django.db import transaction
 from django_spellbook.parsers import spellbook_render
-from django.db.models import Count, F, Max, Min
+from django.db.models import Count, F, Max, Min, Q
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import status
@@ -149,6 +149,11 @@ class PageListView(StormCloudBaseAPIView):
                 type=str,
                 description="Sort order: 'asc' or 'desc' (default: desc)",
             ),
+            OpenApiParameter(
+                name="search",
+                type=str,
+                description="Filter pages by path (case-insensitive contains)",
+            ),
         ],
         responses={200: PageSummarySerializer(many=True)},
         tags=["CMS"],
@@ -157,9 +162,15 @@ class PageListView(StormCloudBaseAPIView):
         owner = request.user
         threshold = timezone.now() - timedelta(hours=24)
 
+        # Build filter with optional search
+        base_filter = Q(owner=owner)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            base_filter &= Q(page_path__icontains=search)
+
         # Aggregate by page_path
         pages = (
-            PageFileMapping.objects.filter(owner=owner)
+            PageFileMapping.objects.filter(base_filter)
             .values("page_path")
             .annotate(
                 file_count=Count("id"),
