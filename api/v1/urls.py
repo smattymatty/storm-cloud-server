@@ -81,6 +81,7 @@ from storage.admin_api import (
     AdminFileDownloadView,
     AdminFileUploadView,
 )
+from storage.search_api import AdminSearchFilesView, SearchFilesView
 
 # Server start time for uptime calculation
 _server_start_time = time.time()
@@ -306,6 +307,12 @@ urlpatterns = [
         AdminBulkOperationView.as_view(),
         name="admin-user-bulk-operation",
     ),
+    # User's file search
+    path(
+        "admin/users/<int:user_id>/search/files/",
+        AdminSearchFilesView.as_view(),
+        name="admin-user-search-files",
+    ),
     # -------------------------------------------------------------------------
     # Admin CMS Operations (act on user's CMS data)
     # -------------------------------------------------------------------------
@@ -316,6 +323,8 @@ urlpatterns = [
     # =========================================================================
     # Storage
     # =========================================================================
+    # Recursive file search
+    path("search/files/", SearchFilesView.as_view(), name="search-files"),
     # Directories (ls operations)
     path("dirs/", DirectoryListRootView.as_view(), name="dir-list-root"),
     # Root directory reorder/reset (must come before <path:> routes)
