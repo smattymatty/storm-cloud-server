@@ -971,6 +971,16 @@
         - not env_check.stat.exists or existing_secrets.values.STORAGE_ENCRYPTION_KEY is not defined or existing_secrets.values.STORAGE_ENCRYPTION_KEY | length == 0
       tags: [app, env]
 
+    - name: Backup existing .env before overwriting
+      ansible.builtin.copy:
+        src: "{{ install_path }}/.env"
+        dest: "{{ install_path }}/.env.backup.{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: yes
+        owner: "{{ app_user }}"
+        mode: "0600"
+      when: env_check.stat.exists
+      tags: [app, env]
+
     - name: Write .env
       ansible.builtin.template:
         src: templates/dotenv.j2

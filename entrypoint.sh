@@ -60,6 +60,73 @@ fi
 echo -e "${GREEN}Environment validation passed${NC}"
 
 # ============================================
+# CRITICAL: ENCRYPTION KEY SAFETY CHECK
+# ============================================
+echo ""
+echo "Step 1b/8: Checking encryption key safety..."
+
+STORAGE_ROOT="${STORMCLOUD_STORAGE_ROOT:-/app/uploads}"
+
+# Check if ANY encrypted files exist (files starting with 0x01 version byte)
+if [ -d "$STORAGE_ROOT" ]; then
+    # Look for files with encryption header (first byte = 0x01)
+    ENCRYPTED_FILE_COUNT=0
+    while IFS= read -r -d '' file; do
+        # Check first byte of file
+        FIRST_BYTE=$(xxd -l 1 -p "$file" 2>/dev/null || echo "")
+        if [ "$FIRST_BYTE" = "01" ]; then
+            ENCRYPTED_FILE_COUNT=$((ENCRYPTED_FILE_COUNT + 1))
+            if [ $ENCRYPTED_FILE_COUNT -eq 1 ]; then
+                FIRST_ENCRYPTED_FILE="$file"
+            fi
+        fi
+        # Stop after finding a few - we just need to know if any exist
+        if [ $ENCRYPTED_FILE_COUNT -ge 3 ]; then
+            break
+        fi
+    done < <(find "$STORAGE_ROOT" -type f -size +16c -print0 2>/dev/null | head -z -n 100)
+
+    if [ $ENCRYPTED_FILE_COUNT -gt 0 ]; then
+        echo -e "${YELLOW}Found encrypted files in storage${NC}"
+
+        # Check if encryption key is set
+        if [ -z "$STORAGE_ENCRYPTION_KEY" ]; then
+            echo ""
+            echo -e "${RED}╔══════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║  CRITICAL ERROR: ENCRYPTED FILES FOUND BUT NO KEY SET!       ║${NC}"
+            echo -e "${RED}╠══════════════════════════════════════════════════════════════╣${NC}"
+            echo -e "${RED}║  Your storage contains encrypted files but                   ║${NC}"
+            echo -e "${RED}║  STORAGE_ENCRYPTION_KEY is empty or missing.                 ║${NC}"
+            echo -e "${RED}║                                                              ║${NC}"
+            echo -e "${RED}║  WITHOUT THE ORIGINAL KEY, THIS DATA CANNOT BE RECOVERED.   ║${NC}"
+            echo -e "${RED}║                                                              ║${NC}"
+            echo -e "${RED}║  Example encrypted file:                                     ║${NC}"
+            echo -e "${RED}║  $FIRST_ENCRYPTED_FILE${NC}"
+            echo -e "${RED}║                                                              ║${NC}"
+            echo -e "${RED}║  TO FIX: Set STORAGE_ENCRYPTION_KEY to your original key    ║${NC}"
+            echo -e "${RED}║  TO OVERRIDE (DATA LOSS): Set FORCE_START_WITHOUT_KEY=true  ║${NC}"
+            echo -e "${RED}╚══════════════════════════════════════════════════════════════╝${NC}"
+            echo ""
+
+            if [ "$FORCE_START_WITHOUT_KEY" != "true" ]; then
+                echo "Container refusing to start to protect your data."
+                echo "If you've lost the key and accept data loss, set FORCE_START_WITHOUT_KEY=true"
+                exit 1
+            else
+                echo -e "${YELLOW}WARNING: FORCE_START_WITHOUT_KEY=true - proceeding despite missing key${NC}"
+                echo -e "${YELLOW}Encrypted files will be UNREADABLE${NC}"
+            fi
+        else
+            echo -e "${GREEN}✓${NC} Encryption key is set for encrypted files"
+        fi
+    else
+        echo -e "${GREEN}✓${NC} No encrypted files detected (or encryption key check passed)"
+    fi
+else
+    echo -e "${GREEN}✓${NC} Storage directory check skipped (not yet mounted)"
+fi
+
+# ============================================
 # 2. VALIDATE DATA DIRECTORY MOUNTS
 # ============================================
 echo ""
