@@ -936,6 +936,48 @@
         - storage_encryption_key | length == 0
       tags: [app, env]
 
+    # Belt-and-suspenders: Check actual files on disk, not just .env
+    - name: Check for encrypted files on disk
+      ansible.builtin.shell: |
+        count=0
+        for f in $(find {{ uploads_path | default('/var/stormcloud/uploads') }} -type f -size +16c 2>/dev/null | head -100); do
+          first_byte=$(xxd -l 1 -p "$f" 2>/dev/null || echo "")
+          [ "$first_byte" = "01" ] && count=$((count + 1))
+          [ $count -ge 3 ] && break
+        done
+        echo $count
+      register: encrypted_file_count
+      changed_when: false
+      failed_when: false
+      tags: [app, env]
+
+    - name: CRITICAL - Fail if encrypted files exist but no key provided
+      ansible.builtin.fail:
+        msg: |
+
+          ══════════════════════════════════════════════════════════════
+          CRITICAL: ENCRYPTED FILES DETECTED - NO KEY PROVIDED
+          ══════════════════════════════════════════════════════════════
+
+          Found {{ encrypted_file_count.stdout }} encrypted file(s) on disk,
+          but STORMCLOUD_ENCRYPTION_KEY is empty.
+
+          Deploying without the key will make ALL ENCRYPTED FILES UNREADABLE.
+
+          Either:
+            1. Set the correct encryption key:
+               export STORMCLOUD_ENCRYPTION_KEY="your-existing-key"
+
+            2. Or set in your local .env:
+               STORAGE_ENCRYPTION_KEY=your-existing-key
+
+          ══════════════════════════════════════════════════════════════
+
+      when:
+        - encrypted_file_count.stdout | default('0') | int > 0
+        - storage_encryption_key | length == 0
+      tags: [app, env]
+
     - name: Preserve existing encryption key (if not explicitly provided)
       ansible.builtin.set_fact:
         storage_encryption_key: "{{ existing_secrets.values.STORAGE_ENCRYPTION_KEY }}"
@@ -1079,6 +1121,31 @@
             make api_key
 
           ══════════════════════════════════════════════════════════════
+      tags: [always]
+
+    - name: CRITICAL - Save your encryption key!
+      ansible.builtin.debug:
+        msg: |
+
+          ██████████████████████████████████████████████████████████████
+          ██                                                          ██
+          ██   SAVE YOUR ENCRYPTION KEY NOW!                          ██
+          ██                                                          ██
+          ██████████████████████████████████████████████████████████████
+
+          Your encryption key is:
+
+            {{ storage_encryption_key }}
+
+          SAVE THIS TO A PASSWORD MANAGER RIGHT NOW!
+
+          If you lose this key, ALL YOUR FILES WILL BE UNRECOVERABLE.
+
+          This is your ONLY warning. The key will not be shown again.
+
+          ██████████████████████████████████████████████████████████████
+
+      when: storage_encryption_key | default('') | length > 0
       tags: [always]
 
   # ===========================================================================

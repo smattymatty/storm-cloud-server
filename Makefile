@@ -137,11 +137,23 @@ deploy: ## Deploy to production server (full deployment)
 	fi
 	@echo ""
 	@echo "$(GREEN)Running deployment playbook...$(NC)"
-	@cd deploy/ansible && ansible-playbook playbook.yml \
-		-i inventory.yml \
-		--extra-vars "@../config.yml" \
-		-K \
-		$(if $(EXTRA_VARS),--extra-vars "$(EXTRA_VARS)",)
+	@# Source .env and map variable names, then run Ansible (all in one shell)
+	@bash -c '\
+		if [ -f ".env" ]; then \
+			echo "Loading .env..."; \
+			set -a; \
+			source .env 2>/dev/null || true; \
+			set +a; \
+			[ -n "$$STORAGE_ENCRYPTION_KEY" ] && export STORMCLOUD_ENCRYPTION_KEY="$$STORAGE_ENCRYPTION_KEY"; \
+			[ -n "$$STORAGE_ENCRYPTION_METHOD" ] && export STORMCLOUD_ENCRYPTION_METHOD="$$STORAGE_ENCRYPTION_METHOD"; \
+			[ -n "$$POSTGRES_PASSWORD" ] && export STORMCLOUD_POSTGRES_PASSWORD="$$POSTGRES_PASSWORD"; \
+		fi; \
+		cd deploy/ansible && ansible-playbook playbook.yml \
+			-i inventory.yml \
+			--extra-vars "@../config.yml" \
+			-K \
+			$(if $(EXTRA_VARS),--extra-vars "$(EXTRA_VARS)",) \
+	'
 
 deploy-check: ## Dry-run deployment (shows what would change)
 	@echo "$(CYAN)Dry-run deployment (no changes will be made)$(NC)"
