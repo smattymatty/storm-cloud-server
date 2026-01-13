@@ -6,9 +6,6 @@ from django.views import View
 from django.db.models import F
 from django.utils import timezone
 
-from core.storage.local import LocalStorageBackend
-from core.services.encryption import DecryptionError
-
 from .models import ShareLink
 from .services import get_user_storage_path
 from .utils import get_share_link_by_token

@@ -129,14 +129,6 @@ deploy: ## Deploy to production server (full deployment)
 		echo ""; \
 		exit 1; \
 	fi
-	@if [ -z "$$STORMCLOUD_POSTGRES_PASSWORD" ]; then \
-		echo "$(YELLOW)ERROR: STORMCLOUD_POSTGRES_PASSWORD not set$(NC)"; \
-		echo ""; \
-		echo "Set it with:"; \
-		echo "  export STORMCLOUD_POSTGRES_PASSWORD=\"MY_SECURE_PASSWORD\""; \
-		echo ""; \
-		exit 1; \
-	fi
 	@echo "$(GREEN)Checking Ansible Galaxy requirements...$(NC)"
 	@if ! deploy/ansible/check-galaxy-deps.sh 2>/dev/null; then \
 		echo "$(GREEN)Installing Ansible Galaxy requirements...$(NC)"; \
