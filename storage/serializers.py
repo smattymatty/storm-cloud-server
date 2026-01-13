@@ -137,7 +137,7 @@ class ShareLinkResponseSerializer(serializers.ModelSerializer):
     def get_url(self, obj: ShareLink) -> str:
         """Build full public URL for this share link."""
         key = obj.get_public_url_key()
-        return f"/api/v1/public/{key}/"
+        return f"/share/{key}/"
 
     @extend_schema_field(serializers.BooleanField())
     def get_has_password(self, obj: ShareLink) -> bool:
