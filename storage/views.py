@@ -138,6 +138,10 @@ class PublicShareFileView(View):
 
     def get(self, request, token: str):
         """Stream the shared file."""
+        # Lazy imports to avoid circular import
+        from core.storage.local import LocalStorageBackend
+        from core.services.encryption import DecryptionError
+
         link = get_share_link_by_token(token)
 
         if not link or not link.is_valid():
