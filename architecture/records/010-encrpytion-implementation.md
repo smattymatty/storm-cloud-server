@@ -336,7 +336,19 @@ CLI decrypts locally
 **Accepted Trade-offs:**
 
 - Server holds keys (acceptable for Phase 1, client-side addresses later)
-- Single master key per deployment (per-user derivation provides isolation)
+- Single master key per deployment (per-user derivation provides isolatWhy client-side encryption is hard:
+
+    Key management (user loses key = data gone forever, no recovery)
+    Server can't search, index, or preview encrypted content
+    Sharing files between users becomes a cryptographic puzzle
+    Web UI needs browser-based crypto (WebCrypto API)
+    CLI needs encryption/decryption logic
+
+Why it's your moat:
+
+Nobody in the "self-hosted cloud storage" space does this well. Nextcloud's E2E encryption is notoriously janky. Most solutions punt on it entirely.
+
+If you nail this, "Canadian data sovereignty with zero-knowledge encryption" is a real differentiator, not marketing fluff.ion)
 - Migration is manual command (not automatic, gives operator control)
 
 ## Security Considerations
@@ -353,7 +365,19 @@ CLI decrypts locally
 | Threat | Protected? |
 |--------|------------|
 | Disk theft | ✅ Yes |
-| Backup leaks | ✅ Yes |
+| Backup leaks | ✅ Yes |Why client-side encryption is hard:
+
+    Key management (user loses key = data gone forever, no recovery)
+    Server can't search, index, or preview encrypted content
+    Sharing files between users becomes a cryptographic puzzle
+    Web UI needs browser-based crypto (WebCrypto API)
+    CLI needs encryption/decryption logic
+
+Why it's your moat:
+
+Nobody in the "self-hosted cloud storage" space does this well. Nextcloud's E2E encryption is notoriously janky. Most solutions punt on it entirely.
+
+If you nail this, "Canadian data sovereignty with zero-knowledge encryption" is a real differentiator, not marketing fluff.
 | Hosting provider snooping | ✅ Yes |
 | Database breach (metadata only) | ✅ Yes (files still encrypted) |
 | Full server compromise | ❌ No (attacker gets key) |
@@ -370,7 +394,19 @@ Last two threats require client-side encryption (Phase 2).
 - Key derivation must be deterministic (same user_id → same key)
 - Version byte must be checked before decryption
 - Storage backends must not access file contents without going through EncryptionService
+Why client-side encryption is hard:
 
+    Key management (user loses key = data gone forever, no recovery)
+    Server can't search, index, or preview encrypted content
+    Sharing files between users becomes a cryptographic puzzle
+    Web UI needs browser-based crypto (WebCrypto API)
+    CLI needs encryption/decryption logic
+
+Why it's your moat:
+
+Nobody in the "self-hosted cloud storage" space does this well. Nextcloud's E2E encryption is notoriously janky. Most solutions punt on it entirely.
+
+If you nail this, "Canadian data sovereignty with zero-knowledge encryption" is a real differentiator, not marketing fluff.
 **Manual Reviews:**
 
 - Changes to encryption algorithm require security review
