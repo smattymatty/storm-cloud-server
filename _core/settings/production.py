@@ -74,6 +74,12 @@ SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
 SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
 CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
 
+# SameSite Cookie Policy
+# 'Lax' is secure default for same-site requests (navigation + top-level GET)
+# 'None' required for cross-site but less secure (requires Secure=True)
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
 # Additional Security Headers (always enabled in production)
 SECURE_BROWSER_XSS_FILTER = True  # Enable browser XSS protection
 SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
