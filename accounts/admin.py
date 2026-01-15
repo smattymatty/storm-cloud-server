@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import APIKey, Organization, Account, EnrollmentKey
+from .models import APIKey, Organization, Account, EnrollmentKey, PlatformInvite
 
 
 @admin.register(Organization)
@@ -39,6 +39,23 @@ class EnrollmentKeyAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'single_use', 'organization', 'created_at']
     search_fields = ['name', 'key', 'required_email', 'organization__name']
     readonly_fields = ['id', 'key', 'created_at', 'updated_at', 'used_by']
+
+
+@admin.register(PlatformInvite)
+class PlatformInviteAdmin(admin.ModelAdmin):
+    """Admin interface for platform invites (client-first enrollment)."""
+
+    list_display = ['name', 'email', 'is_used', 'enrolled_user', 'is_active', 'expires_at', 'created_at']
+    list_filter = ['is_used', 'is_active', 'created_at']
+    search_fields = ['name', 'email', 'key']
+    readonly_fields = ['id', 'key', 'created_at', 'updated_at', 'is_used', 'used_by', 'used_at', 'enrolled_user']
+
+    fieldsets = (
+        (None, {'fields': ('email', 'name', 'key', 'is_active')}),
+        ('Enrollment Status', {'fields': ('enrolled_user', 'is_used', 'used_by', 'used_at')}),
+        ('Settings', {'fields': ('quota_bytes', 'expires_at')}),
+        ('Audit', {'fields': ('created_by', 'created_at', 'updated_at')}),
+    )
 
 
 @admin.register(APIKey)

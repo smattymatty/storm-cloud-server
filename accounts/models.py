@@ -17,6 +17,11 @@ def generate_enrollment_key() -> str:
     return f"ek_{secrets.token_urlsafe(32)}"
 
 
+def generate_platform_invite_key() -> str:
+    """Generate a secure platform invite key with prefix."""
+    return f"pi_{secrets.token_urlsafe(32)}"
+
+
 class Organization(AbstractBaseModel):
     """
     Top-level tenant container.
@@ -460,3 +465,110 @@ class APIKey(AbstractBaseModel):
         Permissions not explicitly set default to True.
         """
         return self.permissions.get(permission_name, True)
+
+
+class PlatformInvite(AbstractBaseModel):
+    """
+    Platform-level invitation for new client onboarding.
+
+    Unlike EnrollmentKey (which is org-scoped), PlatformInvite is used
+    to invite new clients who will create their own organization on signup.
+    This enables client-first enrollment where the client creates the org.
+    """
+    key = models.CharField(
+        max_length=64,
+        unique=True,
+        default=generate_platform_invite_key
+    )
+    email = models.EmailField(
+        help_text="Email address that must be used to claim this invite."
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Descriptive name, e.g., 'Acme Corp Onboarding'"
+    )
+
+    # Who created this invite (platform admin)
+    created_by = models.ForeignKey(
+        'Account',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_platform_invites',
+        help_text="Platform admin who created this invite."
+    )
+
+    # Usage tracking
+    is_used = models.BooleanField(
+        default=False,
+        help_text="Whether this invite has been claimed."
+    )
+    used_by = models.ForeignKey(
+        'Account',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='claimed_platform_invite',
+        help_text="Account that claimed this invite."
+    )
+    used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the invite was claimed."
+    )
+
+    # Two-step enrollment tracking
+    enrolled_user = models.OneToOneField(
+        get_user_model(),
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pending_platform_invite',
+        help_text="User who enrolled but hasn't created org yet."
+    )
+
+    # Expiration
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Invite expires after this time. Null = never expires."
+    )
+
+    # Org quota preset (applied when org is created)
+    quota_bytes = models.BigIntegerField(
+        default=0,
+        help_text="Storage quota for the new org in bytes. 0 = unlimited."
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Platform Invite"
+        verbose_name_plural = "Platform Invites"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['key']),
+            models.Index(fields=['email']),
+            models.Index(fields=['is_active', 'is_used']),
+        ]
+
+    def __str__(self):
+        status = "used" if self.is_used else ("active" if self.is_valid() else "invalid")
+        return f"{self.name} ({self.email}) - {status}"
+
+    def is_valid(self) -> bool:
+        """Check if this invite can still be used."""
+        if not self.is_active:
+            return False
+        if self.is_used:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False
+        return True
+
+    def mark_used(self, account: 'Account') -> None:
+        """Mark this invite as used by an account."""
+        self.is_used = True
+        self.used_by = account
+        self.used_at = timezone.now()
+        self.save(update_fields=['is_used', 'used_by', 'used_at', 'updated_at'])

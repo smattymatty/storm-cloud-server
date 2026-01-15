@@ -54,6 +54,14 @@ from accounts.enrollment_api import (
     EnrollmentResendView,
     EnrollmentInviteCreateView,
 )
+from accounts.platform_api import (
+    PlatformEnrollView,
+    PlatformInviteCreateView,
+    PlatformInviteDetailView,
+    PlatformInviteListView,
+    PlatformInviteValidateView,
+    PlatformSetupOrgView,
+)
 from storage.api import (
     BulkOperationView,
     BulkStatusView,
@@ -181,6 +189,37 @@ urlpatterns = [
         "enrollment/invite/create/",
         EnrollmentInviteCreateView.as_view(),
         name="enrollment-invite-create",
+    ),
+    # Platform Invites (client-first enrollment)
+    path(
+        "platform/invite/create/",
+        PlatformInviteCreateView.as_view(),
+        name="platform-invite-create",
+    ),
+    path(
+        "platform/invite/validate/",
+        PlatformInviteValidateView.as_view(),
+        name="platform-invite-validate",
+    ),
+    path(
+        "platform/invites/",
+        PlatformInviteListView.as_view(),
+        name="platform-invite-list",
+    ),
+    path(
+        "platform/invites/<uuid:invite_id>/",
+        PlatformInviteDetailView.as_view(),
+        name="platform-invite-detail",
+    ),
+    path(
+        "platform/enroll/",
+        PlatformEnrollView.as_view(),
+        name="platform-enroll",
+    ),
+    path(
+        "platform/setup-org/",
+        PlatformSetupOrgView.as_view(),
+        name="platform-setup-org",
     ),
     # Session Authentication (for Swagger UI)
     path("auth/login/", LoginView.as_view(), name="auth-login"),
