@@ -19,7 +19,7 @@ class Command(BaseCommand):
 
         # Get API key
         try:
-            api_key = APIKey.objects.select_related('user').get(id=key_id)
+            api_key = APIKey.objects.select_related('organization').get(id=key_id)
         except APIKey.DoesNotExist:
             raise CommandError(f'API key with ID "{key_id}" does not exist')
 
@@ -33,7 +33,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f'Successfully revoked API key "{api_key.name}" '
-                f'for user "{api_key.user.username}"'
+                f'for organization "{api_key.organization.name}"'
             )
         )
         self.stdout.write(f'Key ID: {api_key.id}')

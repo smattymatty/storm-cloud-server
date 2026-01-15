@@ -14,10 +14,25 @@ from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from accounts.authentication import APIKeyUser
 from core.views import StormCloudBaseAPIView
 from storage.models import StoredFile
 
 from .models import ContentFlag, PageFileMapping, PageStats
+
+
+def get_user_from_request(request: Request) -> User:
+    """
+    Get the actual Django User from a request.
+
+    For session auth, returns request.user directly.
+    For API key auth, returns the User associated with the API key's creator.
+    """
+    if isinstance(request.user, APIKeyUser):
+        return request.user.account.user
+    return request.user
+
+
 from .serializers import (
     ContentFlagSerializer,
     FlagHistorySerializer,
@@ -71,7 +86,7 @@ class MappingReportView(StormCloudBaseAPIView):
 
         page_path = serializer.validated_data["page_path"]
         file_paths = serializer.validated_data.get("file_paths")
-        owner = request.user
+        owner = get_user_from_request(request)
 
         # Normalize page_path to have leading slash
         if not page_path.startswith("/"):
@@ -159,7 +174,7 @@ class PageListView(StormCloudBaseAPIView):
         tags=["CMS"],
     )
     def get(self, request: Request) -> Response:
-        owner = request.user
+        owner = get_user_from_request(request)
         threshold = timezone.now() - timedelta(hours=24)
 
         # Build filter with optional search
@@ -273,11 +288,13 @@ class PageDetailView(StormCloudBaseAPIView):
         if not page_path.startswith("/"):
             page_path = f"/{page_path}"
 
-        owner = request.user
+        # PageFileMapping/PageStats use User, StoredFile uses Account
+        user_owner = get_user_from_request(request)
+        account_owner = request.user.account
         threshold = timezone.now() - timedelta(hours=24)
 
         mappings = PageFileMapping.objects.filter(
-            owner=owner, page_path=page_path
+            owner=user_owner, page_path=page_path
         ).order_by("-last_seen")
 
         if not mappings.exists():
@@ -289,7 +306,7 @@ class PageDetailView(StormCloudBaseAPIView):
         # Collect file paths and prefetch StoredFiles with their flags
         file_paths = [m.file_path for m in mappings]
         stored_files = StoredFile.objects.filter(
-            owner=owner, path__in=file_paths
+            owner=account_owner, path__in=file_paths
         ).prefetch_related("content_flags")
         stored_file_map = {sf.path: sf for sf in stored_files}
 
@@ -329,7 +346,7 @@ class PageDetailView(StormCloudBaseAPIView):
 
         # Get view count
         try:
-            stats = PageStats.objects.get(owner=owner, page_path=page_path)
+            stats = PageStats.objects.get(owner=user_owner, page_path=page_path)
             view_count = stats.view_count
         except PageStats.DoesNotExist:
             view_count = 0
@@ -363,7 +380,7 @@ class PageDetailView(StormCloudBaseAPIView):
         if not page_path.startswith("/"):
             page_path = f"/{page_path}"
 
-        owner = request.user
+        owner = get_user_from_request(request)
 
         deleted, _ = PageFileMapping.objects.filter(
             owner=owner, page_path=page_path
@@ -397,7 +414,7 @@ class FileDetailView(StormCloudBaseAPIView):
         tags=["CMS"],
     )
     def get(self, request: Request, file_path: str) -> Response:
-        owner = request.user
+        owner = get_user_from_request(request)
         threshold = timezone.now() - timedelta(hours=24)
 
         mappings = PageFileMapping.objects.filter(
@@ -479,7 +496,7 @@ class StaleCleanupView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        deleted = PageFileMapping.cleanup_stale(request.user, hours=hours)
+        deleted = PageFileMapping.cleanup_stale(get_user_from_request(request), hours=hours)
 
         return Response(
             {
@@ -560,7 +577,7 @@ class FileFlagsView(StormCloudBaseAPIView):
     def get(self, request: Request, path: str) -> Response:
         # Find the file owned by the user
         try:
-            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+            stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
                 {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
@@ -628,7 +645,7 @@ class SetFlagView(StormCloudBaseAPIView):
 
         # Find the file owned by the user
         try:
-            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+            stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
                 {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
@@ -644,14 +661,14 @@ class SetFlagView(StormCloudBaseAPIView):
             defaults={
                 "is_active": serializer.validated_data["is_active"],
                 "metadata": serializer.validated_data.get("metadata", {}),
-                "changed_by": cast(User, request.user),
+                "changed_by": get_user_from_request(request),
             },
         )
 
         if not created:
             flag.is_active = serializer.validated_data["is_active"]
             flag.metadata = serializer.validated_data.get("metadata", {})
-            flag.changed_by = cast(User, request.user)
+            flag.changed_by = get_user_from_request(request)
             flag.save()  # Triggers history creation
 
         return Response(ContentFlagSerializer(flag).data)
@@ -694,7 +711,7 @@ class FlagHistoryView(StormCloudBaseAPIView):
 
         # Find the file owned by the user
         try:
-            stored_file = StoredFile.objects.get(owner=request.user, path=path)
+            stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
                 {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
@@ -766,7 +783,7 @@ class FlagListView(StormCloudBaseAPIView):
         tags=["CMS Flags"],
     )
     def get(self, request: Request) -> Response:
-        owner = request.user
+        owner = request.user.account
 
         # Get query parameters
         ai_generated_filter = request.query_params.get("ai_generated")
@@ -863,11 +880,13 @@ class PageFlagsView(StormCloudBaseAPIView):
         tags=["CMS Flags"],
     )
     def get(self, request: Request) -> Response:
-        owner = request.user
+        # PageFileMapping uses User, StoredFile (via ContentFlag) uses Account
+        user_owner = get_user_from_request(request)
+        account_owner = request.user.account
 
         # Get all pages for this user
         pages = PageFileMapping.objects.filter(
-            owner=owner
+            owner=user_owner
         ).values('page_path').distinct()
 
         result = []
@@ -876,20 +895,20 @@ class PageFlagsView(StormCloudBaseAPIView):
 
             # Get file paths on this page
             file_paths = PageFileMapping.objects.filter(
-                owner=owner,
+                owner=user_owner,
                 page_path=page_path
             ).values_list('file_path', flat=True)
 
             # Count active flags on those files
             ai_count = ContentFlag.objects.filter(
-                stored_file__owner=owner,
+                stored_file__owner=account_owner,
                 stored_file__path__in=file_paths,
                 flag_type='ai_generated',
                 is_active=True
             ).count()
 
             approved_count = ContentFlag.objects.filter(
-                stored_file__owner=owner,
+                stored_file__owner=account_owner,
                 stored_file__path__in=file_paths,
                 flag_type='user_approved',
                 is_active=True
@@ -931,7 +950,7 @@ class PendingReviewView(StormCloudBaseAPIView):
         tags=["CMS Flags"],
     )
     def get(self, request: Request) -> Response:
-        owner = request.user
+        owner = request.user.account
 
         # Files with ai_generated=True
         ai_generated_files = ContentFlag.objects.filter(

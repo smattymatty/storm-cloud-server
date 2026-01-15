@@ -40,13 +40,13 @@ class BulkOperationServiceTestCase(TestCase):
         )
         self.settings_override.enable()
 
-        # Create user storage directory
-        self.user_storage = self.test_storage_root / str(self.user.id)
+        # Create user storage directory (use Account UUID, not User ID)
+        self.user_storage = self.test_storage_root / str(self.user.account.id)
         self.user_storage.mkdir(exist_ok=True)
 
         # Create service
         self.backend = LocalStorageBackend()
-        self.service = BulkOperationService(user=self.user, backend=self.backend)  # type: ignore[arg-type]
+        self.service = BulkOperationService(account=self.user.account, backend=self.backend)
 
     def tearDown(self):
         """Clean up test-specific storage."""
@@ -69,7 +69,7 @@ class BulkOperationServiceTestCase(TestCase):
             parent_path = ""
 
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.user.account,
             path=path,
             name=Path(path).name,
             size=len(content),
@@ -92,7 +92,7 @@ class BulkOperationServiceTestCase(TestCase):
             parent_path = ""
 
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.user.account,
             path=path,
             name=Path(path).name,
             size=0,
@@ -181,7 +181,7 @@ class BulkOperationServiceTestCase(TestCase):
         # Verify file deleted from filesystem and DB
         self.assertFalse((self.user_storage / "test.txt").exists())
         self.assertFalse(
-            StoredFile.objects.filter(owner=self.user, path="test.txt").exists()
+            StoredFile.objects.filter(owner=self.user.account, path="test.txt").exists()
         )
 
     def test_delete_multiple_files(self):
@@ -201,7 +201,7 @@ class BulkOperationServiceTestCase(TestCase):
         self.assertEqual(result.failed, 0)
 
         # Verify all files deleted
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 0)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
 
     def test_delete_directory_recursive(self):
         """Test deleting a directory recursively."""
@@ -239,7 +239,7 @@ class BulkOperationServiceTestCase(TestCase):
 
         # Verify good file was deleted
         self.assertFalse(
-            StoredFile.objects.filter(owner=self.user, path="good.txt").exists()
+            StoredFile.objects.filter(owner=self.user.account, path="good.txt").exists()
         )
 
     def test_delete_duplicate_paths(self):
@@ -280,7 +280,7 @@ class BulkOperationServiceTestCase(TestCase):
         self.assertTrue((self.user_storage / "dest" / "source.txt").exists())
 
         # Verify DB updated
-        db_file = StoredFile.objects.get(owner=self.user, path="dest/source.txt")
+        db_file = StoredFile.objects.get(owner=self.user.account, path="dest/source.txt")
         self.assertEqual(db_file.parent_path, "dest")
 
     def test_move_to_root(self):
@@ -367,7 +367,7 @@ class BulkOperationServiceTestCase(TestCase):
 
         # Verify DB has both records
         self.assertEqual(
-            StoredFile.objects.filter(owner=self.user).count(), 3
+            StoredFile.objects.filter(owner=self.user.account).count(), 3
         )  # source, dest dir, copy
 
     def test_copy_with_name_collision(self):
@@ -407,8 +407,8 @@ class BulkOperationServiceTestCase(TestCase):
     def test_copy_with_quota_check(self):
         """Test that copy respects user quotas."""
         # Set user quota to 100 bytes
-        self.user.profile.storage_quota_bytes = 100
-        self.user.profile.save()
+        self.user.account.storage_quota_bytes = 100
+        self.user.account.save()
 
         # Create a file that would exceed quota when copied
         self._create_file("large.txt", "x" * 60)  # 60 bytes

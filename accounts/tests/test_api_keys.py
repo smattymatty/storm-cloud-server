@@ -18,7 +18,7 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         # assert 'key' in response.data
         # assert response.data['name'] == 'test-key'
         # Verify key was saved to DB
-        self.authenticate()
+        self.authenticate_session(self.user)  # Session auth required for API key management
         data = {'name': 'test-key'}
         response = self.client.post('/api/v1/auth/tokens/', data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -26,18 +26,17 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         self.assertEqual(response.data['name'], 'test-key')
 
         # Verify key was saved
-        self.assertTrue(APIKey.objects.filter(user=self.user, name='test-key').exists())
+        self.assertTrue(APIKey.objects.filter(organization=self.user.account.organization, name='test-key').exists())
 
     @override_settings(STORMCLOUD_REQUIRE_EMAIL_VERIFICATION=True)
     def test_create_api_key_with_unverified_email_returns_403(self):
         """Creating API key with unverified email returns 403."""
-        # Authenticate
+        # Authenticate with session (session auth required for key management)
         # POST create key
         # assert response.status_code == 403
         # assert response.data['error']['code'] == 'EMAIL_NOT_VERIFIED'
-        unverified_user = UserWithProfileFactory()
-        unverified_key = APIKeyFactory(user=unverified_user)
-        self.authenticate(api_key=unverified_key)
+        unverified_user = UserWithProfileFactory()  # email_verified=False by default
+        self.authenticate_session(unverified_user)
 
         data = {'name': 'test-key'}
         response = self.client.post('/api/v1/auth/tokens/', data)
@@ -51,8 +50,8 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         # assert response.status_code == 403
         # assert response.data['error']['code'] == 'MAX_KEYS_EXCEEDED'
         # Create 2 active keys (including the one from setUp)
-        APIKeyFactory(user=self.user)
-        self.authenticate()
+        APIKeyFactory(organization=self.user.account.organization)
+        self.authenticate_session(self.user)  # Session auth required
 
         data = {'name': 'third-key'}
         response = self.client.post('/api/v1/auth/tokens/', data)
@@ -70,7 +69,7 @@ class APIKeyCreateTest(StormCloudAPITestCase):
 
         api_key_created.connect(signal_handler)
 
-        self.authenticate()
+        self.authenticate_session(self.user)  # Session auth required
         data = {'name': 'test-key'}
         response = self.client.post('/api/v1/auth/tokens/', data)
 
@@ -82,21 +81,21 @@ class APIKeyCreateTest(StormCloudAPITestCase):
 class APIKeyListTest(StormCloudAPITestCase):
     """Tests for GET /api/v1/auth/keys/"""
 
-    def test_list_api_keys_returns_user_keys(self):
-        """Listing keys returns only current user's keys."""
-        # Create 2 keys for user
-        # Create 1 key for different user
+    def test_list_api_keys_returns_org_keys(self):
+        """Listing keys returns only current organization's keys."""
+        # Create 2 keys for user's org
+        # Create 1 key for different org
         # GET /api/v1/auth/keys/
         # assert response.status_code == 200
         # assert response.data['total'] == 2
         # assert len(response.data['keys']) == 2
         self.authenticate()
-        # One key already exists from setUp, create another
-        APIKeyFactory(user=self.user)
+        # One key already exists from setUp, create another in same org
+        APIKeyFactory(organization=self.user.account.organization)
 
-        # Create key for different user
+        # Create key for different user (different org)
         other_user = UserWithProfileFactory()
-        APIKeyFactory(user=other_user)
+        APIKeyFactory(organization=other_user.account.organization)
 
         response = self.client.get('/api/v1/auth/tokens/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -121,7 +120,7 @@ class APIKeyListTest(StormCloudAPITestCase):
         # GET list
         # Verify both appear in response
         self.authenticate()
-        revoked_key = APIKeyFactory(user=self.user, revoked=True)
+        revoked_key = APIKeyFactory(organization=self.user.account.organization, revoked=True)
 
         response = self.client.get('/api/v1/auth/tokens/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -133,13 +132,13 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
     """Tests for POST /api/v1/auth/keys/{id}/revoke/"""
 
     def test_revoke_own_api_key_succeeds(self):
-        """Revoking own key succeeds."""
+        """Revoking org key succeeds."""
         # POST to /api/v1/auth/keys/{key.id}/revoke/
         # assert response.status_code == 200
         # Refresh key from DB, assert is_active == False
         # assert revoked_at is not None
-        self.authenticate()
-        key_to_revoke = APIKeyFactory(user=self.user)
+        self.authenticate_session(self.user)  # Session auth required for key management
+        key_to_revoke = APIKeyFactory(organization=self.user.account.organization)
 
         response = self.client.post(f'/api/v1/auth/tokens/{key_to_revoke.id}/revoke/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -154,22 +153,22 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
         # assert response.data['error']['code'] == 'KEY_NOT_FOUND'
         import uuid
 
-        self.authenticate()
+        self.authenticate_session(self.user)  # Session auth required
         fake_id = uuid.uuid4()
 
         response = self.client.post(f'/api/v1/auth/tokens/{fake_id}/revoke/')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data['error']['code'], 'KEY_NOT_FOUND')
 
-    def test_revoke_another_users_key_returns_404(self):
-        """Revoking another user's key returns 404."""
+    def test_revoke_another_orgs_key_returns_404(self):
+        """Revoking another org's key returns 404."""
         # Authenticate as self.user
-        # POST revoke other user's key
+        # POST revoke other org's key
         # assert response.status_code == 404
         other_user = UserWithProfileFactory()
-        other_key = APIKeyFactory(user=other_user)
+        other_key = APIKeyFactory(organization=other_user.account.organization)
 
-        self.authenticate()
+        self.authenticate_session(self.user)  # Session auth required
 
         response = self.client.post(f'/api/v1/auth/tokens/{other_key.id}/revoke/')
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -179,8 +178,8 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
         # POST revoke
         # assert response.status_code == 400
         # assert response.data['error']['code'] == 'ALREADY_REVOKED'
-        self.authenticate()
-        revoked_key = APIKeyFactory(user=self.user, revoked=True)
+        self.authenticate_session(self.user)  # Session auth required
+        revoked_key = APIKeyFactory(organization=self.user.account.organization, revoked=True)
 
         response = self.client.post(f'/api/v1/auth/tokens/{revoked_key.id}/revoke/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -197,8 +196,8 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
 
         api_key_revoked.connect(signal_handler)
 
-        self.authenticate()
-        key_to_revoke = APIKeyFactory(user=self.user)
+        self.authenticate_session(self.user)  # Session auth required
+        key_to_revoke = APIKeyFactory(organization=self.user.account.organization)
         response = self.client.post(f'/api/v1/auth/tokens/{key_to_revoke.id}/revoke/')
 
         api_key_revoked.disconnect(signal_handler)
@@ -232,17 +231,17 @@ class APIKeyAuthenticationTest(StormCloudAPITestCase):
         response = self.client.get('/api/v1/auth/me/')
         self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
-    def test_user_deactivation_stops_api_key(self):
-        """If user account is deactivated, their API keys should fail."""
+    def test_org_deactivation_stops_api_key(self):
+        """If organization is deactivated, API keys should fail."""
         # Create key and verify it works
-        key = APIKeyFactory(user=self.user)
+        key = APIKeyFactory(organization=self.user.account.organization)
         self.authenticate(api_key=key)
         response = self.client.get('/api/v1/auth/me/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Deactivate user
-        self.user.is_active = False
-        self.user.save()
+        # Deactivate organization
+        self.user.account.organization.is_active = False
+        self.user.account.organization.save()
 
         # Key should no longer work (401 or 403 depending on DRF config)
         response = self.client.get('/api/v1/auth/me/')
@@ -257,7 +256,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         """Existing API key should continue working after user verifies email."""
         # Create unverified user with admin-created key
         unverified_user = UserWithProfileFactory(verified=False)
-        key = APIKeyFactory(user=unverified_user)
+        key = APIKeyFactory(organization=unverified_user.account.organization)
 
         # Use key successfully (keys work regardless of email status)
         self.authenticate(api_key=key)
@@ -265,8 +264,8 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify the email
-        unverified_user.profile.is_email_verified = True
-        unverified_user.profile.save()
+        unverified_user.account.email_verified = True
+        unverified_user.account.save()
 
         # Same key should still work
         response = self.client.get('/api/v1/auth/me/')
@@ -277,7 +276,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         """API key created while verified should work even if email is later unverified."""
         # User starts verified
         verified_user = UserWithProfileFactory(verified=True)
-        key = APIKeyFactory(user=verified_user)
+        key = APIKeyFactory(organization=verified_user.account.organization)
 
         # Use key successfully
         self.authenticate(api_key=key)
@@ -285,8 +284,8 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Admin unverifies user's email (edge case)
-        verified_user.profile.is_email_verified = False
-        verified_user.profile.save()
+        verified_user.account.email_verified = False
+        verified_user.account.save()
 
         # Key should STILL work (only revocation stops keys)
         response = self.client.get('/api/v1/auth/me/')
@@ -297,14 +296,19 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         """User can't create own key without verification, but existing key works."""
         # Create unverified user
         unverified_user = UserWithProfileFactory(verified=False)
-        existing_key = APIKeyFactory(user=unverified_user)
+        existing_key = APIKeyFactory(
+            organization=unverified_user.account.organization,
+            created_by=unverified_user.account,
+        )
 
         # Existing key works for API calls
         self.authenticate(api_key=existing_key)
         response = self.client.get('/api/v1/auth/me/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # But user cannot create NEW keys
+        # Clear API key credentials before using session auth
+        self.client.credentials()  # Clear Bearer header
+        self.authenticate_session(unverified_user)
         response = self.client.post('/api/v1/auth/tokens/', {'name': 'new-key'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data['error']['code'], 'EMAIL_NOT_VERIFIED')
@@ -315,7 +319,10 @@ class APIKeyRevocationBehaviorTest(StormCloudAPITestCase):
 
     def test_password_change_does_not_affect_api_key(self):
         """Changing password should not invalidate API keys."""
-        key = APIKeyFactory(user=self.user)
+        key = APIKeyFactory(
+            organization=self.user.account.organization,
+            created_by=self.user.account,
+        )
         self.authenticate(api_key=key)
 
         # Verify key works
@@ -332,7 +339,10 @@ class APIKeyRevocationBehaviorTest(StormCloudAPITestCase):
 
     def test_revoked_key_cannot_be_unrevoked_via_model(self):
         """Once revoked, setting is_active=True doesn't fully restore the key."""
-        key = APIKeyFactory(user=self.user)
+        key = APIKeyFactory(
+            organization=self.user.account.organization,
+            created_by=self.user.account,
+        )
         key.revoke()
 
         # revoked_at should be set
@@ -347,14 +357,30 @@ class APIKeyRevocationBehaviorTest(StormCloudAPITestCase):
         # Key would technically work again, but revoked_at shows it was revoked
         self.assertIsNotNone(key.revoked_at)
 
-    def test_deleting_user_cascades_to_api_keys(self):
-        """Deleting a user should delete their API keys."""
+    def test_deleting_user_does_not_delete_org_api_keys(self):
+        """Deleting a user should NOT delete org API keys (keys are org-scoped)."""
         temp_user = UserWithProfileFactory(verified=True)
-        key = APIKeyFactory(user=temp_user)
+        org = temp_user.account.organization
+        key = APIKeyFactory(organization=org)
         key_id = key.id
 
-        # Delete user
+        # Delete the user's account first (breaks FK constraint)
+        account_id = temp_user.account.id
+        temp_user.account.delete()
         temp_user.delete()
 
-        # Key should be gone (CASCADE)
+        # Key should still exist (org-scoped, not user-scoped)
+        self.assertTrue(APIKey.objects.filter(id=key_id).exists())
+
+    def test_deleting_organization_cascades_to_api_keys(self):
+        """Deleting an organization should delete its API keys."""
+        temp_user = UserWithProfileFactory(verified=True)
+        org = temp_user.account.organization
+        key = APIKeyFactory(organization=org)
+        key_id = key.id
+
+        # Delete organization (cascades to accounts and keys)
+        org.delete()
+
+        # Key should be gone (CASCADE from organization)
         self.assertFalse(APIKey.objects.filter(id=key_id).exists())

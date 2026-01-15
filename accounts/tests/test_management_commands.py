@@ -24,7 +24,7 @@ class CreateTestUserCommandTest(TestCase):
         out = StringIO()
         call_command('create_test_user', '--username', 'testuser', '--verified', stdout=out)
         user = User.objects.get(username='testuser')
-        self.assertTrue(user.profile.is_email_verified)
+        self.assertTrue(user.account.email_verified)
 
 
 class GenerateAPIKeyCommandTest(TestCase):
@@ -37,7 +37,7 @@ class GenerateAPIKeyCommandTest(TestCase):
         """Generate API key should work."""
         out = StringIO()
         call_command('generate_api_key', 'testuser', '--name', 'test-key', stdout=out)
-        self.assertTrue(APIKey.objects.filter(user=self.user, name='test-key').exists())
+        self.assertTrue(APIKey.objects.filter(organization=self.user.account.organization, name='test-key').exists())
 
 
 class RevokeAPIKeyCommandTest(TestCase):

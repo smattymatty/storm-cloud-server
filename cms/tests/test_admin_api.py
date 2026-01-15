@@ -25,7 +25,7 @@ class AdminCmsTestMixin:
         """Create a StoredFile record for a user."""
         parent_path = "/".join(path.split("/")[:-1]) if "/" in path else ""
         return StoredFile.objects.create(
-            owner=user,
+            owner=user.account,
             path=path,
             name=path.split("/")[-1],
             size=1024,

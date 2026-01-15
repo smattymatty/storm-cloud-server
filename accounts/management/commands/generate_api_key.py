@@ -33,10 +33,17 @@ class Command(BaseCommand):
         except User.DoesNotExist:
             raise CommandError(f'User "{username}" does not exist')
 
+        # Get user's account and organization
+        if not hasattr(user, 'account') or not user.account:
+            raise CommandError(f'User "{username}" has no account')
+        account = user.account
+        organization = account.organization
+
         # Create API key
         api_key = APIKey.objects.create(
-            user=user,
-            name=key_name
+            organization=organization,
+            created_by=account,
+            name=key_name,
         )
 
         self.stdout.write(self.style.SUCCESS(f'Successfully generated API key for "{username}"'))

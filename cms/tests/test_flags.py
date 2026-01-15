@@ -15,7 +15,7 @@ class ContentFlagBaseTestCase(StormCloudAPITestCase):
         self.authenticate()
         # Create a test file
         self.test_file = StoredFile.objects.create(
-            owner=self.user,
+            owner=self.user.account,
             path="test/document.md",
             name="document.md",
             size=1024,
@@ -406,10 +406,13 @@ class FlagAuthTests(ContentFlagBaseTestCase):
         """Cannot access flags on another user's file."""
         # Create another user and their file
         from django.contrib.auth import get_user_model
+        from accounts.models import Account, Organization
         User = get_user_model()
         other_user = User.objects.create_user(username="other", password="pass")
+        other_org = Organization.objects.create(name="Other Org", slug="other-org-flags")
+        other_account = Account.objects.create(user=other_user, organization=other_org, email_verified=True)
         other_file = StoredFile.objects.create(
-            owner=other_user,
+            owner=other_account,
             path="other/secret.md",
             name="secret.md",
             size=512,

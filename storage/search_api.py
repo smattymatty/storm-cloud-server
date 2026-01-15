@@ -261,7 +261,7 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
             limit = DEFAULT_LIMIT
 
         # Get user storage root (admin accessing target user's files)
-        user_root = str(target_user.id)
+        user_root = str(target_user.account.id)
         backend = LocalStorageBackend()
         storage_root = backend.storage_root / user_root
 

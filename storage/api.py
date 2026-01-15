@@ -93,7 +93,7 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
 
     def list_directory(self, request: Request, dir_path: str = "") -> Response:
         """List directory contents with pagination."""
-        service = DirectoryService(cast(User, request.user))
+        service = DirectoryService(request.user.account)
 
         limit = min(int(request.query_params.get("limit", 50)), 200)
         cursor = request.query_params.get("cursor")
@@ -193,7 +193,7 @@ class DirectoryCreateView(StormCloudBaseAPIView):
     )
     def post(self, request: Request, dir_path: str) -> Response:
         """Create directory."""
-        service = DirectoryService(cast(User, request.user))
+        service = DirectoryService(request.user.account)
         result = service.create_directory(dir_path)
 
         if not result.success:
@@ -280,7 +280,7 @@ class DirectoryReorderView(StormCloudBaseAPIView):
         for position, filename in enumerate(order):
             file_path = f"{dir_path}/{filename}" if dir_path else filename
             updated = StoredFile.objects.filter(
-                owner=request.user,
+                owner=request.user.account,
                 path=file_path,
             ).update(sort_position=position)
             updated_count += updated
@@ -325,7 +325,7 @@ class DirectoryResetOrderView(StormCloudBaseAPIView):
 
         # Set sort_position to null for all files in directory
         updated = StoredFile.objects.filter(
-            owner=request.user,
+            owner=request.user.account,
             parent_path=dir_path,
         ).update(sort_position=None)
 
@@ -352,7 +352,7 @@ class FileDetailView(StormCloudBaseAPIView):
     )
     def get(self, request: Request, file_path: str) -> Response:
         """Get file metadata."""
-        service = FileService(cast(User, request.user))
+        service = FileService(request.user.account)
         result = service.get_info(file_path)
 
         if not result.success:
@@ -473,13 +473,13 @@ class FileCreateView(StormCloudBaseAPIView):
 
         # Shift existing files down to make room at position 0
         StoredFile.objects.filter(
-            owner=request.user,
+            owner=request.user.account,
             parent_path=db_parent_path,
             sort_position__isnull=False,
         ).update(sort_position=F("sort_position") + 1)
 
         stored_file, created = StoredFile.objects.update_or_create(
-            owner=request.user,
+            owner=request.user.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -603,7 +603,7 @@ class FileUploadView(StormCloudBaseAPIView):
 
         # Check if this is an overwrite (file already exists)
         is_overwrite = StoredFile.objects.filter(
-            owner=request.user, path=file_path
+            owner=request.user.account, path=file_path
         ).exists()
         if is_overwrite:
             check_user_permission(request.user, "can_overwrite")
@@ -611,12 +611,13 @@ class FileUploadView(StormCloudBaseAPIView):
         # P0-3: Validate against user quota (if set)
         # IsAuthenticated permission guarantees user is not AnonymousUser
         assert not request.user.is_anonymous
-        profile = request.user.profile
-        quota_bytes = profile.storage_quota_bytes
+        profile = getattr(request.user, 'account', None)
+        # API key auth doesn't have per-user quota, use 0 (unlimited/server default)
+        quota_bytes = profile.storage_quota_bytes if profile else 0
         if quota_bytes > 0:  # 0 = unlimited
             # Calculate user's current storage usage
             current_usage = (
-                StoredFile.objects.filter(owner=request.user).aggregate(
+                StoredFile.objects.filter(owner=request.user.account).aggregate(
                     total=Sum("size")
                 )["total"]
                 or 0
@@ -625,7 +626,7 @@ class FileUploadView(StormCloudBaseAPIView):
             # For file replacement (overwrite), calculate delta instead of full size
             size_delta = uploaded_file.size
             if is_overwrite:
-                old_file = StoredFile.objects.get(owner=request.user, path=file_path)
+                old_file = StoredFile.objects.get(owner=request.user.account, path=file_path)
                 size_delta = uploaded_file.size - old_file.size
 
             if current_usage + size_delta > quota_bytes:
@@ -671,13 +672,13 @@ class FileUploadView(StormCloudBaseAPIView):
 
         # Shift existing files down to make room at position 0
         StoredFile.objects.filter(
-            owner=request.user,
+            owner=request.user.account,
             parent_path=db_parent_path,
             sort_position__isnull=False,
         ).update(sort_position=F("sort_position") + 1)
 
         stored_file, created = StoredFile.objects.update_or_create(
-            owner=request.user,
+            owner=request.user.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -1107,11 +1108,11 @@ class FileContentView(StormCloudBaseAPIView):
             )
 
         # Check quota (calculate delta like upload does)
-        profile = request.user.profile  # type: ignore[union-attr]
+        profile = request.user.account  # type: ignore[union-attr]
         quota_bytes = profile.storage_quota_bytes
         if quota_bytes > 0:
             current_usage = (
-                StoredFile.objects.filter(owner=request.user).aggregate(
+                StoredFile.objects.filter(owner=request.user.account).aggregate(
                     total=Sum("size")
                 )["total"]
                 or 0
@@ -1149,7 +1150,7 @@ class FileContentView(StormCloudBaseAPIView):
 
         # Update database record
         stored_file, _created = StoredFile.objects.update_or_create(
-            owner=request.user,
+            owner=request.user.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -1248,7 +1249,7 @@ class FileDeleteView(StormCloudBaseAPIView):
             )
 
         # Delete from database
-        StoredFile.objects.filter(owner=request.user, path=file_path).delete()
+        StoredFile.objects.filter(owner=request.user.account, path=file_path).delete()
 
         # Log successful delete
         emit_user_file_action(
@@ -1384,7 +1385,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
     def get(self, request: Request) -> Response:
         """List all share links for user."""
         links = (
-            ShareLink.objects.filter(owner=request.user)
+            ShareLink.objects.filter(owner=request.user.account)
             .select_related("stored_file")
             .order_by("-created_at")
         )
@@ -1442,7 +1443,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
 
         # Check if file exists
         try:
-            stored_file = StoredFile.objects.get(owner=request.user, path=file_path)
+            stored_file = StoredFile.objects.get(owner=request.user.account, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
                 {
@@ -1457,7 +1458,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
 
         # Create share link
         share_link = ShareLink.objects.create(
-            owner=request.user,
+            owner=request.user.account,
             stored_file=stored_file,
             expiry_days=expiry_days,
             custom_slug=custom_slug or None,
@@ -1487,7 +1488,7 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
     def get(self, request: Request, share_id: str) -> Response:
         """Get share link details."""
         try:
-            link = ShareLink.objects.get(id=share_id, owner=request.user)
+            link = ShareLink.objects.get(id=share_id, owner=request.user.account)
         except ShareLink.DoesNotExist:
             return Response(
                 {
@@ -1514,7 +1515,7 @@ class ShareLinkDetailView(StormCloudBaseAPIView):
     def delete(self, request: Request, share_id: str) -> Response:
         """Revoke share link."""
         try:
-            link = ShareLink.objects.get(id=share_id, owner=request.user)
+            link = ShareLink.objects.get(id=share_id, owner=request.user.account)
         except ShareLink.DoesNotExist:
             return Response(
                 {
@@ -1852,7 +1853,7 @@ class BulkOperationView(StormCloudBaseAPIView):
 
         # Create service and execute
         backend = LocalStorageBackend()
-        service = BulkOperationService(user=cast(User, request.user), backend=backend)
+        service = BulkOperationService(account=request.user.account, backend=backend)
 
         try:
             result = service.execute(operation=operation, paths=paths, options=options)

@@ -3,6 +3,7 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+from django.test import override_settings
 from django.utils import timezone
 from django_mercury import monitor
 from rest_framework.test import APITestCase
@@ -12,16 +13,21 @@ from core.storage.base import FileInfo
 from storage.tests.factories import StoredFileFactory
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class FileOperationPerformance(APITestCase):
     """Performance baselines for file operations."""
 
     def setUp(self):
         super().setUp()
         self.user = UserWithProfileFactory(verified=True)
-        self.api_key = APIKeyFactory(user=self.user)
+        # Explicitly set created_by so APIKeyUser.account works
+        self.api_key = APIKeyFactory(
+            organization=self.user.account.organization,
+            created_by=self.user.account,
+        )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
 
-    @patch("storage.api.LocalStorageBackend")
+    @patch("storage.services.LocalStorageBackend")
     def test_directory_listing_under_50ms(self, mock_backend_class):
         """Directory listing with 100 files under 50ms."""
         # Mock backend to return 100 FileInfo objects
@@ -67,18 +73,23 @@ class FileOperationPerformance(APITestCase):
         self.assertEqual(response.status_code, 201)
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class DirectoryListingScaleTest(APITestCase):
     """Test directory listing with many files."""
 
     def setUp(self):
         super().setUp()
         self.user = UserWithProfileFactory(verified=True)
-        self.api_key = APIKeyFactory(user=self.user)
+        # Explicitly set created_by so APIKeyUser.account works
+        self.api_key = APIKeyFactory(
+            organization=self.user.account.organization,
+            created_by=self.user.account,
+        )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
 
         # Create 100 file records
         for i in range(100):
-            StoredFileFactory(owner=self.user, path=f"file{i}.txt")
+            StoredFileFactory(owner=self.user.account, path=f"file{i}.txt")
 
     def test_list_100_files_under_500ms_no_n1(self):
         """Listing 100 files should be efficient."""

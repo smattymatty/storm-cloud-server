@@ -1,7 +1,6 @@
 import uuid
 from typing import List, Tuple
 
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -31,7 +30,7 @@ class StoredFile(AbstractBaseModel):
     ]
 
     owner = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name="files"
+        "accounts.Account", on_delete=models.CASCADE, related_name="files"
     )
     path = models.CharField(
         max_length=1024
@@ -99,7 +98,7 @@ class StoredFile(AbstractBaseModel):
             )
 
     def __str__(self):
-        return f"{self.owner.username}: {self.path}"
+        return f"{self.owner.user.username}: {self.path}"
 
 
 class ShareLink(AbstractBaseModel):
@@ -123,7 +122,7 @@ class ShareLink(AbstractBaseModel):
     ]
 
     owner = models.ForeignKey(
-        get_user_model(), on_delete=models.CASCADE, related_name="share_links"
+        "accounts.Account", on_delete=models.CASCADE, related_name="share_links"
     )
 
     # What file this shares
@@ -263,7 +262,7 @@ class ShareLink(AbstractBaseModel):
 
     def __str__(self):
         key = self.get_public_url_key()
-        return f"{self.owner.username}: {self.file_path} ({key})"
+        return f"{self.owner.user.username}: {self.file_path} ({key})"
 
 
 class FileAuditLog(AbstractBaseModel):
@@ -308,22 +307,22 @@ class FileAuditLog(AbstractBaseModel):
         (ACTION_BULK_COPY, "Bulk copy"),
     ]
 
-    # Who performed the action (the admin for admin actions, or the user for regular actions)
+    # Who performed the action (the admin for admin actions, or the account for regular actions)
     performed_by = models.ForeignKey(
-        get_user_model(),
+        "accounts.Account",
         on_delete=models.SET_NULL,
         null=True,
         related_name="file_actions_performed",
-        help_text="User who performed the action (admin for admin actions)",
+        help_text="Account who performed the action (admin for admin actions)",
     )
 
-    # Whose files were affected (the target user)
+    # Whose files were affected (the target account)
     target_user = models.ForeignKey(
-        get_user_model(),
+        "accounts.Account",
         on_delete=models.SET_NULL,
         null=True,
         related_name="file_actions_received",
-        help_text="User whose files were affected",
+        help_text="Account whose files were affected",
     )
 
     # Is this an admin action (acting on behalf of another user)?
@@ -385,5 +384,5 @@ class FileAuditLog(AbstractBaseModel):
 
     def __str__(self) -> str:
         admin_marker = "[ADMIN] " if self.is_admin_action else ""
-        performer = self.performed_by.username if self.performed_by else "N/A"
+        performer = self.performed_by.user.username if self.performed_by else "N/A"
         return f"{admin_marker}{performer}: {self.action} {self.path}"

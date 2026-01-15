@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.text import slugify
 from datetime import timedelta
 from core.models import AbstractBaseModel
 import secrets
@@ -11,46 +12,121 @@ def generate_verification_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-class UserProfile(AbstractBaseModel):
-    """Extended user profile for Storm Cloud specific fields."""
+def generate_enrollment_key() -> str:
+    """Generate a secure enrollment key with prefix."""
+    return f"ek_{secrets.token_urlsafe(32)}"
 
+
+class Organization(AbstractBaseModel):
+    """
+    Top-level tenant container.
+
+    Organizations group accounts and own API keys. All files belong to accounts
+    within an organization.
+    """
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, max_length=255)
+
+    # Org-level storage quota (optional - 0 = unlimited)
+    storage_quota_bytes = models.BigIntegerField(
+        default=0,
+        help_text="Maximum storage for entire org in bytes. 0 = unlimited."
+    )
+    storage_used_bytes = models.BigIntegerField(
+        default=0,
+        help_text="Current storage usage across all accounts."
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Organization"
+        verbose_name_plural = "Organizations"
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        """Auto-generate slug from name if not provided."""
+        if not self.slug:
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while Organization.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    @property
+    def storage_remaining_bytes(self) -> int:
+        """Bytes remaining in org quota. Returns -1 if unlimited."""
+        if self.storage_quota_bytes == 0:
+            return -1
+        return max(0, self.storage_quota_bytes - self.storage_used_bytes)
+
+    @property
+    def is_over_quota(self) -> bool:
+        """Check if org has exceeded storage quota."""
+        if self.storage_quota_bytes == 0:
+            return False
+        return self.storage_used_bytes >= self.storage_quota_bytes
+
+    def update_storage_usage(self, delta_bytes: int) -> None:
+        """Update storage usage by delta (positive or negative)."""
+        self.storage_used_bytes = max(0, self.storage_used_bytes + delta_bytes)
+        self.save(update_fields=['storage_used_bytes', 'updated_at'])
+
+
+class Account(AbstractBaseModel):
+    """
+    Extended user profile with organization membership.
+
+    Replaces UserProfile. Each Account belongs to exactly one Organization.
+    Files, shares, and quotas are tied to Accounts.
+    """
     user = models.OneToOneField(
         get_user_model(),
         on_delete=models.CASCADE,
-        related_name='profile'
+        related_name='account'
     )
-    is_email_verified = models.BooleanField(default=False)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='accounts'
+    )
+    email_verified = models.BooleanField(default=False)
 
-    # Storage quota (Task 003)
+    # Per-account storage quota (optional - 0 = use org default)
     storage_quota_bytes = models.BigIntegerField(
         default=0,
-        help_text="Maximum storage allowed in bytes. 0 = unlimited."
+        help_text="Maximum storage for this account in bytes. 0 = unlimited."
     )
     storage_used_bytes = models.BigIntegerField(
         default=0,
         help_text="Current storage usage in bytes."
     )
 
-    # Permission flags - granular control over user capabilities
+    # Action permissions (migrated from UserProfile)
     can_upload = models.BooleanField(
         default=True,
-        help_text="User can upload new files."
+        help_text="Account can upload new files."
     )
     can_delete = models.BooleanField(
         default=True,
-        help_text="User can delete files and folders."
+        help_text="Account can delete files and folders."
     )
     can_move = models.BooleanField(
         default=True,
-        help_text="User can move/rename files and folders."
+        help_text="Account can move/rename files and folders."
     )
     can_overwrite = models.BooleanField(
         default=True,
-        help_text="User can overwrite/edit existing files."
+        help_text="Account can overwrite/edit existing files."
     )
     can_create_shares = models.BooleanField(
         default=True,
-        help_text="User can create share links."
+        help_text="Account can create share links."
     )
     max_share_links = models.PositiveIntegerField(
         default=0,
@@ -61,41 +137,169 @@ class UserProfile(AbstractBaseModel):
         help_text="Per-file upload size limit in bytes. 0 = use server default."
     )
 
+    # Org admin permissions (NEW)
+    can_invite = models.BooleanField(
+        default=False,
+        help_text="Account can create enrollment keys to invite others."
+    )
+    can_manage_members = models.BooleanField(
+        default=False,
+        help_text="Account can view and modify other accounts in the org."
+    )
+    can_manage_api_keys = models.BooleanField(
+        default=False,
+        help_text="Account can create and revoke org API keys."
+    )
+    is_owner = models.BooleanField(
+        default=False,
+        help_text="Account is an org owner. At least one owner must exist per org."
+    )
+
+    is_active = models.BooleanField(default=True)
+
     class Meta:
-        verbose_name = "User Profile"
-        verbose_name_plural = "User Profiles"
+        verbose_name = "Account"
+        verbose_name_plural = "Accounts"
+        # Ensure one account per user
+        constraints = [
+            models.UniqueConstraint(fields=['user'], name='unique_user_account'),
+        ]
 
     def __str__(self):
-        return f"Profile: {self.user.username}"
+        return f"{self.user.username} @ {self.organization.name}"
 
     @property
     def storage_remaining_bytes(self) -> int:
-        """
-        Bytes remaining in quota.
-
-        Returns:
-            Remaining bytes, or -1 if unlimited
-        """
+        """Bytes remaining in quota. Returns -1 if unlimited."""
         if self.storage_quota_bytes == 0:
             return -1
         return max(0, self.storage_quota_bytes - self.storage_used_bytes)
 
     @property
     def is_over_quota(self) -> bool:
-        """Check if user has exceeded storage quota."""
+        """Check if account has exceeded storage quota."""
         if self.storage_quota_bytes == 0:
             return False
         return self.storage_used_bytes >= self.storage_quota_bytes
 
     def update_storage_usage(self, delta_bytes: int) -> None:
-        """
-        Update storage usage by delta (positive or negative).
-
-        Args:
-            delta_bytes: Change in storage usage (positive for increase, negative for decrease)
-        """
+        """Update storage usage by delta (positive or negative)."""
         self.storage_used_bytes = max(0, self.storage_used_bytes + delta_bytes)
         self.save(update_fields=['storage_used_bytes', 'updated_at'])
+        # Also update org-level usage
+        self.organization.update_storage_usage(delta_bytes)
+
+    def delete(self, *args, **kwargs):
+        """Prevent deleting the last owner of an organization."""
+        if self.is_owner:
+            owner_count = Account.objects.filter(
+                organization=self.organization,
+                is_owner=True
+            ).exclude(pk=self.pk).count()
+            if owner_count == 0:
+                raise ValueError("Cannot delete the last owner of an organization.")
+        super().delete(*args, **kwargs)
+
+
+class EnrollmentKey(AbstractBaseModel):
+    """
+    Invitation key for human account registration.
+
+    EnrollmentKeys are created by org admins to invite new members.
+    Can be single-use or multi-use, with optional email restrictions.
+    """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='enrollment_keys'
+    )
+    key = models.CharField(
+        max_length=64,
+        unique=True,
+        default=generate_enrollment_key
+    )
+    name = models.CharField(
+        max_length=255,
+        help_text="Descriptive name, e.g., 'CEO Bootstrap', 'Sales Team Invite'"
+    )
+
+    # Email restriction (optional)
+    required_email = models.EmailField(
+        blank=True,
+        null=True,
+        help_text="If set, only this email can use this key."
+    )
+
+    # Preset permissions for accounts created with this key
+    preset_permissions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Permission overrides for accounts created with this key."
+    )
+
+    # Usage tracking
+    single_use = models.BooleanField(
+        default=True,
+        help_text="If true, key becomes invalid after first use."
+    )
+    used_by = models.ForeignKey(
+        'Account',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='used_enrollment_key'
+    )
+    use_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times this key has been used."
+    )
+
+    # Expiration
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Key expires after this time. Null = never expires."
+    )
+
+    # Audit
+    created_by = models.ForeignKey(
+        'Account',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_enrollment_keys'
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Enrollment Key"
+        verbose_name_plural = "Enrollment Keys"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['key']),
+            models.Index(fields=['organization', 'is_active']),
+        ]
+
+    def __str__(self):
+        status = "active" if self.is_valid() else "invalid"
+        return f"{self.name} ({self.organization.name}) - {status}"
+
+    def is_valid(self) -> bool:
+        """Check if this enrollment key can be used."""
+        if not self.is_active:
+            return False
+        if self.expires_at and timezone.now() > self.expires_at:
+            return False
+        if self.single_use and self.used_by:
+            return False
+        return True
+
+    def mark_used(self, account: 'Account') -> None:
+        """Mark this key as used by an account."""
+        self.use_count += 1
+        if self.single_use:
+            self.used_by = account
+        self.save(update_fields=['use_count', 'used_by', 'updated_at'])
 
 
 class EmailVerificationToken(AbstractBaseModel):
@@ -140,31 +344,45 @@ class EmailVerificationToken(AbstractBaseModel):
 
 
 class APIKey(AbstractBaseModel):
-    """API key for CLI/programmatic access."""
+    """
+    API key for CLI/programmatic (machine) access.
 
-    user = models.ForeignKey(
-        get_user_model(),
+    API keys are org-scoped and have their own permissions JSON.
+    They are not tied to a specific account, but track who created them.
+    """
+    organization = models.ForeignKey(
+        Organization,
         on_delete=models.CASCADE,
         related_name='api_keys'
     )
+    created_by = models.ForeignKey(
+        Account,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_api_keys',
+        help_text="Account that created this key (for audit)."
+    )
+
     name = models.CharField(max_length=100)  # e.g., "CLI key", "CI/CD key"
     key = models.CharField(max_length=64, unique=True, editable=False)
     last_used_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
-    # New fields for Task 002
-    scope = models.JSONField(
-        default=list,
+    # Permissions for this API key (independent of any account)
+    permissions = models.JSONField(
+        default=dict,
         blank=True,
-        help_text="Reserved for future use. List of permission scopes."
+        help_text="Permission flags for this key. Keys not present default to True."
     )
+    # Example: {"can_upload": true, "can_delete": false, "can_move": true}
+
     revoked_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text="Timestamp when key was revoked. Set alongside is_active=False."
     )
 
-    # Webhook configuration
+    # Webhook configuration (per-key notifications)
     webhook_url = models.URLField(
         max_length=500,
         blank=True,
@@ -222,7 +440,7 @@ class APIKey(AbstractBaseModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.name} ({self.user.username})"
+        return f"{self.name} ({self.organization.name})"
 
     def generate_webhook_secret(self) -> str:
         """Generate a new webhook secret."""
@@ -234,3 +452,11 @@ class APIKey(AbstractBaseModel):
         self.is_active = False
         self.revoked_at = timezone.now()
         self.save(update_fields=['is_active', 'revoked_at', 'updated_at'])
+
+    def has_permission(self, permission_name: str) -> bool:
+        """
+        Check if this API key has a specific permission.
+
+        Permissions not explicitly set default to True.
+        """
+        return self.permissions.get(permission_name, True)

@@ -8,10 +8,9 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, BinaryIO, Optional, Union
+from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.db.models import F, Sum
 
 from core.services.encryption import DecryptionError
@@ -20,7 +19,8 @@ from core.utils import PathValidationError, normalize_path
 
 from .models import StoredFile
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.models import Account
 
 
 # =============================================================================
@@ -189,9 +189,31 @@ def generate_etag(path: str, size: int, modified_at: Any) -> str:
 # =============================================================================
 
 
-def get_user_storage_path(user: User) -> str:
-    """Get storage path prefix for user."""
-    return f"{user.id}"
+def get_account_storage_path(account: "Account") -> str:
+    """Get storage path prefix for account."""
+    return f"{account.id}"
+
+
+# Legacy alias for backward compatibility
+def get_user_storage_path(user_or_account) -> str:
+    """
+    Get storage path prefix.
+
+    Accepts either an Account, User, or APIKeyUser (for backward compatibility).
+    Returns the Account UUID as the path prefix.
+    """
+    # If it's an Account (has both 'user' and 'organization' attrs)
+    # Note: APIKeyUser also has 'organization' but not 'user'
+    if hasattr(user_or_account, 'user') and hasattr(user_or_account, 'organization'):
+        return f"{user_or_account.id}"
+    # Otherwise it's a User or APIKeyUser - get account.id (UUID)
+    account = getattr(user_or_account, 'account', None)
+    if account is None:
+        raise ValueError(
+            f"Cannot determine storage path: {type(user_or_account).__name__} "
+            f"has no associated account. Ensure API keys have created_by set."
+        )
+    return f"{account.id}"
 
 
 # =============================================================================
@@ -202,10 +224,10 @@ def get_user_storage_path(user: User) -> str:
 class DirectoryService:
     """Service for directory operations."""
 
-    def __init__(self, user: User, backend: Optional[LocalStorageBackend] = None):
-        self.user = user
+    def __init__(self, account: "Account", backend: Optional[LocalStorageBackend] = None):
+        self.account = account
         self.backend = backend or LocalStorageBackend()
-        self.user_prefix = get_user_storage_path(user)
+        self.user_prefix = get_account_storage_path(account)
 
     def list_directory(
         self,
@@ -257,7 +279,7 @@ class DirectoryService:
                 "encryption_method": f.encryption_method,
                 "sort_position": f.sort_position,
             }
-            for f in StoredFile.objects.filter(owner=self.user, path__in=entry_paths)
+            for f in StoredFile.objects.filter(owner=self.account, path__in=entry_paths)
         }
 
         # Build entry data
@@ -347,13 +369,13 @@ class DirectoryService:
 
         # Shift existing files down to make room at position 0
         StoredFile.objects.filter(
-            owner=self.user,
+            owner=self.account,
             parent_path=parent_path,
             sort_position__isnull=False,
         ).update(sort_position=F("sort_position") + 1)
 
         StoredFile.objects.update_or_create(
-            owner=self.user,
+            owner=self.account,
             path=dir_path,
             defaults={
                 "name": file_info.name,
@@ -389,10 +411,10 @@ class DirectoryService:
 class FileService:
     """Service for file operations."""
 
-    def __init__(self, user: User, backend: Optional[LocalStorageBackend] = None):
-        self.user = user
+    def __init__(self, account: "Account", backend: Optional[LocalStorageBackend] = None):
+        self.account = account
         self.backend = backend or LocalStorageBackend()
-        self.user_prefix = get_user_storage_path(user)
+        self.user_prefix = get_account_storage_path(account)
 
     def get_info(self, file_path: str) -> FileInfoResult:
         """Get file metadata."""
@@ -418,7 +440,7 @@ class FileService:
 
         # Get database record for additional info
         try:
-            db_file = StoredFile.objects.get(owner=self.user, path=file_path)
+            db_file = StoredFile.objects.get(owner=self.account, path=file_path)
             created_at = db_file.created_at
             encryption_method = db_file.encryption_method
         except StoredFile.DoesNotExist:
@@ -472,7 +494,7 @@ class FileService:
 
         # Check if overwrite
         is_overwrite = StoredFile.objects.filter(
-            owner=self.user, path=file_path
+            owner=self.account, path=file_path
         ).exists()
 
         # Check quota if requested
@@ -496,13 +518,13 @@ class FileService:
 
         # Shift existing files down to make room at position 0
         StoredFile.objects.filter(
-            owner=self.user,
+            owner=self.account,
             parent_path=db_parent_path,
             sort_position__isnull=False,
         ).update(sort_position=F("sort_position") + 1)
 
         stored_file, created = StoredFile.objects.update_or_create(
-            owner=self.user,
+            owner=self.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -621,12 +643,12 @@ class FileService:
         self.backend.delete(full_path)
 
         # Delete from database (CASCADE handles ShareLinks)
-        StoredFile.objects.filter(owner=self.user, path=file_path).delete()
+        StoredFile.objects.filter(owner=self.account, path=file_path).delete()
 
         # For directories, also delete child records
         if file_info.is_directory:
             StoredFile.objects.filter(
-                owner=self.user, path__startswith=f"{file_path}/"
+                owner=self.account, path__startswith=f"{file_path}/"
             ).delete()
 
         return ServiceResult(success=True, data={"path": file_path})
@@ -767,7 +789,7 @@ class FileService:
 
         # Update database record
         stored_file, _ = StoredFile.objects.update_or_create(
-            owner=self.user,
+            owner=self.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -795,18 +817,14 @@ class FileService:
         new_size: int,
         existing_file_path: Optional[str] = None,
     ) -> ServiceResult:
-        """Check if operation would exceed user quota."""
-        profile = getattr(self.user, "profile", None)
-        if not profile:
-            return ServiceResult(success=True)
-
-        quota_bytes = profile.storage_quota_bytes
+        """Check if operation would exceed account quota."""
+        quota_bytes = self.account.storage_quota_bytes
         if quota_bytes <= 0:  # 0 = unlimited
             return ServiceResult(success=True)
 
         # Calculate current usage
         current_usage = (
-            StoredFile.objects.filter(owner=self.user).aggregate(total=Sum("size"))["total"]
+            StoredFile.objects.filter(owner=self.account).aggregate(total=Sum("size"))["total"]
             or 0
         )
 
@@ -814,7 +832,7 @@ class FileService:
         size_delta = new_size
         if existing_file_path:
             try:
-                old_file = StoredFile.objects.get(owner=self.user, path=existing_file_path)
+                old_file = StoredFile.objects.get(owner=self.account, path=existing_file_path)
                 size_delta = new_size - old_file.size
             except StoredFile.DoesNotExist:
                 pass

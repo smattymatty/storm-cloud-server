@@ -47,6 +47,13 @@ from accounts.api import (
     # User Per-Key Webhook
     UserKeyWebhookView,
 )
+from accounts.enrollment_api import (
+    EnrollmentValidateView,
+    EnrollmentEnrollView,
+    EnrollmentStatusView,
+    EnrollmentResendView,
+    EnrollmentInviteCreateView,
+)
 from storage.api import (
     BulkOperationView,
     BulkStatusView,
@@ -148,6 +155,32 @@ urlpatterns = [
         "auth/resend-verification/",
         ResendVerificationView.as_view(),
         name="auth-resend-verification",
+    ),
+    # Enrollment (invite-based registration)
+    path(
+        "enrollment/validate/",
+        EnrollmentValidateView.as_view(),
+        name="enrollment-validate",
+    ),
+    path(
+        "enrollment/enroll/",
+        EnrollmentEnrollView.as_view(),
+        name="enrollment-enroll",
+    ),
+    path(
+        "enrollment/status/<uuid:enrollment_id>/",
+        EnrollmentStatusView.as_view(),
+        name="enrollment-status",
+    ),
+    path(
+        "enrollment/resend/<uuid:enrollment_id>/",
+        EnrollmentResendView.as_view(),
+        name="enrollment-resend",
+    ),
+    path(
+        "enrollment/invite/create/",
+        EnrollmentInviteCreateView.as_view(),
+        name="enrollment-invite-create",
     ),
     # Session Authentication (for Swagger UI)
     path("auth/login/", LoginView.as_view(), name="auth-login"),

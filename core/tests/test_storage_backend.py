@@ -3,11 +3,12 @@
 import tempfile
 import shutil
 from pathlib import Path
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from core.storage.local import LocalStorageBackend
 from io import BytesIO
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD='none')
 class LocalStorageBackendTest(TestCase):
     """Tests for LocalStorageBackend."""
 

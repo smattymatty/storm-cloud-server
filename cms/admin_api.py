@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from core.views import StormCloudBaseAPIView
 from storage.models import StoredFile
 
+from .api import get_user_from_request
 from .models import ContentFlag, PageFileMapping, PageStats
 from .serializers import (
     ContentFlagSerializer,
@@ -237,7 +238,7 @@ class AdminPageDetailView(AdminCmsBaseView):
         # Collect file paths and prefetch StoredFiles with their flags
         file_paths = [m.file_path for m in mappings]
         stored_files = StoredFile.objects.filter(
-            owner=target_user, path__in=file_paths
+            owner=target_user.account, path__in=file_paths
         ).prefetch_related("content_flags")
         stored_file_map = {sf.path: sf for sf in stored_files}
 
@@ -377,14 +378,14 @@ class AdminPageFlagsView(AdminCmsBaseView):
 
             # Count active flags on those files
             ai_count = ContentFlag.objects.filter(
-                stored_file__owner=target_user,
+                stored_file__owner=target_user.account,
                 stored_file__path__in=file_paths,
                 flag_type="ai_generated",
                 is_active=True
             ).count()
 
             approved_count = ContentFlag.objects.filter(
-                stored_file__owner=target_user,
+                stored_file__owner=target_user.account,
                 stored_file__path__in=file_paths,
                 flag_type="user_approved",
                 is_active=True
@@ -455,7 +456,7 @@ class AdminFlagListView(AdminCmsBaseView):
 
         # Get all files for this user that have any flags
         files_with_flags = StoredFile.objects.filter(
-            owner=target_user,
+            owner=target_user.account,
             content_flags__isnull=False,
         ).distinct()
 
@@ -533,14 +534,14 @@ class AdminPendingReviewView(AdminCmsBaseView):
 
         # Files with ai_generated=True
         ai_generated_files = ContentFlag.objects.filter(
-            stored_file__owner=target_user,
+            stored_file__owner=target_user.account,
             flag_type="ai_generated",
             is_active=True,
         ).values_list("stored_file_id", flat=True)
 
         # Files with user_approved=True
         approved_files = ContentFlag.objects.filter(
-            stored_file__owner=target_user,
+            stored_file__owner=target_user.account,
             flag_type="user_approved",
             is_active=True,
         ).values_list("stored_file_id", flat=True)
@@ -599,7 +600,7 @@ class AdminFileFlagsView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user, path=file_path)
+            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
                 {
@@ -680,7 +681,7 @@ class AdminSetFlagView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user, path=file_path)
+            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
                 {
@@ -700,14 +701,14 @@ class AdminSetFlagView(AdminCmsBaseView):
             defaults={
                 "is_active": serializer.validated_data["is_active"],
                 "metadata": serializer.validated_data.get("metadata", {}),
-                "changed_by": cast(User, request.user),  # Admin, not target_user
+                "changed_by": get_user_from_request(request),  # Admin, not target_user
             },
         )
 
         if not created:
             flag.is_active = serializer.validated_data["is_active"]
             flag.metadata = serializer.validated_data.get("metadata", {})
-            flag.changed_by = cast(User, request.user)  # Admin, not target_user
+            flag.changed_by = get_user_from_request(request)  # Admin, not target_user
             flag.save()  # Triggers history creation
 
         response_data = ContentFlagSerializer(flag).data
@@ -756,7 +757,7 @@ class AdminFlagHistoryView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user, path=file_path)
+            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
                 {

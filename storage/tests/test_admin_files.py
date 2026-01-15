@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from rest_framework import status
 
 from accounts.tests.factories import APIKeyFactory, UserWithProfileFactory
@@ -13,6 +14,13 @@ from storage.models import FileAuditLog, StoredFile
 User = get_user_model()
 
 
+# Disable encryption for admin file tests - they write/read files directly
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
+class AdminFileTestCase(StormCloudAdminTestCase):
+    """Base test case for admin file tests with encryption disabled."""
+    pass
+
+
 class AdminFileTestMixin:
     """Mixin with helper methods for admin file tests."""
 
@@ -20,7 +28,7 @@ class AdminFileTestMixin:
         self, user: User, path: str, content: str = "test content"
     ) -> StoredFile:
         """Create a file in user's storage (filesystem + DB)."""
-        storage_path = Path(self.test_storage_root) / str(user.id) / path
+        storage_path = Path(self.test_storage_root) / str(user.account.id) / path
         storage_path.parent.mkdir(parents=True, exist_ok=True)
         storage_path.write_text(content)
 
@@ -29,7 +37,7 @@ class AdminFileTestMixin:
             parent_path = ""
 
         return StoredFile.objects.create(
-            owner=user,
+            owner=user.account,
             path=path,
             name=Path(path).name,
             size=len(content),
@@ -41,7 +49,7 @@ class AdminFileTestMixin:
 
     def _create_dir_for_user(self, user: User, path: str) -> StoredFile:
         """Create a directory in user's storage (filesystem + DB)."""
-        storage_path = Path(self.test_storage_root) / str(user.id) / path
+        storage_path = Path(self.test_storage_root) / str(user.account.id) / path
         storage_path.mkdir(parents=True, exist_ok=True)
 
         parent_path = str(Path(path).parent) if "/" in path else ""
@@ -49,7 +57,7 @@ class AdminFileTestMixin:
             parent_path = ""
 
         return StoredFile.objects.create(
-            owner=user,
+            owner=user.account,
             path=path,
             name=Path(path).name,
             size=0,
@@ -81,14 +89,15 @@ class AdminFileTestMixin:
     ) -> FileAuditLog:
         """Assert that an audit log entry was created with expected values."""
         performed_by = performed_by or self.admin
+        # FileAuditLog.target_user and performed_by are ForeignKeys to Account
         log = FileAuditLog.objects.filter(
             action=action,
             path=path,
-            target_user=target_user,
+            target_user=target_user.account,
         ).first()
 
         self.assertIsNotNone(log, f"No audit log found for action={action}, path={path}")
-        self.assertEqual(log.performed_by, performed_by)
+        self.assertEqual(log.performed_by, performed_by.account)
         self.assertEqual(log.is_admin_action, is_admin_action)
         self.assertEqual(log.success, success)
         return log
@@ -99,7 +108,7 @@ class AdminFileTestMixin:
 # =============================================================================
 
 
-class AdminDirectoryListTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminDirectoryListTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for GET /api/v1/admin/users/{id}/dirs/ and /dirs/{path}/"""
 
     def setUp(self):
@@ -167,7 +176,7 @@ class AdminDirectoryListTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminDirectoryCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminDirectoryCreateTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for POST /api/v1/admin/users/{id}/dirs/{path}/create/"""
 
     def setUp(self):
@@ -185,7 +194,7 @@ class AdminDirectoryCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertTrue(response.data["is_directory"])
 
         # Verify filesystem
-        dir_path = Path(self.test_storage_root) / str(self.target_user.id) / "newdir"
+        dir_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "newdir"
         self.assertTrue(dir_path.exists())
         self.assertTrue(dir_path.is_dir())
 
@@ -198,7 +207,7 @@ class AdminDirectoryCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         # Verify all directories exist
-        base = Path(self.test_storage_root) / str(self.target_user.id)
+        base = Path(self.test_storage_root) / str(self.target_user.account.id)
         self.assertTrue((base / "parent" / "child" / "grandchild").exists())
 
     def test_create_existing_directory_returns_409(self):
@@ -242,7 +251,7 @@ class AdminDirectoryCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileUploadTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for POST /api/v1/admin/users/{id}/files/{path}/upload/"""
 
     def setUp(self):
@@ -260,7 +269,7 @@ class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.data["size"], len(b"admin uploaded content"))
 
         # Verify filesystem
-        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "uploaded.txt"
+        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "uploaded.txt"
         self.assertTrue(file_path.exists())
         self.assertEqual(file_path.read_text(), "admin uploaded content")
 
@@ -274,7 +283,7 @@ class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "existing.txt"
+        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "existing.txt"
         self.assertEqual(file_path.read_text(), "new content")
 
     def test_upload_creates_parent_dirs(self):
@@ -287,7 +296,7 @@ class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
 
         file_path = (
             Path(self.test_storage_root)
-            / str(self.target_user.id)
+            / str(self.target_user.account.id)
             / "deep/nested/path/file.txt"
         )
         self.assertTrue(file_path.exists())
@@ -322,7 +331,7 @@ class AdminFileUploadTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileCreateTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for POST /api/v1/admin/users/{id}/files/{path}/create/"""
 
     def setUp(self):
@@ -341,7 +350,7 @@ class AdminFileCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertIn("detail", response.data)
 
         # Verify filesystem
-        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "newfile.txt"
+        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "newfile.txt"
         self.assertTrue(file_path.exists())
         self.assertEqual(file_path.read_text(), "")
 
@@ -355,7 +364,7 @@ class AdminFileCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
 
         file_path = (
             Path(self.test_storage_root)
-            / str(self.target_user.id)
+            / str(self.target_user.account.id)
             / "deep/nested/newfile.txt"
         )
         self.assertTrue(file_path.exists())
@@ -408,7 +417,7 @@ class AdminFileCreateTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileDownloadTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileDownloadTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for GET /api/v1/admin/users/{id}/files/{path}/download/"""
 
     def setUp(self):
@@ -481,7 +490,7 @@ class AdminFileDownloadTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileDeleteTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileDeleteTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for DELETE /api/v1/admin/users/{id}/files/{path}/delete/"""
 
     def setUp(self):
@@ -491,7 +500,7 @@ class AdminFileDeleteTest(AdminFileTestMixin, StormCloudAdminTestCase):
     def test_admin_delete_user_file(self):
         """Admin can delete user's file."""
         self._create_file_for_user(self.target_user, "todelete.txt")
-        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "todelete.txt"
+        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "todelete.txt"
         self.assertTrue(file_path.exists())
 
         response = self.client.delete(
@@ -501,7 +510,7 @@ class AdminFileDeleteTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(file_path.exists())
         self.assertFalse(
-            StoredFile.objects.filter(owner=self.target_user, path="todelete.txt").exists()
+            StoredFile.objects.filter(owner=self.target_user.account, path="todelete.txt").exists()
         )
 
     def test_delete_directory_recursive(self):
@@ -510,7 +519,7 @@ class AdminFileDeleteTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self._create_file_for_user(self.target_user, "deldir/file1.txt")
         self._create_file_for_user(self.target_user, "deldir/file2.txt")
 
-        dir_path = Path(self.test_storage_root) / str(self.target_user.id) / "deldir"
+        dir_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "deldir"
         self.assertTrue(dir_path.exists())
 
         response = self.client.delete(
@@ -562,7 +571,7 @@ class AdminFileDeleteTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileContentTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileContentTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for GET/PUT /api/v1/admin/users/{id}/files/{path}/content/"""
 
     def setUp(self):
@@ -593,18 +602,18 @@ class AdminFileContentTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify file was updated
-        file_path = Path(self.test_storage_root) / str(self.target_user.id) / "editable.txt"
+        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "editable.txt"
         self.assertEqual(file_path.read_text(), "updated content")
 
     def test_preview_binary_returns_400(self):
         """Binary files return NOT_TEXT_FILE error."""
         # Create a binary file
-        storage_path = Path(self.test_storage_root) / str(self.target_user.id) / "image.png"
+        storage_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "image.png"
         storage_path.parent.mkdir(parents=True, exist_ok=True)
         storage_path.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00")
 
         StoredFile.objects.create(
-            owner=self.target_user,
+            owner=self.target_user.account,
             path="image.png",
             name="image.png",
             size=11,
@@ -672,7 +681,7 @@ class AdminFileContentTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminFileDetailTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminFileDetailTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for GET /api/v1/admin/users/{id}/files/{path}/"""
 
     def setUp(self):
@@ -735,7 +744,7 @@ class AdminFileDetailTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminBulkOperationTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminBulkOperationTest(AdminFileTestMixin, AdminFileTestCase):
     """Tests for POST /api/v1/admin/users/{id}/bulk/"""
 
     def setUp(self):
@@ -780,7 +789,7 @@ class AdminBulkOperationTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.data["succeeded"], 2)
 
         # Verify files moved
-        base = Path(self.test_storage_root) / str(self.target_user.id)
+        base = Path(self.test_storage_root) / str(self.target_user.account.id)
         self.assertFalse((base / "move1.txt").exists())
         self.assertTrue((base / "dest" / "move1.txt").exists())
 
@@ -803,7 +812,7 @@ class AdminBulkOperationTest(AdminFileTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.data["succeeded"], 1)
 
         # Verify both original and copy exist
-        base = Path(self.test_storage_root) / str(self.target_user.id)
+        base = Path(self.test_storage_root) / str(self.target_user.account.id)
         self.assertTrue((base / "copy1.txt").exists())
         self.assertTrue((base / "backup" / "copy1.txt").exists())
 
@@ -843,11 +852,11 @@ class AdminBulkOperationTest(AdminFileTestMixin, StormCloudAdminTestCase):
         # Should have bulk_delete audit log
         log = FileAuditLog.objects.filter(
             action=FileAuditLog.ACTION_BULK_DELETE,
-            target_user=self.target_user,
+            target_user=self.target_user.account,
         ).first()
         self.assertIsNotNone(log)
         self.assertTrue(log.is_admin_action)
-        self.assertEqual(log.performed_by, self.admin)
+        self.assertEqual(log.performed_by, self.admin.account)
 
 
 # =============================================================================
@@ -855,7 +864,7 @@ class AdminBulkOperationTest(AdminFileTestMixin, StormCloudAdminTestCase):
 # =============================================================================
 
 
-class AdminSelfAccessTest(AdminFileTestMixin, StormCloudAdminTestCase):
+class AdminSelfAccessTest(AdminFileTestMixin, AdminFileTestCase):
     """Edge case: Admin accesses their own files via admin endpoint."""
 
     def test_admin_accessing_own_files_via_admin_endpoint(self):
@@ -873,8 +882,8 @@ class AdminSelfAccessTest(AdminFileTestMixin, StormCloudAdminTestCase):
         # Even though performed_by == target_user, is_admin_action should be True
         log = FileAuditLog.objects.filter(
             action=FileAuditLog.ACTION_LIST,
-            target_user=self.admin,
-            performed_by=self.admin,
+            target_user=self.admin.account,
+            performed_by=self.admin.account,
         ).first()
 
         self.assertIsNotNone(log)

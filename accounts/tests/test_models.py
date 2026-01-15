@@ -6,32 +6,32 @@ from datetime import timedelta
 
 from accounts.tests.factories import (
     UserFactory,
-    UserProfileFactory,
+    AccountFactory,
     APIKeyFactory,
     EmailVerificationTokenFactory,
 )
 
 
-class UserProfileModelTest(TestCase):
-    """Tests for UserProfile model."""
+class AccountModelTest(TestCase):
+    """Tests for Account model."""
 
     def test_string_representation(self):
         """Test __str__ method."""
         user = UserFactory(username='testuser')
-        profile = UserProfileFactory(user=user)
-        self.assertEqual(str(profile), f"Profile: {user.username}")
+        account = AccountFactory(user=user)
+        self.assertIn(user.username, str(account))
 
-    def test_profile_created_with_user(self):
-        """Test profile can be created for a user."""
+    def test_account_created_with_user(self):
+        """Test account can be created for a user."""
         user = UserFactory()
-        profile = UserProfileFactory(user=user)
-        self.assertEqual(profile.user, user)
-        self.assertTrue(profile.id is not None)
+        account = AccountFactory(user=user)
+        self.assertEqual(account.user, user)
+        self.assertTrue(account.id is not None)
 
-    def test_default_is_email_verified_is_false(self):
-        """Test new profiles default to unverified."""
-        profile = UserProfileFactory()
-        self.assertEqual(profile.is_email_verified, False)
+    def test_default_email_verified_is_false(self):
+        """Test new accounts default to unverified."""
+        account = AccountFactory()
+        self.assertEqual(account.email_verified, False)
 
 
 class EmailVerificationTokenModelTest(TestCase):
@@ -90,11 +90,12 @@ class APIKeyModelTest(TestCase):
     """Tests for APIKey model."""
 
     def test_string_representation(self):
-        """Test __str__ method includes name and username."""
-        user = UserFactory(username='testuser')
-        api_key = APIKeyFactory(user=user, name='test-key')
+        """Test __str__ method includes name and organization."""
+        from accounts.tests.factories import OrganizationFactory
+        org = OrganizationFactory(name='Test Org')
+        api_key = APIKeyFactory(organization=org, name='test-key')
         self.assertIn('test-key', str(api_key))
-        self.assertIn('testuser', str(api_key))
+        self.assertIn('Test Org', str(api_key))
 
     def test_key_is_generated_on_creation(self):
         """Test API key is auto-generated on save."""
@@ -115,8 +116,3 @@ class APIKeyModelTest(TestCase):
         self.assertIsNone(api_key.revoked_at)
         api_key.revoke()
         self.assertIsNotNone(api_key.revoked_at)
-
-    def test_default_scope_is_empty_list(self):
-        """Test scope defaults to empty list."""
-        api_key = APIKeyFactory()
-        self.assertEqual(api_key.scope, [])

@@ -6,7 +6,7 @@ from django.contrib.auth.password_validation import validate_password
 from drf_spectacular.utils import extend_schema_field
 from drf_spectacular.types import OpenApiTypes
 
-from .models import APIKey, UserProfile
+from .models import APIKey, Account, Organization, EnrollmentKey
 
 User = get_user_model()
 
@@ -20,14 +20,15 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date_joined']
 
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    """User profile serializer."""
+class AccountSerializer(serializers.ModelSerializer):
+    """Account serializer with permission flags."""
 
     class Meta:
-        model = UserProfile
+        model = Account
         fields = [
-            'is_email_verified',
-            # Permission flags
+            'id',
+            'email_verified',
+            # Action permissions
             'can_upload',
             'can_delete',
             'can_move',
@@ -35,7 +36,20 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'can_create_shares',
             'max_share_links',
             'max_upload_bytes',
+            # Org admin permissions
+            'can_invite',
+            'can_manage_members',
+            'can_manage_api_keys',
+            'is_owner',
+            # Storage
+            'storage_quota_bytes',
+            'storage_used_bytes',
         ]
+        read_only_fields = ['id', 'storage_used_bytes']
+
+
+# Backward compatibility alias
+UserProfileSerializer = AccountSerializer
 
 
 class RegistrationSerializer(serializers.Serializer):
@@ -126,7 +140,7 @@ class AuthMeResponseSerializer(serializers.Serializer):
     """Response serializer for /auth/me/ endpoint."""
 
     user = UserSerializer()
-    profile = UserProfileSerializer()
+    account = AccountSerializer()
     api_key = serializers.SerializerMethodField()
 
     @extend_schema_field({
@@ -163,8 +177,13 @@ class AdminUserCreateSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
-    is_email_verified = serializers.BooleanField(default=False)
+    email_verified = serializers.BooleanField(default=False)
     is_staff = serializers.BooleanField(default=False)
+    organization_slug = serializers.SlugField(
+        required=False,
+        allow_null=True,
+        help_text="Organization slug. If not provided, uses admin's organization."
+    )
 
     def validate_password(self, value):
         """Validate password only if provided."""
@@ -213,7 +232,7 @@ class AdminUserDetailSerializer(serializers.Serializer):
     """Detailed user info for admin endpoints."""
 
     user = UserSerializer()
-    profile = UserProfileSerializer()
+    account = AccountSerializer()
     api_keys = APIKeyListSerializer(many=True, source='user.api_keys')
     storage_used_bytes = serializers.IntegerField(default=0)
 

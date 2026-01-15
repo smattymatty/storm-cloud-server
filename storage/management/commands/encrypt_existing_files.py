@@ -128,10 +128,10 @@ class Command(BaseCommand):
 
     def _process_user(self, user, mode: str, dry_run: bool, verbosity: int, stats: dict):
         """Process all files for a single user."""
-        user_prefix = str(user.id)
+        user_prefix = str(user.account.id)
 
         # Get all non-directory files for this user
-        files = StoredFile.objects.filter(owner=user, is_directory=False)
+        files = StoredFile.objects.filter(owner=user.account, is_directory=False)
 
         for stored_file in files:
             stats["files_scanned"] += 1

@@ -6,7 +6,6 @@ Uses Django 6.0 Tasks framework for async operations.
 
 import logging
 from typing import Optional, List, Dict
-from django.contrib.auth import get_user_model
 
 try:
     from django.tasks import task  # Django 6.0+
@@ -30,7 +29,6 @@ from core.services.bulk import BulkOperationService, BulkOperationStats
 from core.storage.local import LocalStorageBackend
 
 logger = logging.getLogger(__name__)
-User = get_user_model()
 
 
 @task(
@@ -105,7 +103,7 @@ def bulk_operation_task(
     operation: str,
     paths: List[str],
     options: Optional[Dict],
-    user_id: int,
+    account_id: str,
 ):
     """
     Execute bulk file operation asynchronously.
@@ -115,28 +113,30 @@ def bulk_operation_task(
         operation: Operation to perform ('delete', 'move', 'copy')
         paths: List of file/directory paths
         options: Operation-specific options (e.g., destination)
-        user_id: ID of user performing operations
+        account_id: UUID of account performing operations
 
     Returns:
         dict: BulkOperationStats as dictionary
     """
+    from accounts.models import Account
+
     logger.info(
         f"Bulk operation task started: operation={operation}, "
-        f"paths_count={len(paths)}, user_id={user_id}, attempt={context.attempt}"
+        f"paths_count={len(paths)}, account_id={account_id}, attempt={context.attempt}"
     )
 
     try:
-        # Get user
+        # Get account
         try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            error_msg = f"User not found: {user_id}"
+            account = Account.objects.get(id=account_id)
+        except Account.DoesNotExist:
+            error_msg = f"Account not found: {account_id}"
             logger.error(error_msg)
             return {"status": "error", "error": error_msg}
 
         # Create service and execute
         backend = LocalStorageBackend()
-        service = BulkOperationService(user=user, backend=backend)
+        service = BulkOperationService(account=account, backend=backend)
 
         # force_sync=True ensures we don't recursively queue tasks
         stats = service.execute(

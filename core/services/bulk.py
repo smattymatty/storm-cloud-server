@@ -5,7 +5,7 @@ Enables batch file operations (delete, move, copy) on multiple files/folders
 in a single request with partial success support.
 
 Usage:
-    service = BulkOperationService(user=request.user, backend=LocalStorageBackend())
+    service = BulkOperationService(account=request.user.account, backend=LocalStorageBackend())
     stats = service.execute(operation='delete', paths=['file1.txt', 'file2.txt'])
 """
 
@@ -13,7 +13,6 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Union, Dict, Any
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Sum
 
@@ -22,9 +21,7 @@ from core.utils import normalize_path, PathValidationError
 from storage.models import StoredFile
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser as User
-else:
-    User = get_user_model()
+    from accounts.models import Account
 
 
 @dataclass
@@ -68,7 +65,7 @@ class BulkOperationService:
 
     def __init__(
         self,
-        user: User,
+        account: "Account",
         backend: AbstractStorageBackend,
         async_threshold: Optional[int] = None,
     ):
@@ -76,14 +73,15 @@ class BulkOperationService:
         Initialize bulk operation service.
 
         Args:
-            user: User performing the operations
+            account: Account performing the operations
             backend: Storage backend instance
             async_threshold: Override default async threshold (for testing)
         """
-        self.user = user
+        self.account = account
         self.backend = backend
         self.async_threshold = async_threshold or self.ASYNC_THRESHOLD
-        self.user_prefix = f"{user.id}"  # type: ignore[attr-defined]
+        # Use Account UUID for storage path prefix
+        self.account_prefix = f"{account.id}"
 
     def execute(
         self,
@@ -226,7 +224,7 @@ class BulkOperationService:
             operation=operation,
             paths=paths,
             options=options,
-            user_id=self.user.id,  # type: ignore[attr-defined]
+            account_id=str(self.account.id),
         )
 
         return {
@@ -273,7 +271,7 @@ class BulkOperationService:
         db_files: dict[str, StoredFile] = {
             f.path: f
             for f in StoredFile.objects.filter(
-                owner=self.user,
+                owner=self.account,
                 path__in=path_map.keys()
             )
         }
@@ -282,7 +280,7 @@ class BulkOperationService:
         successful_file_ids: List[int] = []
 
         for normalized_path, original_path in path_map.items():
-            full_path = f"{self.user_prefix}/{normalized_path}"
+            full_path = f"{self.account_prefix}/{normalized_path}"
             db_file = db_files.get(normalized_path)
 
             # Check existence - need either DB record or filesystem presence
@@ -352,11 +350,11 @@ class BulkOperationService:
                     error_message=str(e),
                 )
 
-            full_path = f"{self.user_prefix}/{normalized_path}"
+            full_path = f"{self.account_prefix}/{normalized_path}"
 
             # Check if file exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.user, path=normalized_path)
+                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
             except StoredFile.DoesNotExist:
                 # Check if it exists on filesystem
                 if not self.backend.exists(full_path):
@@ -428,16 +426,16 @@ class BulkOperationService:
                     error_message=str(e),
                 )
 
-            source_full = f"{self.user_prefix}/{normalized_path}"
+            source_full = f"{self.account_prefix}/{normalized_path}"
             dest_full = (
-                f"{self.user_prefix}/{normalized_dest}"
+                f"{self.account_prefix}/{normalized_dest}"
                 if normalized_dest
-                else self.user_prefix
+                else self.account_prefix
             )
 
             # Check if source exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.user, path=normalized_path)
+                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
             except StoredFile.DoesNotExist:
                 return BulkOperationResult(
                     path=path,
@@ -482,7 +480,7 @@ class BulkOperationService:
 
             # Update database record
             # Calculate new path (relative to user root)
-            new_relative_path = new_file_info.path.replace(f"{self.user_prefix}/", "")
+            new_relative_path = new_file_info.path.replace(f"{self.account_prefix}/", "")
             new_parent_path = (
                 str(Path(new_relative_path).parent) if "/" in new_relative_path else ""
             )
@@ -523,16 +521,16 @@ class BulkOperationService:
                     error_message=str(e),
                 )
 
-            source_full = f"{self.user_prefix}/{normalized_path}"
+            source_full = f"{self.account_prefix}/{normalized_path}"
             dest_full = (
-                f"{self.user_prefix}/{normalized_dest}"
+                f"{self.account_prefix}/{normalized_dest}"
                 if normalized_dest
-                else self.user_prefix
+                else self.account_prefix
             )
 
             # Check if source exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.user, path=normalized_path)
+                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
             except StoredFile.DoesNotExist:
                 return BulkOperationResult(
                     path=path,
@@ -552,22 +550,21 @@ class BulkOperationService:
 
             # Check quota before copying
             if db_file.size > 0:
-                # Get user's current storage usage
-                user_profile = self.user.profile  # type: ignore[attr-defined]
+                # Get account's current storage usage
                 storage_used_bytes = (
-                    StoredFile.objects.filter(owner=self.user).aggregate(
+                    StoredFile.objects.filter(owner=self.account).aggregate(
                         total=Sum("size")
                     )["total"]
                     or 0
                 )
 
                 # Check if quota is set and would be exceeded
-                if user_profile.storage_quota_bytes > 0:
+                if self.account.storage_quota_bytes > 0:
                     if (
                         storage_used_bytes + db_file.size
-                        > user_profile.storage_quota_bytes
+                        > self.account.storage_quota_bytes
                     ):
-                        quota_mb = user_profile.storage_quota_bytes / (1024 * 1024)
+                        quota_mb = self.account.storage_quota_bytes / (1024 * 1024)
                         used_mb = storage_used_bytes / (1024 * 1024)
                         return BulkOperationResult(
                             path=path,
@@ -604,7 +601,7 @@ class BulkOperationService:
                 )
 
             # Create new database record for the copy
-            new_relative_path = new_file_info.path.replace(f"{self.user_prefix}/", "")
+            new_relative_path = new_file_info.path.replace(f"{self.account_prefix}/", "")
             new_parent_path = (
                 str(Path(new_relative_path).parent) if "/" in new_relative_path else ""
             )
@@ -614,7 +611,7 @@ class BulkOperationService:
             with transaction.atomic():
                 # Create new StoredFile record (don't copy ShareLinks per spec)
                 StoredFile.objects.create(
-                    owner=self.user,
+                    owner=self.account,
                     path=new_relative_path,
                     name=new_file_info.name,
                     size=new_file_info.size,

@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
-from accounts.models import APIKey, UserProfile
+from accounts.models import APIKey, Account, Organization
 from accounts.services.webhook import trigger_webhook, _deliver_webhook
 
 User = get_user_model()
@@ -20,16 +20,17 @@ class WebhookTriggerTests(TestCase):
             email="test@example.com",
             password="testpass"
         )
-        UserProfile.objects.create(user=self.user, is_email_verified=True)
+        self.org = Organization.objects.create(name="Test Org", slug="test-org")
+        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
         self.api_key = APIKey.objects.create(
-            user=self.user,
+            organization=self.org,
             name="test-key",
             webhook_url="https://example.com/webhook/",
         )
 
     def test_trigger_does_nothing_without_webhook(self):
         """No webhook configured = no action."""
-        api_key = APIKey.objects.create(user=self.user, name="no-webhook")
+        api_key = APIKey.objects.create(organization=self.org, name="no-webhook")
 
         with patch("accounts.services.webhook.threading.Thread") as mock_thread:
             trigger_webhook(api_key, "file.updated", "test.md")
@@ -37,8 +38,9 @@ class WebhookTriggerTests(TestCase):
 
     def test_trigger_does_nothing_when_disabled(self):
         """Webhook disabled = no action."""
-        self.api_key.webhook_enabled = False
-        self.api_key.save()
+        # Use update() to bypass save() auto-enable logic
+        APIKey.objects.filter(id=self.api_key.id).update(webhook_enabled=False)
+        self.api_key.refresh_from_db()
 
         with patch("accounts.services.webhook.threading.Thread") as mock_thread:
             trigger_webhook(self.api_key, "file.updated", "test.md")
@@ -172,8 +174,8 @@ class WebhookTriggerTests(TestCase):
     @patch("accounts.services.webhook.requests.post")
     def test_deliver_skips_disabled_webhook(self, mock_post):
         """Delivery skips if webhook disabled between trigger and delivery."""
-        self.api_key.webhook_enabled = False
-        self.api_key.save()
+        # Use update() to bypass save() auto-enable logic
+        APIKey.objects.filter(id=self.api_key.id).update(webhook_enabled=False)
 
         _deliver_webhook(self.api_key.id, "file.updated", "test.md")
 
@@ -200,9 +202,10 @@ class WebhookEventTypesTests(TestCase):
             email="test@example.com",
             password="testpass"
         )
-        UserProfile.objects.create(user=self.user, is_email_verified=True)
+        self.org = Organization.objects.create(name="Test Org", slug="test-org")
+        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
         self.api_key = APIKey.objects.create(
-            user=self.user,
+            organization=self.org,
             name="test-key",
             webhook_url="https://example.com/webhook/",
         )

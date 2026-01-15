@@ -15,6 +15,7 @@ from django.test import TestCase, override_settings
 from core.services.encryption import VERSION_AES_256_GCM, OVERHEAD
 from core.storage.local import LocalStorageBackend
 from storage.models import StoredFile
+from accounts.models import Account, Organization
 
 User = get_user_model()
 
@@ -54,8 +55,11 @@ class EncryptExistingFilesCommandTest(TestCase):
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password="testpass"
         )
+        # Create organization and account for the user
+        org = Organization.objects.create(name="Test Org", slug="test-org-encrypt")
+        self.account = Account.objects.create(user=self.user, organization=org, email_verified=True)
         # Create user directory
-        user_dir = Path(self.temp_dir) / str(self.user.id)
+        user_dir = Path(self.temp_dir) / str(self.account.id)
         user_dir.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
@@ -64,12 +68,12 @@ class EncryptExistingFilesCommandTest(TestCase):
 
     def _create_plaintext_file(self, filename: str, content: bytes) -> StoredFile:
         """Create a plaintext file directly on disk and in DB."""
-        user_dir = Path(self.temp_dir) / str(self.user.id)
+        user_dir = Path(self.temp_dir) / str(self.account.id)
         file_path = user_dir / filename
         file_path.write_bytes(content)
 
         return StoredFile.objects.create(
-            owner=self.user,
+            owner=self.account,
             path=filename,
             name=filename,
             size=len(content),
@@ -128,7 +132,7 @@ class EncryptExistingFilesCommandTest(TestCase):
             )
 
         # File should still be plaintext on disk
-        file_path = Path(self.temp_dir) / str(self.user.id) / "test.txt"
+        file_path = Path(self.temp_dir) / str(self.account.id) / "test.txt"
         self.assertEqual(file_path.read_bytes(), b"test content")
 
         # DB should not be updated
@@ -156,7 +160,7 @@ class EncryptExistingFilesCommandTest(TestCase):
             )
 
             # File should be encrypted on disk
-            file_path = Path(self.temp_dir) / str(self.user.id) / "test.txt"
+            file_path = Path(self.temp_dir) / str(self.account.id) / "test.txt"
             raw_content = file_path.read_bytes()
             self.assertEqual(raw_content[0:1], VERSION_AES_256_GCM)
 
@@ -175,7 +179,9 @@ class EncryptExistingFilesCommandTest(TestCase):
         other_user = User.objects.create_user(
             username="other", email="other@example.com", password="pass"
         )
-        other_dir = Path(self.temp_dir) / str(other_user.id)
+        other_org = Organization.objects.create(name="Other Org", slug="other-org")
+        other_account = Account.objects.create(user=other_user, organization=other_org, email_verified=True)
+        other_dir = Path(self.temp_dir) / str(other_account.id)
         other_dir.mkdir(parents=True, exist_ok=True)
 
         # Create files for both users
@@ -184,7 +190,7 @@ class EncryptExistingFilesCommandTest(TestCase):
         other_file_path = other_dir / "user2_file.txt"
         other_file_path.write_bytes(b"user 2 content")
         StoredFile.objects.create(
-            owner=other_user,
+            owner=other_account,
             path="user2_file.txt",
             name="user2_file.txt",
             size=14,
@@ -211,10 +217,10 @@ class EncryptExistingFilesCommandTest(TestCase):
     def test_skips_directories(self):
         """Command should skip directory entries."""
         # Create a directory entry
-        user_dir = Path(self.temp_dir) / str(self.user.id) / "mydir"
+        user_dir = Path(self.temp_dir) / str(self.account.id) / "mydir"
         user_dir.mkdir(parents=True, exist_ok=True)
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.account,
             path="mydir",
             name="mydir",
             size=0,
@@ -234,7 +240,7 @@ class EncryptExistingFilesCommandTest(TestCase):
         """Command should skip already encrypted files."""
         # Create an encrypted file via the backend
         from io import BytesIO
-        user_prefix = str(self.user.id)
+        user_prefix = str(self.account.id)
         content = BytesIO(b"encrypted content")
 
         with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
@@ -242,7 +248,7 @@ class EncryptExistingFilesCommandTest(TestCase):
             file_info = backend.save(f"{user_prefix}/encrypted.txt", content)
 
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.account,
             path="encrypted.txt",
             name="encrypted.txt",
             size=file_info.size,
@@ -276,7 +282,7 @@ class EncryptExistingFilesCommandTest(TestCase):
         """Summary should show success message when all files encrypted."""
         # Create already encrypted file (DB only - no physical file needed)
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.account,
             path="encrypted.txt",
             name="encrypted.txt",
             size=100,

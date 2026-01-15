@@ -35,17 +35,22 @@ def log_email_verified(sender, user, **kwargs):
 
 @receiver(api_key_created)
 def log_api_key_created(sender, api_key, user, **kwargs):
+    # Handle both real User and APIKeyUser, and None
+    user_id = getattr(user, 'id', None) if user else None
     security_logger.info(
-        f"API_KEY_CREATED user_id={user.id} key_id={api_key.id} "
+        f"API_KEY_CREATED user_id={user_id} key_id={api_key.id} "
         f"key_name={api_key.name}"
     )
 
 
 @receiver(api_key_revoked)
 def log_api_key_revoked(sender, api_key, user, revoked_by, **kwargs):
+    # Handle both real User and APIKeyUser, and None
+    user_id = getattr(user, 'id', None) if user else None
+    revoked_by_id = getattr(revoked_by, 'id', None) if revoked_by else None
     security_logger.info(
-        f"API_KEY_REVOKED user_id={user.id} key_id={api_key.id} "
-        f"key_name={api_key.name} revoked_by={revoked_by.id}"
+        f"API_KEY_REVOKED user_id={user_id} key_id={api_key.id} "
+        f"key_name={api_key.name} revoked_by={revoked_by_id}"
     )
 
 

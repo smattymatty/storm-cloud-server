@@ -173,7 +173,7 @@ class FileContentEditTest(StormCloudAPITestCase):
             content_type="text/plain",
         )
 
-        stored = StoredFile.objects.get(owner=self.user, path="editable.txt")
+        stored = StoredFile.objects.get(owner=self.user.account, path="editable.txt")
         self.assertEqual(stored.size, 100)
 
     def test_edit_nonexistent_file_returns_404(self):
@@ -205,8 +205,8 @@ class FileContentEditTest(StormCloudAPITestCase):
     def test_edit_respects_quota(self):
         """Edit should check quota before saving."""
         # Set very low quota (10 bytes)
-        self.user.profile.storage_quota_bytes = 10
-        self.user.profile.save()
+        self.user.account.storage_quota_bytes = 10
+        self.user.account.save()
 
         response = self.client.put(
             "/api/v1/files/editable.txt/content/",

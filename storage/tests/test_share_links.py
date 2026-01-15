@@ -219,7 +219,7 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
 
         # Create another user with shares
         other_user = UserWithProfileFactory(verified=True)
-        ShareLinkFactory.create_batch(2, owner=other_user)
+        ShareLinkFactory.create_batch(2, owner=other_user.account)
 
         # List current user's shares
         response = self.client.get("/api/v1/shares/")
@@ -227,7 +227,7 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 3)
         for share in response.data:
-            self.assertEqual(share["owner"], self.user.id)
+            self.assertEqual(share["owner"], self.user.account.id)
 
     def test_list_share_links_unauthenticated(self):
         """List endpoint without authentication should return 403."""
@@ -262,7 +262,7 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
 
         # Create share for other user
         other_user = UserWithProfileFactory(verified=True)
-        other_share = ShareLinkFactory(owner=other_user)
+        other_share = ShareLinkFactory(owner=other_user.account)
 
         # Try to access it
         response = self.client.get(f"/api/v1/shares/{other_share.id}/")
@@ -274,10 +274,10 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
         self.authenticate()
 
         # Create active share
-        active = ShareLinkFactory(owner=self.user, expiry_days=7)
+        active = ShareLinkFactory(owner=self.user.account, expiry_days=7)
 
         # Create expired share
-        expired = ShareLinkFactory(owner=self.user, expiry_days=7)
+        expired = ShareLinkFactory(owner=self.user.account, expiry_days=7)
         expired.expires_at = timezone.now() - timedelta(days=1)
         expired.save(update_fields=["expires_at"])
 
@@ -300,7 +300,7 @@ class ShareLinkRevocationTest(StormCloudAPITestCase):
         self.authenticate()
 
         # Create share
-        share = ShareLinkFactory(owner=self.user)
+        share = ShareLinkFactory(owner=self.user.account)
 
         # Revoke it
         response = self.client.delete(f"/api/v1/shares/{share.id}/")
@@ -318,7 +318,7 @@ class ShareLinkRevocationTest(StormCloudAPITestCase):
 
         # Create share for other user
         other_user = UserWithProfileFactory(verified=True)
-        other_share = ShareLinkFactory(owner=other_user)
+        other_share = ShareLinkFactory(owner=other_user.account)
 
         # Try to revoke it
         response = self.client.delete(f"/api/v1/shares/{other_share.id}/")
@@ -334,11 +334,11 @@ class ShareLinkRevocationTest(StormCloudAPITestCase):
         from storage.tests.factories import StoredFileFactory
 
         # Create file record
-        StoredFileFactory(owner=self.user, path="revoked-file.txt")
+        StoredFileFactory(owner=self.user.account, path="revoked-file.txt")
 
         # Create and revoke share
         share = ShareLinkFactory(
-            owner=self.user, file_path="revoked-file.txt", is_active=False
+            owner=self.user.account, file_path="revoked-file.txt", is_active=False
         )
 
         # Try to access via public endpoint
@@ -398,11 +398,11 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         from storage.tests.factories import StoredFileFactory
 
         # Create file record (needed for share to work)
-        stored_file = StoredFileFactory(owner=self.user, path="expired-file.txt")
+        stored_file = StoredFileFactory(owner=self.user.account, path="expired-file.txt")
 
         # Create expired share
         share = ShareLinkFactory(
-            owner=self.user, stored_file=stored_file, expiry_days=7
+            owner=self.user.account, stored_file=stored_file, expiry_days=7
         )
         share.expires_at = timezone.now() - timedelta(days=1)
         share.save(update_fields=["expires_at"])

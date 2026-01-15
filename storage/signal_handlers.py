@@ -44,10 +44,15 @@ def log_file_action(
         else None
     )
 
+    # Convert User/APIKeyUser to Account for ForeignKey
+    # Both real User and APIKeyUser have .account property
+    performed_by_account = performed_by.account if performed_by else None
+    target_user_account = target_user.account if target_user else None
+
     # Create audit log entry in database
     FileAuditLog.objects.create(
-        performed_by=performed_by,
-        target_user=target_user,
+        performed_by=performed_by_account,
+        target_user=target_user_account,
         is_admin_action=is_admin_action,
         action=action,
         path=path,
@@ -65,8 +70,8 @@ def log_file_action(
     # Also log to file for external monitoring
     admin_marker = "[ADMIN] " if is_admin_action else ""
     status = "SUCCESS" if success else f"FAILED ({kwargs.get('error_code', 'UNKNOWN')})"
-    performer_id = performed_by.id if performed_by else "N/A"
-    target_id = target_user.id if target_user else "N/A"
+    performer_id = performed_by_account.id if performed_by_account else "N/A"
+    target_id = target_user_account.id if target_user_account else "N/A"
 
     audit_logger.info(
         f"{admin_marker}FILE_{action.upper()} "

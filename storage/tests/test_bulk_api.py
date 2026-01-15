@@ -12,6 +12,7 @@ from accounts.tests.factories import UserWithProfileFactory
 from storage.models import StoredFile
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class BulkOperationAPITestCase(TestCase):
     """Test suite for bulk operations API."""
 
@@ -43,7 +44,7 @@ class BulkOperationAPITestCase(TestCase):
         self.settings_override.enable()
 
         # Create user storage directory
-        self.user_storage = self.test_storage_root / str(self.user.id)
+        self.user_storage = self.test_storage_root / str(self.user.account.id)
         self.user_storage.mkdir(exist_ok=True)
 
     def tearDown(self):
@@ -66,7 +67,7 @@ class BulkOperationAPITestCase(TestCase):
             parent_path = ""
 
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.user.account,
             path=path,
             name=Path(path).name,
             size=len(content),
@@ -86,7 +87,7 @@ class BulkOperationAPITestCase(TestCase):
             parent_path = ""
 
         StoredFile.objects.create(
-            owner=self.user,
+            owner=self.user.account,
             path=path,
             name=Path(path).name,
             size=0,
@@ -190,7 +191,7 @@ class BulkOperationAPITestCase(TestCase):
         self.assertEqual(response.data["failed"], 0)
 
         # Verify files deleted
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 0)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
 
     def test_delete_partial_failure(self):
         """Test delete with mix of existing and missing files."""

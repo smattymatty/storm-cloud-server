@@ -11,6 +11,7 @@ from accounts.tests.factories import UserWithProfileFactory
 from storage.tests.factories import StoredFileFactory
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class RebuildStorageIndexTaskTestCase(TestCase):
     """Test suite for rebuild_storage_index Django task."""
 
@@ -40,7 +41,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.settings_override.enable()
         
         # Create user storage directory
-        self.user_storage = self.test_storage_root / str(self.user.id)
+        self.user_storage = self.test_storage_root / str(self.user.account.id)
         self.user_storage.mkdir(exist_ok=True)
 
     def tearDown(self):
@@ -86,7 +87,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self._create_file('new.txt')
         
         # Initial count should be 0
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 0)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
         
         # Enqueue sync task
         result = rebuild_storage_index.enqueue(mode='sync')
@@ -94,7 +95,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(result.status, 'SUCCESSFUL')
         
         # Check that record was created
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 1)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
         
         # Check stats
         stats = result.return_value
@@ -104,7 +105,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         """Test task execution filtered by user_id."""
         # Create second user
         user2 = UserWithProfileFactory(verified=True)
-        user2_storage = self.test_storage_root / str(user2.id)
+        user2_storage = self.test_storage_root / str(user2.account.id)
         user2_storage.mkdir(exist_ok=True)
         
         # Create files for both users
@@ -119,8 +120,8 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_created'], 1)
         
         # Only user1's file should have record
-        self.assertTrue(StoredFile.objects.filter(owner=self.user, path='user1.txt').exists())
-        self.assertFalse(StoredFile.objects.filter(owner=user2, path='user2.txt').exists())
+        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='user1.txt').exists())
+        self.assertFalse(StoredFile.objects.filter(owner=user2.account, path='user2.txt').exists())
         
         # Cleanup
         shutil.rmtree(user2_storage)
@@ -138,12 +139,12 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_created'], 1)
         
         # But no actual records should exist
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 0)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
 
     def test_task_enqueue_force_flag(self):
         """Test task respects force flag for destructive operations."""
         # Create orphaned record
-        StoredFileFactory(owner=self.user, path='orphan.txt', name='orphan.txt')
+        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
         
         # Without force, clean should fail - task raises ValueError
         result = rebuild_storage_index.enqueue(mode='clean', force=False)
@@ -154,12 +155,12 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertIn('force', result.errors[0].traceback.lower())
         
         # Record should still exist
-        self.assertTrue(StoredFile.objects.filter(owner=self.user, path='orphan.txt').exists())
+        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='orphan.txt').exists())
 
     def test_task_clean_with_force(self):
         """Test clean task with force flag deletes orphans."""
         # Create orphaned record
-        StoredFileFactory(owner=self.user, path='orphan.txt', name='orphan.txt')
+        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
         
         result = rebuild_storage_index.enqueue(mode='clean', force=True)
         
@@ -169,7 +170,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_deleted'], 1)
         
         # Record should be deleted
-        self.assertFalse(StoredFile.objects.filter(owner=self.user, path='orphan.txt').exists())
+        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='orphan.txt').exists())
 
     def test_task_full_mode(self):
         """Test full mode task performs sync and clean."""
@@ -177,7 +178,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self._create_file('new.txt')
         
         # Orphaned record
-        StoredFileFactory(owner=self.user, path='orphan.txt', name='orphan.txt')
+        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
         
         result = rebuild_storage_index.enqueue(mode='full', force=True)
         
@@ -188,8 +189,8 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_deleted'], 1)
         
         # Verify final state
-        self.assertTrue(StoredFile.objects.filter(owner=self.user, path='new.txt').exists())
-        self.assertFalse(StoredFile.objects.filter(owner=self.user, path='orphan.txt').exists())
+        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='new.txt').exists())
+        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='orphan.txt').exists())
 
     # =========================================================================
     # Task Return Value Tests
@@ -271,7 +272,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(result.status, 'SUCCESSFUL')
         
         # Step 3: Verify DB records created
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 4)  # 3 files + 1 folder
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 4)  # 3 files + 1 folder
         
         # Step 4: Delete a file on disk
         (self.user_storage / 'file1.txt').unlink()
@@ -287,8 +288,8 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_deleted'], 1)
         
         # Step 7: Verify final state
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 3)  # 2 files + 1 folder
-        self.assertFalse(StoredFile.objects.filter(owner=self.user, path='file1.txt').exists())
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 3)  # 2 files + 1 folder
+        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='file1.txt').exists())
 
     def test_task_handles_concurrent_filesystem_changes(self):
         """Test task handles filesystem state changes during execution."""
@@ -297,7 +298,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         
         # Sync it
         rebuild_storage_index.enqueue(mode='sync')
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 1)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
         
         # Add more files
         self._create_file('added.txt')
@@ -308,7 +309,7 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         self.assertEqual(stats['records_created'], 1)  # Only the new file
         
         # Final count should be 2
-        self.assertEqual(StoredFile.objects.filter(owner=self.user).count(), 2)
+        self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 2)
 
     def test_task_handles_empty_storage(self):
         """Test task handles user with no files gracefully."""
@@ -325,23 +326,23 @@ class RebuildStorageIndexTaskTestCase(TestCase):
         """Test task can process multiple users in single execution."""
         # Create three users with files
         users = [UserWithProfileFactory(verified=True) for _ in range(3)]
-        
+
         for user in users:
-            user_storage = self.test_storage_root / str(user.id)
+            user_storage = self.test_storage_root / str(user.account.id)
             user_storage.mkdir(exist_ok=True)
             (user_storage / 'file.txt').write_text('content')
-        
+
         # Sync all users
         result = rebuild_storage_index.enqueue(mode='sync')
-        
+
         stats = result.return_value
         self.assertEqual(stats['users_scanned'], 4)  # 3 new + 1 from setUp
         self.assertEqual(stats['records_created'], 3)
-        
+
         # Verify all users have records
         for user in users:
-            self.assertTrue(StoredFile.objects.filter(owner=user, path='file.txt').exists())
-        
+            self.assertTrue(StoredFile.objects.filter(owner=user.account, path='file.txt').exists())
+
         # Cleanup
         for user in users:
-            shutil.rmtree(self.test_storage_root / str(user.id))
+            shutil.rmtree(self.test_storage_root / str(user.account.id))

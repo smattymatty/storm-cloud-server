@@ -17,7 +17,7 @@ from core.throttling import (
     AnonLoginThrottle,
     AnonRegistrationThrottle,
 )
-from .models import APIKey, UserProfile, EmailVerificationToken
+from .models import APIKey, Account, Organization, EnrollmentKey, EmailVerificationToken
 from .serializers import (
     UserSerializer,
     UserProfileSerializer,
@@ -47,8 +47,20 @@ from .signals import (
     login_failed,
 )
 from .utils import get_client_ip, send_verification_email
+from .authentication import APIKeyUser
 
 User = get_user_model()
+
+
+def get_user_organization(user):
+    """Get organization for either User or APIKeyUser."""
+    if hasattr(user, 'organization') and user.organization:
+        # APIKeyUser - has organization directly
+        return user.organization
+    elif hasattr(user, 'account') and user.account:
+        # Regular User - get via account
+        return user.account.organization
+    return None
 
 
 # =============================================================================
@@ -96,8 +108,17 @@ class RegistrationView(StormCloudBaseAPIView):
             password=serializer.validated_data["password"],
         )
 
-        # Create profile
-        profile = UserProfile.objects.create(user=user)
+        # Create personal organization for new user
+        organization = Organization.objects.create(
+            name=f"{user.username}'s Organization",
+        )
+
+        # Create account with organization (first user is owner)
+        account = Account.objects.create(
+            user=user,
+            organization=organization,
+            is_owner=True,
+        )
 
         # Fire signal
         user_registered.send(sender=User, user=user, request=request)
@@ -142,7 +163,7 @@ class EmailVerificationView(StormCloudBaseAPIView):
 
         try:
             token = EmailVerificationToken.objects.select_related(
-                "user", "user__profile"
+                "user", "user__account"
             ).get(token=token_str)
         except EmailVerificationToken.DoesNotExist:
             return Response(
@@ -182,9 +203,9 @@ class EmailVerificationView(StormCloudBaseAPIView):
         token.mark_used()
 
         # Mark email as verified
-        profile = token.user.profile
-        profile.is_email_verified = True
-        profile.save(update_fields=["is_email_verified"])
+        profile = token.user.account
+        profile.email_verified = True
+        profile.save(update_fields=["email_verified"])
 
         # Fire signal
         email_verified.send(sender=User, user=token.user)
@@ -222,8 +243,8 @@ class ResendVerificationView(StormCloudBaseAPIView):
 
         # Always return success to prevent email enumeration
         try:
-            user = User.objects.select_related("profile").get(email=email)
-            if not user.profile.is_email_verified:
+            user = User.objects.select_related("account").get(email=email)
+            if not user.account.email_verified:
                 # Send new verification email
                 send_verification_email(user, request)
         except User.DoesNotExist:
@@ -330,8 +351,8 @@ class LoginView(StormCloudBaseAPIView):
         # Check email verification (unless admin)
         if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION and not user.is_staff:
             # Use select_related to avoid extra query
-            user = User.objects.select_related("profile").get(pk=user.pk)
-            if not user.profile.is_email_verified:
+            user = User.objects.select_related("account").get(pk=user.pk)
+            if not user.account.email_verified:
                 login_failed.send(
                     sender=None,
                     username=username,
@@ -399,10 +420,24 @@ class APIKeyCreateView(StormCloudBaseAPIView):
     )
     def post(self, request: Request) -> Response:
         """Create new API key for authenticated user."""
+        # Require session auth (API keys can't create other API keys)
+        if isinstance(request.user, APIKeyUser):
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_AUTH_REQUIRED",
+                        "message": "API key creation requires session authentication, not API key.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        account = request.user.account
+        organization = account.organization
+
         # Check email verification (unless admin)
         if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION and not request.user.is_staff:
-            profile = UserProfile.objects.get(user=request.user)
-            if not profile.is_email_verified:
+            if not account.email_verified:
                 return Response(
                     {
                         "error": {
@@ -417,7 +452,7 @@ class APIKeyCreateView(StormCloudBaseAPIView):
         # Check max keys limit
         if settings.STORMCLOUD_MAX_API_KEYS_PER_USER > 0:
             active_count = APIKey.objects.filter(
-                user=request.user, is_active=True
+                organization=organization, is_active=True
             ).count()
             if active_count >= settings.STORMCLOUD_MAX_API_KEYS_PER_USER:
                 return Response(
@@ -436,7 +471,9 @@ class APIKeyCreateView(StormCloudBaseAPIView):
 
         # Create key
         api_key = APIKey.objects.create(
-            user=request.user, name=serializer.validated_data["name"]
+            organization=organization,
+            created_by=account,
+            name=serializer.validated_data["name"],
         )
 
         # Fire signal
@@ -469,7 +506,8 @@ class APIKeyListView(StormCloudBaseAPIView):
     )
     def get(self, request: Request) -> Response:
         """List user's API keys."""
-        keys = APIKey.objects.filter(user=request.user).order_by("-created_at")
+        organization = get_user_organization(request.user)
+        keys = APIKey.objects.filter(organization=organization).order_by("-created_at")
         active_count = keys.filter(is_active=True).count()
 
         return Response(
@@ -492,10 +530,24 @@ class APIKeyListView(StormCloudBaseAPIView):
     )
     def post(self, request: Request) -> Response:
         """Create new API key for authenticated user."""
+        # Require session auth (API keys can't create other API keys)
+        if isinstance(request.user, APIKeyUser):
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_AUTH_REQUIRED",
+                        "message": "API key creation requires session authentication, not API key.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        account = request.user.account
+        organization = account.organization
+
         # Check email verification (unless admin)
         if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION and not request.user.is_staff:
-            profile = UserProfile.objects.get(user=request.user)
-            if not profile.is_email_verified:
+            if not account.email_verified:
                 return Response(
                     {
                         "error": {
@@ -510,7 +562,7 @@ class APIKeyListView(StormCloudBaseAPIView):
         # Check max keys limit
         if settings.STORMCLOUD_MAX_API_KEYS_PER_USER > 0:
             active_count = APIKey.objects.filter(
-                user=request.user, is_active=True
+                organization=organization, is_active=True
             ).count()
             if active_count >= settings.STORMCLOUD_MAX_API_KEYS_PER_USER:
                 return Response(
@@ -529,7 +581,9 @@ class APIKeyListView(StormCloudBaseAPIView):
 
         # Create key
         api_key = APIKey.objects.create(
-            user=request.user, name=serializer.validated_data["name"]
+            organization=organization,
+            created_by=account,
+            name=serializer.validated_data["name"],
         )
 
         # Fire signal
@@ -564,7 +618,8 @@ class APIKeyRevokeView(StormCloudBaseAPIView):
     def post(self, request: Request, key_id: int) -> Response:
         """Revoke an API key."""
         try:
-            api_key = APIKey.objects.get(id=key_id, user=request.user)
+            organization = get_user_organization(request.user)
+            api_key = APIKey.objects.get(id=key_id, organization=organization)
         except APIKey.DoesNotExist:
             return Response(
                 {
@@ -623,11 +678,25 @@ class AuthMeView(StormCloudBaseAPIView):
     )
     def get(self, request: Request) -> Response:
         """Get current user info."""
-        profile, created = UserProfile.objects.get_or_create(user=request.user)
+        if isinstance(request.user, APIKeyUser):
+            # API key auth - return simplified response (can't use UserSerializer)
+            return Response({
+                "user": None,
+                "account": None,
+                "api_key": {
+                    "id": str(request.auth.id),
+                    "name": request.auth.name,
+                    "organization_id": str(request.user.organization.id),
+                    "organization_name": request.user.organization.name,
+                    "last_used_at": request.auth.last_used_at,
+                },
+            })
 
+        # Session auth - get/create account
+        account, created = Account.objects.get_or_create(user=request.user)
         data = {
             "user": request.user,
-            "profile": profile,
+            "account": account,
         }
 
         serializer = AuthMeResponseSerializer(
@@ -655,6 +724,18 @@ class DeactivateAccountView(StormCloudBaseAPIView):
     )
     def post(self, request: Request) -> Response:
         """Deactivate account."""
+        # Require session auth (API key users can't deactivate accounts)
+        if isinstance(request.user, APIKeyUser):
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_AUTH_REQUIRED",
+                        "message": "This operation requires session authentication, not API key.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = DeactivateAccountSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -672,7 +753,8 @@ class DeactivateAccountView(StormCloudBaseAPIView):
 
         # Revoke all API keys
         keys_revoked = 0
-        for key in APIKey.objects.filter(user=request.user, is_active=True):
+        organization = get_user_organization(request.user)
+        for key in APIKey.objects.filter(organization=organization, is_active=True):
             key.revoke()
             keys_revoked += 1
 
@@ -707,6 +789,18 @@ class DeleteAccountView(StormCloudBaseAPIView):
     )
     def delete(self, request: Request) -> Response:
         """Delete account."""
+        # Require session auth (API key users can't delete accounts)
+        if isinstance(request.user, APIKeyUser):
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_AUTH_REQUIRED",
+                        "message": "This operation requires session authentication, not API key.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         serializer = DeleteAccountSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -770,6 +864,25 @@ class AdminUserCreateView(StormCloudBaseAPIView):
         # Get password (may be None or empty)
         password = serializer.validated_data.get("password")
 
+        # Determine organization
+        org_slug = serializer.validated_data.get("organization_slug")
+        if org_slug:
+            try:
+                organization = Organization.objects.get(slug=org_slug)
+            except Organization.DoesNotExist:
+                return Response(
+                    {"error": {"code": "ORG_NOT_FOUND", "message": f"Organization not found: {org_slug}"}},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            # Use admin's organization if they have one
+            organization = get_user_organization(request.user)
+            if not organization:
+                return Response(
+                    {"error": {"code": "ORG_REQUIRED", "message": "Organization slug is required"}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Create user
         user = User.objects.create_user(
             username=serializer.validated_data["username"],
@@ -783,16 +896,17 @@ class AdminUserCreateView(StormCloudBaseAPIView):
             user.set_unusable_password()
             user.save()
 
-        # Create profile
-        profile = UserProfile.objects.create(
+        # Create account
+        account = Account.objects.create(
             user=user,
-            is_email_verified=serializer.validated_data.get("is_email_verified", False),
+            organization=organization,
+            email_verified=serializer.validated_data.get("email_verified", False),
         )
 
         return Response(
             {
                 "user": UserSerializer(user).data,
-                "profile": UserProfileSerializer(profile).data,
+                "profile": UserProfileSerializer(account).data,
                 "message": "User created successfully",
             },
             status=status.HTTP_201_CREATED,
@@ -818,8 +932,8 @@ class AdminUserListView(StormCloudBaseAPIView):
 
         TODO: Add pagination in Phase 3 (DRF PageNumberPagination).
         """
-        queryset = User.objects.select_related("profile").annotate(
-            api_key_count=Count("api_keys")
+        queryset = User.objects.select_related("account").annotate(
+            api_key_count=Count("account__organization__api_keys")
         )
 
         # Filters
@@ -830,7 +944,7 @@ class AdminUserListView(StormCloudBaseAPIView):
         is_verified = request.query_params.get("is_verified")
         if is_verified is not None:
             queryset = queryset.filter(
-                profile__is_email_verified=is_verified.lower() == "true"
+                account__email_verified=is_verified.lower() == "true"
             )
 
         search = request.query_params.get("search")
@@ -848,7 +962,7 @@ class AdminUserListView(StormCloudBaseAPIView):
                     "email": user.email,
                     "is_active": user.is_active,
                     "is_staff": user.is_staff,
-                    "is_email_verified": user.profile.is_email_verified,
+                    "is_email_verified": user.account.email_verified,
                     "date_joined": user.date_joined,
                     "api_key_count": user.api_key_count,
                 }
@@ -884,6 +998,25 @@ class AdminUserListView(StormCloudBaseAPIView):
         # Get password (may be None or empty)
         password = serializer.validated_data.get("password")
 
+        # Determine organization
+        org_slug = serializer.validated_data.get("organization_slug")
+        if org_slug:
+            try:
+                organization = Organization.objects.get(slug=org_slug)
+            except Organization.DoesNotExist:
+                return Response(
+                    {"error": {"code": "ORG_NOT_FOUND", "message": f"Organization not found: {org_slug}"}},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            # Use admin's organization if they have one
+            organization = get_user_organization(request.user)
+            if not organization:
+                return Response(
+                    {"error": {"code": "ORG_REQUIRED", "message": "Organization slug is required"}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         try:
             # Create user
             user = User.objects.create_user(
@@ -900,18 +1033,17 @@ class AdminUserListView(StormCloudBaseAPIView):
                 user.set_unusable_password()
                 user.save()
 
-            # Create profile
-            profile = UserProfile.objects.create(
+            # Create account
+            account = Account.objects.create(
                 user=user,
-                is_email_verified=serializer.validated_data.get(
-                    "is_email_verified", False
-                ),
+                organization=organization,
+                email_verified=serializer.validated_data.get("email_verified", False),
             )
 
             return Response(
                 {
                     "user": UserSerializer(user).data,
-                    "profile": UserProfileSerializer(profile).data,
+                    "profile": UserProfileSerializer(account).data,
                     "message": "User created successfully",
                 },
                 status=status.HTTP_201_CREATED,
@@ -963,8 +1095,8 @@ class AdminUserDetailView(StormCloudBaseAPIView):
 
         try:
             user = (
-                User.objects.select_related("profile")
-                .prefetch_related("api_keys")
+                User.objects.select_related("account", "account__organization")
+                .prefetch_related("account__organization__api_keys")
                 .get(id=user_id)
             )
         except User.DoesNotExist:
@@ -980,18 +1112,23 @@ class AdminUserDetailView(StormCloudBaseAPIView):
 
         # P0-3: Calculate storage used
         storage_used = (
-            StoredFile.objects.filter(owner=user).aggregate(total=Sum("size"))["total"]
+            StoredFile.objects.filter(owner=user.account).aggregate(total=Sum("size"))["total"]
             or 0
         )
 
-        quota_bytes = user.profile.storage_quota_bytes
+        quota_bytes = user.account.storage_quota_bytes
         quota_mb = round(quota_bytes / (1024 * 1024), 2) if quota_bytes > 0 else None
+
+        # Get API keys via organization (user no longer has direct api_keys relation)
+        api_keys = []
+        if user.account and user.account.organization:
+            api_keys = user.account.organization.api_keys.all()
 
         return Response(
             {
                 "user": UserSerializer(user).data,
-                "profile": UserProfileSerializer(user.profile).data,
-                "api_keys": APIKeyListSerializer(user.api_keys.all(), many=True).data,
+                "profile": UserProfileSerializer(user.account).data,
+                "api_keys": APIKeyListSerializer(api_keys, many=True).data,
                 "storage_used_bytes": storage_used,
                 "storage_used_mb": round(storage_used / (1024 * 1024), 2),
                 "storage_quota_mb": quota_mb,
@@ -1015,7 +1152,7 @@ class AdminUserDetailView(StormCloudBaseAPIView):
         from django.db import IntegrityError
 
         try:
-            user = User.objects.select_related("profile").get(id=user_id)
+            user = User.objects.select_related("account").get(id=user_id)
         except User.DoesNotExist:
             return Response(
                 {
@@ -1061,7 +1198,7 @@ class AdminUserDetailView(StormCloudBaseAPIView):
             return Response(
                 {
                     "user": UserSerializer(user).data,
-                    "profile": UserProfileSerializer(user.profile).data,
+                    "profile": UserProfileSerializer(user.account).data,
                     "message": "User updated successfully",
                 }
             )
@@ -1157,7 +1294,7 @@ class AdminUserVerifyView(StormCloudBaseAPIView):
     def post(self, request: Request, user_id: int) -> Response:
         """Verify user email."""
         try:
-            user = User.objects.select_related("profile").get(id=user_id)
+            user = User.objects.select_related("account").get(id=user_id)
         except User.DoesNotExist:
             return Response(
                 {
@@ -1169,9 +1306,9 @@ class AdminUserVerifyView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        profile = user.profile
-        profile.is_email_verified = True
-        profile.save(update_fields=["is_email_verified"])
+        profile = user.account
+        profile.email_verified = True
+        profile.save(update_fields=["email_verified"])
 
         return Response(
             {
@@ -1189,7 +1326,7 @@ class AdminUserDeactivateView(StormCloudBaseAPIView):
 
     @extend_schema(
         summary="Admin: Deactivate user",
-        description="Deactivate a user's account and revoke all their API keys.",
+        description="Deactivate a user's account and revoke API keys created by them.",
         request=None,
         responses={
             200: OpenApiResponse(description="User deactivated"),
@@ -1212,9 +1349,9 @@ class AdminUserDeactivateView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Revoke all API keys
+        # Only revoke API keys created by this user (org keys remain active)
         keys_revoked = 0
-        for key in APIKey.objects.filter(user=user, is_active=True):
+        for key in APIKey.objects.filter(created_by=user.account, is_active=True):
             key.revoke()
             keys_revoked += 1
 
@@ -1324,7 +1461,7 @@ class AdminUserQuotaUpdateView(StormCloudBaseAPIView):
         from storage.models import StoredFile
 
         try:
-            user = User.objects.select_related("profile").get(id=user_id)
+            user = User.objects.select_related("account").get(id=user_id)
         except User.DoesNotExist:
             return Response(
                 {
@@ -1339,7 +1476,7 @@ class AdminUserQuotaUpdateView(StormCloudBaseAPIView):
         serializer = AdminUserQuotaUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        profile = user.profile
+        profile = user.account
         new_quota_mb = serializer.validated_data["storage_quota_mb"]
 
         # Convert MB to bytes for storage (null/0 = unlimited)
@@ -1395,7 +1532,7 @@ class AdminUserPermissionsUpdateView(StormCloudBaseAPIView):
     def patch(self, request: Request, user_id: int) -> Response:
         """Update user permissions."""
         try:
-            user = User.objects.select_related("profile").get(id=user_id)
+            user = User.objects.select_related("account").get(id=user_id)
         except User.DoesNotExist:
             return Response(
                 {
@@ -1410,7 +1547,7 @@ class AdminUserPermissionsUpdateView(StormCloudBaseAPIView):
         serializer = AdminUserPermissionsUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        profile = user.profile
+        profile = user.account
         updated_fields = []
 
         # Update only the fields that were provided
@@ -1462,12 +1599,18 @@ class AdminUserAPIKeyCreateView(StormCloudBaseAPIView):
     def post(self, request: Request, user_id: int) -> Response:
         """Create API key for specified user."""
         user = get_object_or_404(User, pk=user_id)
+        account = user.account
+        organization = account.organization
 
         serializer = APIKeyCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         name = serializer.validated_data.get("name", "API Key")
-        key = APIKey.objects.create(user=user, name=name)
+        key = APIKey.objects.create(
+            organization=organization,
+            created_by=account,
+            name=name,
+        )
 
         api_key_created.send(sender=APIKey, api_key=key, user=user)
 
@@ -1492,12 +1635,16 @@ class AdminAPIKeyListView(StormCloudBaseAPIView):
 
         TODO: Add pagination in Phase 3 (DRF PageNumberPagination).
         """
-        queryset = APIKey.objects.select_related("user").all()
+        queryset = APIKey.objects.select_related("organization", "created_by").all()
 
         # Filters
         user_id = request.query_params.get("user_id")
         if user_id:
-            queryset = queryset.filter(user_id=user_id)
+            queryset = queryset.filter(created_by__user_id=user_id)
+
+        organization_id = request.query_params.get("organization_id")
+        if organization_id:
+            queryset = queryset.filter(organization_id=organization_id)
 
         is_active = request.query_params.get("is_active")
         if is_active is not None:
@@ -1505,18 +1652,25 @@ class AdminAPIKeyListView(StormCloudBaseAPIView):
 
         keys_data = []
         for key in queryset:
-            keys_data.append(
-                {
-                    "id": str(key.id),
-                    "name": key.name,
-                    "user_id": key.user.id,
-                    "username": key.user.username,
-                    "is_active": key.is_active,
-                    "created_at": key.created_at,
-                    "last_used_at": key.last_used_at,
-                    "revoked_at": key.revoked_at,
-                }
-            )
+            key_data = {
+                "id": str(key.id),
+                "name": key.name,
+                "organization_id": str(key.organization.id),
+                "organization_name": key.organization.name,
+                "organization": {
+                    "id": str(key.organization.id),
+                    "name": key.organization.name,
+                    "slug": key.organization.slug,
+                },
+                "is_active": key.is_active,
+                "created_at": key.created_at,
+                "last_used_at": key.last_used_at,
+                "revoked_at": key.revoked_at,
+            }
+            if key.created_by:
+                key_data["created_by_user_id"] = key.created_by.user.id
+                key_data["created_by_username"] = key.created_by.user.username
+            keys_data.append(key_data)
 
         return Response({"keys": keys_data, "total": len(keys_data)})
 
@@ -1540,7 +1694,7 @@ class AdminAPIKeyRevokeView(StormCloudBaseAPIView):
     def post(self, request: Request, key_id: int) -> Response:
         """Revoke an API key."""
         try:
-            api_key = APIKey.objects.select_related("user").get(id=key_id)
+            api_key = APIKey.objects.select_related("organization", "created_by").get(id=key_id)
         except APIKey.DoesNotExist:
             return Response(
                 {
@@ -1566,21 +1720,25 @@ class AdminAPIKeyRevokeView(StormCloudBaseAPIView):
         # Revoke the key
         api_key.revoke()
 
-        # Fire signal
+        # Fire signal (user is the created_by user if available)
+        user = api_key.created_by.user if api_key.created_by else None
         api_key_revoked.send(
-            sender=APIKey, api_key=api_key, user=api_key.user, revoked_by=request.user
+            sender=APIKey, api_key=api_key, user=user, revoked_by=request.user
         )
 
-        return Response(
-            {
-                "message": "API key revoked",
-                "key_id": str(api_key.id),
-                "key_name": api_key.name,
-                "user_id": api_key.user.id,
-                "username": api_key.user.username,
-                "revoked_at": api_key.revoked_at,
-            }
-        )
+        response_data = {
+            "message": "API key revoked",
+            "key_id": str(api_key.id),
+            "key_name": api_key.name,
+            "organization_id": str(api_key.organization.id),
+            "organization_name": api_key.organization.name,
+            "revoked_at": api_key.revoked_at,
+        }
+        if api_key.created_by:
+            response_data["created_by_user_id"] = api_key.created_by.user.id
+            response_data["created_by_username"] = api_key.created_by.user.username
+
+        return Response(response_data)
 
 
 # =============================================================================
@@ -1891,7 +2049,7 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
     def get_api_key(self, user_id: int, key_id) -> APIKey | None:
         """Get APIKey or None if not found."""
         try:
-            return APIKey.objects.get(id=key_id, user_id=user_id)
+            return APIKey.objects.get(id=key_id, created_by__user_id=user_id)
         except APIKey.DoesNotExist:
             return None
 
@@ -2037,7 +2195,7 @@ class AdminUserKeyWebhookRegenerateView(StormCloudBaseAPIView):
     )
     def post(self, request: Request, user_id: int, key_id) -> Response:
         try:
-            api_key = APIKey.objects.get(id=key_id, user_id=user_id)
+            api_key = APIKey.objects.get(id=key_id, created_by__user_id=user_id)
         except APIKey.DoesNotExist:
             return Response(
                 {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
@@ -2094,7 +2252,7 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
         from django.utils import timezone
 
         try:
-            api_key = APIKey.objects.get(id=key_id, user_id=user_id)
+            api_key = APIKey.objects.get(id=key_id, created_by__user_id=user_id)
         except APIKey.DoesNotExist:
             return Response(
                 {"error": {"code": "KEY_NOT_FOUND", "message": "API key not found."}},
@@ -2185,7 +2343,8 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
     def get_api_key(self, request, key_id) -> APIKey | None:
         """Get user's own APIKey or None."""
         try:
-            return APIKey.objects.get(id=key_id, user=request.user, is_active=True)
+            organization = get_user_organization(request.user)
+            return APIKey.objects.get(id=key_id, organization=organization, is_active=True)
         except APIKey.DoesNotExist:
             return None
 
@@ -2276,9 +2435,10 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
         # If copying from another key, get that key's secret
         if source_key_id and webhook_url:
             try:
+                organization = get_user_organization(request.user)
                 source_key = APIKey.objects.get(
                     id=source_key_id,
-                    user=request.user,
+                    organization=organization,
                     is_active=True,
                     webhook_secret__isnull=False
                 )

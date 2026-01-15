@@ -265,10 +265,10 @@ class FileAuditLogSerializer(serializers.ModelSerializer):
     """Serializer for file audit log entries."""
 
     performed_by_username = serializers.CharField(
-        source="performed_by.username", read_only=True, allow_null=True
+        source="performed_by.user.username", read_only=True, allow_null=True
     )
     target_user_username = serializers.CharField(
-        source="target_user.username", read_only=True, allow_null=True
+        source="target_user.user.username", read_only=True, allow_null=True
     )
     action_display = serializers.CharField(source="get_action_display", read_only=True)
 

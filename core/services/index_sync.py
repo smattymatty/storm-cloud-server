@@ -16,7 +16,6 @@ from typing import Optional, Dict, List
 from django.contrib.auth import get_user_model
 from core.services.encryption import DecryptionError, EncryptionService
 from core.storage.base import AbstractStorageBackend
-from core.storage.local import LocalStorageBackend
 from storage.models import StoredFile
 
 logger = logging.getLogger(__name__)
@@ -52,7 +51,11 @@ class IndexSyncService:
         backend: Optional[AbstractStorageBackend] = None,
         user_id: Optional[int] = None
     ):
-        self.backend = backend or LocalStorageBackend()
+        if backend is None:
+            # Lazy import to avoid circular dependency
+            from core.storage.local import LocalStorageBackend
+            backend = LocalStorageBackend()
+        self.backend = backend
         self.user_id = user_id
         self.encryption = EncryptionService()
         
@@ -129,15 +132,16 @@ class IndexSyncService:
             IndexSyncStats with operation results
         """
         stats = IndexSyncStats()
-        user_prefix = f"{user.id}"
-        
+        # Use Account UUID for storage path prefix (not User.id)
+        user_prefix = f"{user.account.id}"
+
         # Scan filesystem
         fs_files = self._scan_filesystem(user_prefix)
         stats.files_on_disk = len(fs_files)
         
         # Get DB records
         db_files = {
-            f.path: f for f in StoredFile.objects.filter(owner=user)
+            f.path: f for f in StoredFile.objects.filter(owner=user.account)
         }
         stats.files_in_db = len(db_files)
         
@@ -313,7 +317,7 @@ class IndexSyncService:
 
         # Idempotent: update_or_create handles race conditions
         return StoredFile.objects.update_or_create(
-            owner=user,
+            owner=user.account,
             path=path,
             defaults={
                 'name': file_info['name'],

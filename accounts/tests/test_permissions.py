@@ -12,8 +12,8 @@ class PermissionUploadTest(StormCloudAPITestCase):
     def test_upload_denied_when_can_upload_false(self):
         """User with can_upload=False cannot upload files."""
         self.authenticate()
-        self.user.profile.can_upload = False
-        self.user.profile.save()
+        self.user.account.can_upload = False
+        self.user.account.save()
 
         with open(__file__, 'rb') as f:
             response = self.client.post(
@@ -30,8 +30,8 @@ class PermissionUploadTest(StormCloudAPITestCase):
         """User with can_upload=True can upload files."""
         self.authenticate()
         # Default is True, but let's be explicit
-        self.user.profile.can_upload = True
-        self.user.profile.save()
+        self.user.account.can_upload = True
+        self.user.account.save()
 
         with open(__file__, 'rb') as f:
             response = self.client.post(
@@ -59,8 +59,8 @@ class PermissionDeleteTest(StormCloudAPITestCase):
             )
 
         # Now disable delete permission
-        self.user.profile.can_delete = False
-        self.user.profile.save()
+        self.user.account.can_delete = False
+        self.user.account.save()
 
         response = self.client.delete('/api/v1/files/deleteme.txt/delete/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -99,8 +99,8 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
             )
 
         # Now disable overwrite permission
-        self.user.profile.can_overwrite = False
-        self.user.profile.save()
+        self.user.account.can_overwrite = False
+        self.user.account.save()
 
         # Try to overwrite
         with open(__file__, 'rb') as f:
@@ -127,8 +127,8 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
             )
 
         # Now disable overwrite permission
-        self.user.profile.can_overwrite = False
-        self.user.profile.save()
+        self.user.account.can_overwrite = False
+        self.user.account.save()
 
         # Try to edit content
         response = self.client.put(
@@ -158,8 +158,8 @@ class PermissionShareTest(StormCloudAPITestCase):
             )
 
         # Now disable share permission
-        self.user.profile.can_create_shares = False
-        self.user.profile.save()
+        self.user.account.can_create_shares = False
+        self.user.account.save()
 
         response = self.client.post('/api/v1/shares/', {'file_path': 'share.txt'})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -180,8 +180,8 @@ class PermissionShareTest(StormCloudAPITestCase):
                 )
 
         # Set max share links to 2
-        self.user.profile.max_share_links = 2
-        self.user.profile.save()
+        self.user.account.max_share_links = 2
+        self.user.account.save()
 
         # Create 2 shares (should work)
         self.client.post('/api/v1/shares/', {'file_path': 'share0.txt'})
@@ -209,8 +209,8 @@ class PermissionBulkTest(StormCloudAPITestCase):
             )
 
         # Disable delete permission
-        self.user.profile.can_delete = False
-        self.user.profile.save()
+        self.user.account.can_delete = False
+        self.user.account.save()
 
         response = self.client.post('/api/v1/bulk/', {
             'operation': 'delete',
@@ -235,8 +235,8 @@ class PermissionBulkTest(StormCloudAPITestCase):
         self.client.post('/api/v1/dirs/', {'path': 'dest'}, format='json')
 
         # Disable move permission
-        self.user.profile.can_move = False
-        self.user.profile.save()
+        self.user.account.can_move = False
+        self.user.account.save()
 
         response = self.client.post('/api/v1/bulk/', {
             'operation': 'move',
@@ -262,8 +262,8 @@ class PermissionBulkTest(StormCloudAPITestCase):
         self.client.post('/api/v1/dirs/', {'path': 'dest'}, format='json')
 
         # Disable upload permission
-        self.user.profile.can_upload = False
-        self.user.profile.save()
+        self.user.account.can_upload = False
+        self.user.account.save()
 
         response = self.client.post('/api/v1/bulk/', {
             'operation': 'copy',
@@ -282,8 +282,11 @@ class AdminPermissionsUpdateTest(StormCloudAPITestCase):
     def test_admin_can_update_user_permissions(self):
         """Admin can update user permission flags."""
         # Create admin and target user
-        admin = UserWithProfileFactory(is_staff=True, is_superuser=True, verified=True)
-        admin_key = APIKeyFactory(user=admin)
+        admin = UserWithProfileFactory(admin=True)
+        admin_key = APIKeyFactory(
+            organization=admin.account.organization,
+            created_by=admin.account,
+        )
         target_user = UserWithProfileFactory(verified=True)
 
         self.authenticate(api_key=admin_key)
@@ -304,10 +307,10 @@ class AdminPermissionsUpdateTest(StormCloudAPITestCase):
         self.assertEqual(response.data['permissions']['max_share_links'], 5)
 
         # Verify in database
-        target_user.profile.refresh_from_db()
-        self.assertFalse(target_user.profile.can_upload)
-        self.assertFalse(target_user.profile.can_delete)
-        self.assertEqual(target_user.profile.max_share_links, 5)
+        target_user.account.refresh_from_db()
+        self.assertFalse(target_user.account.can_upload)
+        self.assertFalse(target_user.account.can_delete)
+        self.assertEqual(target_user.account.max_share_links, 5)
 
     def test_non_admin_cannot_update_permissions(self):
         """Non-admin users cannot update permissions."""
@@ -324,14 +327,17 @@ class AdminPermissionsUpdateTest(StormCloudAPITestCase):
 
     def test_partial_update_only_changes_specified_fields(self):
         """PATCH only updates the fields that are provided."""
-        admin = UserWithProfileFactory(is_staff=True, is_superuser=True, verified=True)
-        admin_key = APIKeyFactory(user=admin)
+        admin = UserWithProfileFactory(admin=True)
+        admin_key = APIKeyFactory(
+            organization=admin.account.organization,
+            created_by=admin.account,
+        )
         target_user = UserWithProfileFactory(verified=True)
 
         # Set initial values - ensure both are True
-        target_user.profile.can_upload = True
-        target_user.profile.can_delete = True
-        target_user.profile.save(update_fields=['can_upload', 'can_delete'])
+        target_user.account.can_upload = True
+        target_user.account.can_delete = True
+        target_user.account.save(update_fields=['can_upload', 'can_delete'])
 
         self.authenticate(api_key=admin_key)
 
@@ -354,14 +360,17 @@ class AdminUserDetailPermissionsTest(StormCloudAPITestCase):
 
     def test_admin_user_detail_includes_permissions(self):
         """Admin user detail response includes permission fields."""
-        admin = UserWithProfileFactory(is_staff=True, is_superuser=True, verified=True)
-        admin_key = APIKeyFactory(user=admin)
+        admin = UserWithProfileFactory(admin=True)
+        admin_key = APIKeyFactory(
+            organization=admin.account.organization,
+            created_by=admin.account,
+        )
         target_user = UserWithProfileFactory(verified=True)
 
         # Set some specific permission values
-        target_user.profile.can_upload = False
-        target_user.profile.max_share_links = 10
-        target_user.profile.save()
+        target_user.account.can_upload = False
+        target_user.account.max_share_links = 10
+        target_user.account.save()
 
         self.authenticate(api_key=admin_key)
 

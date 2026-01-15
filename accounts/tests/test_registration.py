@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from core.tests.base import StormCloudAPITestCase
 from accounts.tests.factories import UserWithProfileFactory
-from accounts.models import UserProfile
+from accounts.models import Account
 
 User = get_user_model()
 
@@ -47,8 +47,8 @@ class RegistrationEnabledTest(StormCloudAPITestCase):
         user = User.objects.get(username='newuser')
         self.assertIsNotNone(user)
 
-        # Verify profile was created
-        self.assertTrue(UserProfile.objects.filter(user=user).exists())
+        # Verify account was created
+        self.assertTrue(Account.objects.filter(user=user).exists())
 
     def test_registration_sends_verification_email(self):
         """Registration sends verification email."""

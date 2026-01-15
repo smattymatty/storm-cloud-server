@@ -14,14 +14,14 @@ class AdminUserCreateTest(StormCloudAdminTestCase):
 
     def test_admin_create_user_succeeds(self):
         """Admin can create user with custom settings."""
-        # with username, email, password, is_email_verified, is_staff
+        # with username, email, password, email_verified, is_staff
         # assert response.status_code == 201
         # Verify user was created with correct attributes
         data = {
             "username": "newadminuser",
             "email": "newadmin@example.com",
             "password": "testpass123",
-            "is_email_verified": True,
+            "email_verified": True,
             "is_staff": True,
         }
         response = self.client.post("/api/v1/admin/users/", data)
@@ -29,7 +29,7 @@ class AdminUserCreateTest(StormCloudAdminTestCase):
 
         user = User.objects.get(username="newadminuser")
         self.assertTrue(user.is_staff)
-        self.assertTrue(user.profile.is_email_verified)
+        self.assertTrue(user.account.email_verified)
 
     def test_admin_create_user_bypasses_registration_setting(self):
         """Admin can create users even when ALLOW_REGISTRATION=False."""
@@ -191,12 +191,12 @@ class AdminUserDetailTest(StormCloudAdminTestCase):
         from accounts.tests.factories import APIKeyFactory
 
         user = UserWithProfileFactory()
-        APIKeyFactory(user=user)
+        APIKeyFactory(organization=user.account.organization)
 
         response = self.client.get(f"/api/v1/admin/users/{user.id}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("user", response.data)
-        self.assertIn("profile", response.data)
+        self.assertIn("profile", response.data)  # API returns 'profile', model is Account
         self.assertIn("api_keys", response.data)
 
     def test_admin_get_nonexistent_user_returns_404(self):
@@ -227,14 +227,14 @@ class AdminUserVerifyTest(StormCloudAdminTestCase):
         """Admin can manually verify user's email."""
         # POST /api/v1/admin/users/{user.id}/verify/
         # assert response.status_code == 200
-        # Refresh profile, assert is_email_verified == True
+        # Refresh profile, assert email_verified == True
         user = UserWithProfileFactory()
 
         response = self.client.post(f"/api/v1/admin/users/{user.id}/verify/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        user.profile.refresh_from_db()
-        self.assertTrue(user.profile.is_email_verified)
+        user.account.refresh_from_db()
+        self.assertTrue(user.account.email_verified)
 
     def test_admin_verify_nonexistent_user_returns_404(self):
         """Verifying non-existent user returns 404."""
@@ -251,12 +251,12 @@ class AdminUserDeactivateTest(StormCloudAdminTestCase):
         # POST /api/v1/admin/users/{user.id}/deactivate/
         # assert response.status_code == 200
         # Verify user.is_active == False
-        # Verify keys were revoked
+        # Note: org API keys remain active (they're org-scoped, not user-scoped)
         from accounts.tests.factories import APIKeyFactory
         from accounts.models import APIKey
 
         user = UserWithProfileFactory(is_active=True)
-        key = APIKeyFactory(user=user)
+        key = APIKeyFactory(organization=user.account.organization)
 
         response = self.client.post(f"/api/v1/admin/users/{user.id}/deactivate/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -264,9 +264,9 @@ class AdminUserDeactivateTest(StormCloudAdminTestCase):
         user.refresh_from_db()
         self.assertFalse(user.is_active)
 
-        # Verify keys were revoked
+        # Org API keys remain active (they're not tied to the user)
         key.refresh_from_db()
-        self.assertFalse(key.is_active)
+        self.assertTrue(key.is_active)
 
     def test_admin_deactivate_nonexistent_user_returns_404(self):
         """Deactivating non-existent user returns 404."""
@@ -531,7 +531,7 @@ class AdminUserCreatePasswordOptionalTest(StormCloudAdminTestCase):
         data = {
             "username": "nokeyuser",
             "email": "nokey@example.com",
-            "is_email_verified": True,
+            "email_verified": True,
         }
         response = self.client.post("/api/v1/admin/users/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -546,7 +546,7 @@ class AdminUserCreatePasswordOptionalTest(StormCloudAdminTestCase):
             "username": "emptypassuser",
             "email": "emptypass@example.com",
             "password": "",
-            "is_email_verified": True,
+            "email_verified": True,
         }
         response = self.client.post("/api/v1/admin/users/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -560,7 +560,7 @@ class AdminUserCreatePasswordOptionalTest(StormCloudAdminTestCase):
             "username": "withpassuser",
             "email": "withpass@example.com",
             "password": "securepass123",
-            "is_email_verified": True,
+            "email_verified": True,
         }
         response = self.client.post("/api/v1/admin/users/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -588,7 +588,7 @@ class AdminUserAPIKeyCreateTest(StormCloudAdminTestCase):
 
         # Verify key exists in database
         from accounts.models import APIKey
-        self.assertTrue(APIKey.objects.filter(user=user, name="Admin Created Key").exists())
+        self.assertTrue(APIKey.objects.filter(organization=user.account.organization, name="Admin Created Key").exists())
 
     def test_admin_create_key_with_default_name(self):
         """Key gets default name if not provided."""

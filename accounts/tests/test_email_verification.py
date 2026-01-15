@@ -22,8 +22,8 @@ class EmailVerificationTest(StormCloudAPITestCase):
         response = self.client.post('/api/v1/auth/verify-email/', {'token': token.token})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        user.profile.refresh_from_db()
-        self.assertTrue(user.profile.is_email_verified)
+        user.account.refresh_from_db()
+        self.assertTrue(user.account.email_verified)
 
     def test_verify_email_with_invalid_token_returns_400(self):
         """Verification with non-existent token returns error."""

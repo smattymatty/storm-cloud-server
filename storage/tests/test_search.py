@@ -18,7 +18,7 @@ class SearchFilesViewTest(StormCloudAPITestCase):
         super().setUp()
         self.authenticate()
         # Create test directory structure
-        user_storage = self.test_storage_root / str(self.user.id)
+        user_storage = self.test_storage_root / str(self.user.account.id)
         user_storage.mkdir(parents=True, exist_ok=True)
 
         # Create some files and directories for search
@@ -130,7 +130,7 @@ class AdminSearchFilesViewTest(StormCloudAdminTestCase):
     def setUp(self):
         super().setUp()
         # Create test directory structure for target user
-        user_storage = self.test_storage_root / str(self.user.id)
+        user_storage = self.test_storage_root / str(self.user.account.id)
         user_storage.mkdir(parents=True, exist_ok=True)
 
         # Create some files for target user

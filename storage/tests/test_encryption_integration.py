@@ -21,19 +21,20 @@ def generate_test_key() -> str:
 TEST_KEY = generate_test_key()
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class LocalStorageBackendEncryptionDisabledTest(TestCase):
     """Tests for storage backend when encryption is disabled."""
 
     def setUp(self):
         """Create temp directory for testing."""
         self.temp_dir = tempfile.mkdtemp()
+        # Backend created AFTER class-level @override_settings applies
         self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
 
     def tearDown(self):
         """Clean up temp directory."""
         shutil.rmtree(self.temp_dir)
 
-    @override_settings(STORAGE_ENCRYPTION_METHOD="none")
     def test_save_stores_plaintext(self):
         """save should store plaintext when encryption disabled."""
         content = BytesIO(b"test content")
@@ -43,7 +44,6 @@ class LocalStorageBackendEncryptionDisabledTest(TestCase):
         raw_path = Path(self.temp_dir) / "test.txt"
         self.assertEqual(raw_path.read_bytes(), b"test content")
 
-    @override_settings(STORAGE_ENCRYPTION_METHOD="none")
     def test_open_returns_plaintext(self):
         """open should return plaintext content."""
         content = BytesIO(b"test content")
@@ -52,7 +52,6 @@ class LocalStorageBackendEncryptionDisabledTest(TestCase):
         file_handle = self.backend.open("test.txt")
         self.assertEqual(file_handle.read(), b"test content")
 
-    @override_settings(STORAGE_ENCRYPTION_METHOD="none")
     def test_file_info_no_encryption_metadata(self):
         """FileInfo should have encryption_method='none' when disabled."""
         content = BytesIO(b"test content")

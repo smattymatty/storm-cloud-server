@@ -2,7 +2,7 @@
 
 import factory
 from storage.models import StoredFile, ShareLink
-from accounts.tests.factories import UserFactory
+from accounts.tests.factories import UserWithAccountFactory, AccountFactory
 
 
 def _get_test_password_hash() -> str:
@@ -19,7 +19,8 @@ class StoredFileFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = StoredFile
 
-    owner = factory.SubFactory(UserFactory)
+    # owner must be an Account, not a User
+    owner = factory.SubFactory(AccountFactory, verified=True)
     path = factory.Sequence(lambda n: f"file{n}.txt")
     name = factory.LazyAttribute(lambda o: o.path.split("/")[-1])
     size = 1024
@@ -42,7 +43,8 @@ class ShareLinkFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = ShareLink
 
-    owner = factory.SubFactory(UserFactory)
+    # owner must be an Account, not a User
+    owner = factory.SubFactory(AccountFactory, verified=True)
     stored_file = factory.SubFactory(
         StoredFileFactory, owner=factory.SelfAttribute("..owner")
     )

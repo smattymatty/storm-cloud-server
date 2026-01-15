@@ -33,8 +33,8 @@ class FileAuditLogModelTest(TestCase):
     def test_create_audit_log_entry(self):
         """Can create FileAuditLog with all fields."""
         log = FileAuditLog.objects.create(
-            performed_by=self.user1,
-            target_user=self.user2,
+            performed_by=self.user1.account,
+            target_user=self.user2.account,
             is_admin_action=True,
             action=FileAuditLog.ACTION_UPLOAD,
             path="test/file.txt",
@@ -50,8 +50,8 @@ class FileAuditLogModelTest(TestCase):
         )
 
         self.assertIsNotNone(log.id)
-        self.assertEqual(log.performed_by, self.user1)
-        self.assertEqual(log.target_user, self.user2)
+        self.assertEqual(log.performed_by, self.user1.account)
+        self.assertEqual(log.target_user, self.user2.account)
         self.assertTrue(log.is_admin_action)
         self.assertEqual(log.action, FileAuditLog.ACTION_UPLOAD)
         self.assertEqual(log.path, "test/file.txt")
@@ -76,56 +76,56 @@ class FileAuditLogModelTest(TestCase):
 
         for action in valid_actions:
             log = FileAuditLog.objects.create(
-                performed_by=self.user1,
-                target_user=self.user2,
+                performed_by=self.user1.account,
+                target_user=self.user2.account,
                 action=action,
                 path="test.txt",
             )
             self.assertEqual(log.action, action)
 
     def test_performed_by_set_null_on_delete(self):
-        """performed_by nulled when user deleted."""
+        """performed_by nulled when account deleted."""
         performer = UserWithProfileFactory(verified=True)
         log = FileAuditLog.objects.create(
-            performed_by=performer,
-            target_user=self.user2,
+            performed_by=performer.account,
+            target_user=self.user2.account,
             action=FileAuditLog.ACTION_UPLOAD,
             path="test.txt",
         )
 
-        performer.delete()
+        performer.account.delete()
         log.refresh_from_db()
 
         self.assertIsNone(log.performed_by)
-        self.assertEqual(log.target_user, self.user2)  # Still intact
+        self.assertEqual(log.target_user, self.user2.account)  # Still intact
 
     def test_target_user_set_null_on_delete(self):
-        """target_user nulled when user deleted."""
+        """target_user nulled when account deleted."""
         target = UserWithProfileFactory(verified=True)
         log = FileAuditLog.objects.create(
-            performed_by=self.user1,
-            target_user=target,
+            performed_by=self.user1.account,
+            target_user=target.account,
             action=FileAuditLog.ACTION_UPLOAD,
             path="test.txt",
         )
 
-        target.delete()
+        target.account.delete()
         log.refresh_from_db()
 
         self.assertIsNone(log.target_user)
-        self.assertEqual(log.performed_by, self.user1)  # Still intact
+        self.assertEqual(log.performed_by, self.user1.account)  # Still intact
 
     def test_ordering_by_created_at_desc(self):
         """Default ordering is newest first."""
         log1 = FileAuditLog.objects.create(
-            performed_by=self.user1,
-            target_user=self.user2,
+            performed_by=self.user1.account,
+            target_user=self.user2.account,
             action=FileAuditLog.ACTION_UPLOAD,
             path="first.txt",
         )
         log2 = FileAuditLog.objects.create(
-            performed_by=self.user1,
-            target_user=self.user2,
+            performed_by=self.user1.account,
+            target_user=self.user2.account,
             action=FileAuditLog.ACTION_DOWNLOAD,
             path="second.txt",
         )
@@ -151,12 +151,12 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self, user: User, path: str, content: str = "test"
     ) -> StoredFile:
         """Create a file in user's storage."""
-        storage_path = Path(self.test_storage_root) / str(user.id) / path
+        storage_path = Path(self.test_storage_root) / str(user.account.id) / path
         storage_path.parent.mkdir(parents=True, exist_ok=True)
         storage_path.write_text(content)
 
         return StoredFile.objects.create(
-            owner=user,
+            owner=user.account,
             path=path,
             name=Path(path).name,
             size=len(content),
@@ -177,7 +177,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_LIST,
         ).first()
 
@@ -194,7 +194,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_LIST,
         ).first()
 
@@ -213,7 +213,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_LIST,
         ).first()
 
@@ -230,7 +230,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_LIST,
         ).first()
 
@@ -247,13 +247,13 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_LIST,
         ).first()
 
         self.assertIsNotNone(log)
-        self.assertEqual(log.performed_by, self.admin)
-        self.assertEqual(log.target_user, self.target_user)
+        self.assertEqual(log.performed_by, self.admin.account)
+        self.assertEqual(log.target_user, self.target_user.account)
         self.assertNotEqual(log.performed_by, log.target_user)
 
     def test_error_details_captured(self):
@@ -265,7 +265,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
         log = FileAuditLog.objects.filter(
-            target_user=self.target_user,
+            target_user=self.target_user.account,
             action=FileAuditLog.ACTION_DOWNLOAD,
             success=False,
         ).first()
@@ -290,24 +290,24 @@ class AdminFileAuditLogListTest(StormCloudAdminTestCase):
 
         # Create some audit logs
         self.log1 = FileAuditLog.objects.create(
-            performed_by=self.admin,
-            target_user=self.target_user,
+            performed_by=self.admin.account,
+            target_user=self.target_user.account,
             is_admin_action=True,
             action=FileAuditLog.ACTION_UPLOAD,
             path="file1.txt",
             success=True,
         )
         self.log2 = FileAuditLog.objects.create(
-            performed_by=self.other_admin,
-            target_user=self.target_user,
+            performed_by=self.other_admin.account,
+            target_user=self.target_user.account,
             is_admin_action=True,
             action=FileAuditLog.ACTION_DELETE,
             path="file2.txt",
             success=True,
         )
         self.log3 = FileAuditLog.objects.create(
-            performed_by=self.admin,
-            target_user=self.target_user,
+            performed_by=self.admin.account,
+            target_user=self.target_user.account,
             is_admin_action=True,
             action=FileAuditLog.ACTION_DOWNLOAD,
             path="subdir/file3.txt",
@@ -326,22 +326,24 @@ class AdminFileAuditLogListTest(StormCloudAdminTestCase):
     def test_filter_by_user_id(self):
         """Filter by target_user works."""
         response = self.client.get(
-            f"/api/v1/admin/audit/files/?user_id={self.target_user.id}"
+            f"/api/v1/admin/audit/files/?user_id={self.target_user.account.id}"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         for log in response.data["results"]:
-            self.assertEqual(log["target_user"], self.target_user.id)
+            # Serializer returns UUID, compare directly
+            self.assertEqual(log["target_user"], self.target_user.account.id)
 
     def test_filter_by_performed_by(self):
         """Filter by admin who performed works."""
         response = self.client.get(
-            f"/api/v1/admin/audit/files/?performed_by={self.admin.id}"
+            f"/api/v1/admin/audit/files/?performed_by={self.admin.account.id}"
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         for log in response.data["results"]:
-            self.assertEqual(log["performed_by"], self.admin.id)
+            # Serializer returns UUID, compare directly
+            self.assertEqual(log["performed_by"], self.admin.account.id)
 
     def test_filter_by_action(self):
         """Filter by action type works."""
@@ -355,8 +357,8 @@ class AdminFileAuditLogListTest(StormCloudAdminTestCase):
         """admin_only=true filter works."""
         # Create a non-admin log
         FileAuditLog.objects.create(
-            performed_by=self.target_user,
-            target_user=self.target_user,
+            performed_by=self.target_user.account,
+            target_user=self.target_user.account,
             is_admin_action=False,
             action=FileAuditLog.ACTION_UPLOAD,
             path="user_file.txt",
@@ -401,8 +403,8 @@ class AdminFileAuditLogListTest(StormCloudAdminTestCase):
         # Create more logs
         for i in range(15):
             FileAuditLog.objects.create(
-                performed_by=self.admin,
-                target_user=self.target_user,
+                performed_by=self.admin.account,
+                target_user=self.target_user.account,
                 action=FileAuditLog.ACTION_LIST,
                 path=f"pagefile{i}.txt",
             )

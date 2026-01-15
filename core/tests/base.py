@@ -31,10 +31,13 @@ class StormCloudAPITestCase(APITestCase):
     def setUp(self):
         super().setUp()
         # Import here to avoid circular imports
-        from accounts.tests.factories import UserWithProfileFactory, APIKeyFactory
+        from accounts.tests.factories import UserWithAccountFactory, APIKeyFactory
 
-        self.user = UserWithProfileFactory(verified=True)
-        self.api_key = APIKeyFactory(user=self.user)
+        self.user = UserWithAccountFactory(verified=True)
+        self.api_key = APIKeyFactory(
+            organization=self.user.account.organization,
+            created_by=self.user.account,  # Required for APIKeyUser.account to work
+        )
 
         # Use test storage root for this test run
         # Disable throttling by using DummyCache (doesn't store anything)
@@ -54,7 +57,7 @@ class StormCloudAPITestCase(APITestCase):
         self.settings_override.disable()
 
         # Clean up user storage directory if it exists
-        user_storage = self.test_storage_root / str(self.user.id)
+        user_storage = self.test_storage_root / str(self.user.account.id)
         if user_storage.exists():
             shutil.rmtree(user_storage)
 
@@ -70,10 +73,13 @@ class StormCloudAPITestCase(APITestCase):
 
     def create_admin(self):
         """Create and return an admin user with API key."""
-        from accounts.tests.factories import UserWithProfileFactory, APIKeyFactory
+        from accounts.tests.factories import UserWithAccountFactory, APIKeyFactory
 
-        admin = UserWithProfileFactory(admin=True)
-        key = APIKeyFactory(user=admin)
+        admin = UserWithAccountFactory(admin=True)
+        key = APIKeyFactory(
+            organization=admin.account.organization,
+            created_by=admin.account,  # Links admin status to the API key
+        )
         return admin, key
 
 

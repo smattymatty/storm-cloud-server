@@ -2,6 +2,7 @@
 
 from io import BytesIO
 
+from django.test import override_settings
 from rest_framework import status
 
 from accounts.tests.factories import UserWithProfileFactory
@@ -25,7 +26,7 @@ class DirectoryListTest(StormCloudAPITestCase):
         self.authenticate()
         # Create DB records - actual files not needed for pagination test
         for i in range(10):
-            StoredFileFactory(owner=self.user, path=f"file{i}.txt")
+            StoredFileFactory(owner=self.user.account, path=f"file{i}.txt")
 
         response = self.client.get("/api/v1/dirs/?limit=5")
         # Verify limit is respected (may include existing structure files)
@@ -140,9 +141,9 @@ class DirectoryReorderTest(StormCloudAPITestCase):
         self.assertEqual(response.data["count"], 3)
 
         # Verify positions
-        c_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-c.txt")
-        a_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-a.txt")
-        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        c_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-c.txt")
+        a_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-a.txt")
+        b_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-b.txt")
         self.assertEqual(c_file.sort_position, 0)
         self.assertEqual(a_file.sort_position, 1)
         self.assertEqual(b_file.sort_position, 2)
@@ -168,7 +169,7 @@ class DirectoryReorderTest(StormCloudAPITestCase):
         self.assertEqual(response.data["count"], 1)
 
         # b should be position 0, a unchanged (still 0 from creation)
-        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        b_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-b.txt")
         self.assertEqual(b_file.sort_position, 0)
 
     def test_reorder_in_subdirectory(self):
@@ -205,7 +206,7 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
         self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
 
         # Files have sort_position=0 from creation, verify
-        a_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-a.txt")
+        a_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-a.txt")
         self.assertIsNotNone(a_file.sort_position)
 
         # Reset order
@@ -214,7 +215,7 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
 
         # Verify positions are null
         a_file.refresh_from_db()
-        b_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-b.txt")
+        b_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-b.txt")
         self.assertIsNone(a_file.sort_position)
         self.assertIsNone(b_file.sort_position)
 
@@ -237,11 +238,11 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Root file should still have position
-        root_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}-root.txt")
+        root_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-root.txt")
         self.assertIsNotNone(root_file.sort_position)
 
         # Subdir file should be null
-        sub_file = StoredFile.objects.get(owner=self.user, path=f"{prefix}/sub.txt")
+        sub_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}/sub.txt")
         self.assertIsNone(sub_file.sort_position)
 
 
@@ -259,8 +260,8 @@ class SortPositionTest(StormCloudAPITestCase):
         self.client.post(f"/api/v1/files/{prefix}-first.txt/create/")
         self.client.post(f"/api/v1/files/{prefix}-second.txt/create/")
 
-        first = StoredFile.objects.get(owner=self.user, path=f"{prefix}-first.txt")
-        second = StoredFile.objects.get(owner=self.user, path=f"{prefix}-second.txt")
+        first = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-first.txt")
+        second = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-second.txt")
 
         # Second file pushes first down
         self.assertEqual(second.sort_position, 0)
@@ -323,6 +324,7 @@ class FileUploadTest(StormCloudAPITestCase):
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
 
 
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class EncryptionGovernanceTest(StormCloudAPITestCase):
     """Tests for ADR 006 encryption governance fitness functions."""
 
@@ -342,7 +344,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
 
         # Verify encryption_method is set in database
         stored_file = StoredFile.objects.get(
-            owner=self.user, path="governance-test.txt"
+            owner=self.user.account, path="governance-test.txt"
         )
         self.assertIsNotNone(stored_file.encryption_method)
         self.assertNotEqual(stored_file.encryption_method, "")
@@ -359,7 +361,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         # Valid encryption_method values
         for method in ["none", "server", "client"]:
             file_obj = StoredFile(
-                owner=self.user,
+                owner=self.user.account,
                 path=f"test-{method}.txt",
                 name=f"test-{method}.txt",
                 encryption_method=method,
@@ -368,7 +370,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
 
         # Invalid encryption_method value (via model validation)
         file_obj = StoredFile(
-            owner=self.user,
+            owner=self.user.account,
             path="test-invalid.txt",
             name="test-invalid.txt",
             encryption_method="invalid",
@@ -376,8 +378,9 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         with self.assertRaises(ValidationError):
             file_obj.full_clean()
 
+    @override_settings(STORAGE_ENCRYPTION_METHOD="none")
     def test_file_upload_sets_encryption_method_none(self):
-        """File upload should default to encryption_method='none'."""
+        """File upload should default to encryption_method='none' when encryption disabled."""
         self.authenticate()
 
         test_file = BytesIO(b"test content")
@@ -444,7 +447,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
 
         # Attempt to create file with empty encryption_method
         file_obj = StoredFile(
-            owner=self.user,
+            owner=self.user.account,
             path="empty-encryption.txt",
             name="empty-encryption.txt",
             encryption_method="",

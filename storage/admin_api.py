@@ -38,8 +38,8 @@ User = get_user_model()
 
 
 def get_target_user_storage_path(target_user: User) -> str:
-    """Get storage path prefix for target user."""
-    return f"{target_user.id}"
+    """Get storage path prefix for target user (Account UUID)."""
+    return f"{target_user.account.id}"
 
 
 def emit_admin_file_action(
@@ -199,7 +199,7 @@ class AdminDirectoryListRootView(AdminFileBaseView):
         entry_paths = [entry.path.replace(f"{user_prefix}/", "") for entry in entries]
         db_files = {
             f.path: {"encryption_method": f.encryption_method, "sort_position": f.sort_position}
-            for f in StoredFile.objects.filter(owner=target_user, path__in=entry_paths)
+            for f in StoredFile.objects.filter(owner=target_user.account, path__in=entry_paths)
         }
 
         # Build entry data
@@ -364,7 +364,7 @@ class AdminDirectoryCreateView(AdminFileBaseView):
         full_path = f"{user_prefix}/{dir_path}"
 
         # Check if exists on filesystem OR in database
-        if backend.exists(full_path) or StoredFile.objects.filter(owner=target_user, path=dir_path).exists():
+        if backend.exists(full_path) or StoredFile.objects.filter(owner=target_user.account, path=dir_path).exists():
             emit_admin_file_action(
                 self.__class__,
                 request,
@@ -389,7 +389,7 @@ class AdminDirectoryCreateView(AdminFileBaseView):
         # Create database record (use get_or_create for safety)
         parent_path = str(Path(dir_path).parent) if "/" in dir_path else ""
         StoredFile.objects.get_or_create(
-            owner=target_user,
+            owner=target_user.account,
             path=dir_path,
             defaults={
                 "name": Path(dir_path).name,
@@ -460,7 +460,7 @@ class AdminFileDetailView(AdminFileBaseView):
 
         # Get database record for encryption info
         try:
-            db_file = StoredFile.objects.get(owner=target_user, path=file_path)
+            db_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
             encryption_method = db_file.encryption_method
             created_at = db_file.created_at
         except StoredFile.DoesNotExist:
@@ -568,7 +568,7 @@ class AdminFileUploadView(AdminFileBaseView):
         db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
 
         stored_file, created = StoredFile.objects.update_or_create(
-            owner=target_user,
+            owner=target_user.account,
             path=file_path,
             defaults={
                 "name": file_info.name,
@@ -682,7 +682,7 @@ class AdminFileCreateView(AdminFileBaseView):
         # Create database record
         db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
         stored_file = StoredFile.objects.create(
-            owner=target_user,
+            owner=target_user.account,
             path=file_path,
             name=Path(file_path).name,
             size=0,
@@ -885,12 +885,12 @@ class AdminFileDeleteView(AdminFileBaseView):
             backend.delete(full_path)
 
         # Delete database record (CASCADE will handle ShareLinks)
-        StoredFile.objects.filter(owner=target_user, path=file_path).delete()
+        StoredFile.objects.filter(owner=target_user.account, path=file_path).delete()
 
         # For directories, also delete child records
         if file_info.is_directory:
             StoredFile.objects.filter(
-                owner=target_user, path__startswith=f"{file_path}/"
+                owner=target_user.account, path__startswith=f"{file_path}/"
             ).delete()
 
         emit_admin_file_action(
@@ -1077,7 +1077,7 @@ class AdminFileContentView(AdminFileBaseView):
         file_info = backend.save(full_path, file_obj)
 
         # Update database record
-        StoredFile.objects.filter(owner=target_user, path=file_path).update(
+        StoredFile.objects.filter(owner=target_user.account, path=file_path).update(
             size=file_info.size,
             content_type=file_info.content_type or "text/plain",
         )
@@ -1146,7 +1146,7 @@ class AdminBulkOperationView(AdminFileBaseView):
         action = action_map[operation]
 
         # Use BulkOperationService
-        service = BulkOperationService(target_user, backend)
+        service = BulkOperationService(target_user.account, backend)
 
         try:
             stats = service.execute(operation=operation, paths=paths, options=options)
