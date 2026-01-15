@@ -25,11 +25,15 @@ def trigger_webhook(
     Trigger webhook for an API key (non-blocking).
 
     Args:
-        api_key: The APIKey instance with webhook config
+        api_key: The APIKey instance with webhook config (may be None for session auth)
         event: Event type (file.created, file.updated, etc.)
         path: File path that changed
         extra_data: Optional additional payload data
     """
+    # Guard against None (session auth has no API key)
+    if not api_key:
+        return
+
     if not api_key.webhook_url or not api_key.webhook_enabled:
         return
 

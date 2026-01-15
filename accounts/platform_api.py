@@ -277,25 +277,13 @@ class PlatformSetupOrgView(APIView):
     Step 2: Create organization and account.
 
     POST /api/v1/platform/setup-org/
-    Authenticated endpoint - user must have a pending platform invite.
+    Authenticated endpoint - user must have a pending platform invite OR be superuser.
     Creates Organization and Account, completes enrollment.
     """
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Check user has pending invite
-        try:
-            invite = request.user.pending_platform_invite
-        except PlatformInvite.DoesNotExist:
-            return Response(
-                {'error': {
-                    'code': 'NO_PENDING_INVITE',
-                    'message': 'No pending enrollment found. Please start from invite link.'
-                }},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         # Check user doesn't already have an account
         if hasattr(request.user, 'account'):
             return Response(
@@ -306,10 +294,28 @@ class PlatformSetupOrgView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Try to get pending invite
+        invite = None
+        try:
+            invite = request.user.pending_platform_invite
+        except PlatformInvite.DoesNotExist:
+            # No invite - only superusers can proceed
+            if not request.user.is_superuser:
+                return Response(
+                    {'error': {
+                        'code': 'NO_PENDING_INVITE',
+                        'message': 'No pending enrollment found. Please start from invite link.'
+                    }},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         serializer = PlatformSetupOrgSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+
+        # Quota: from invite if available, otherwise unlimited (0) for superusers
+        quota_bytes = invite.quota_bytes if invite else 0
 
         # Create org and account in transaction
         with transaction.atomic():
@@ -317,7 +323,7 @@ class PlatformSetupOrgView(APIView):
             org = Organization.objects.create(
                 name=data['organization_name'],
                 slug=data.get('organization_slug') or None,  # Let model auto-generate
-                storage_quota_bytes=invite.quota_bytes,
+                storage_quota_bytes=quota_bytes,
             )
 
             # Create account (org owner)
@@ -331,14 +337,15 @@ class PlatformSetupOrgView(APIView):
                 can_manage_api_keys=True,
             )
 
-            # Mark invite as fully used
-            invite.is_used = True
-            invite.used_by = account
-            invite.used_at = timezone.now()
-            invite.enrolled_user = None  # Clear pending state
-            invite.save(update_fields=[
-                'is_used', 'used_by', 'used_at', 'enrolled_user', 'updated_at'
-            ])
+            # Mark invite as fully used (if exists)
+            if invite:
+                invite.is_used = True
+                invite.used_by = account
+                invite.used_at = timezone.now()
+                invite.enrolled_user = None  # Clear pending state
+                invite.save(update_fields=[
+                    'is_used', 'used_by', 'used_at', 'enrolled_user', 'updated_at'
+                ])
 
         response_data = {
             'organization_id': org.id,

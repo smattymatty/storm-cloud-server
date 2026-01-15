@@ -280,3 +280,16 @@ class AdminUserPermissionsUpdateSerializer(serializers.Serializer):
         min_value=0,
         help_text="Per-file upload size limit in bytes. 0 = use server default"
     )
+
+
+class AdminOrganizationSerializer(serializers.Serializer):
+    """Organization info for admin list endpoint."""
+
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    slug = serializers.SlugField()
+    is_active = serializers.BooleanField()
+    storage_quota_bytes = serializers.IntegerField()
+    storage_used_bytes = serializers.IntegerField()
+    member_count = serializers.IntegerField()
+    created_at = serializers.DateTimeField()

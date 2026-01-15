@@ -65,8 +65,10 @@ def check_permission(source: Union["Account", "APIKey"], permission_name: str) -
         # API keys use permissions JSON, default to True
         has_permission = source.has_permission(permission_name)
     else:
-        # Account uses boolean fields
-        has_permission = getattr(source, permission_name, True)
+        # Account uses boolean fields - fail if permission doesn't exist
+        if not hasattr(source, permission_name):
+            raise ValueError(f"Unknown permission: {permission_name}")
+        has_permission = getattr(source, permission_name)
 
     if not has_permission:
         raise PermissionDenied(
@@ -108,21 +110,26 @@ def check_user_permission(user: "AbstractBaseUser", permission_name: str) -> Non
             )
         # Also check the creating account's permissions
         account = user.api_key.created_by
-        if account and not getattr(account, permission_name, True):
-            raise PermissionDenied(
-                detail={
-                    "error": {
-                        "code": "PERMISSION_DENIED",
-                        "message": "You do not have permission to perform this action.",
-                        "permission": permission_name,
+        if account:
+            if not hasattr(account, permission_name):
+                raise ValueError(f"Unknown permission: {permission_name}")
+            if not getattr(account, permission_name):
+                raise PermissionDenied(
+                    detail={
+                        "error": {
+                            "code": "PERMISSION_DENIED",
+                            "message": "You do not have permission to perform this action.",
+                            "permission": permission_name,
+                        }
                     }
-                }
-            )
+                )
         return
 
     # Session auth - use account
     account = user.account
-    if not getattr(account, permission_name, True):
+    if not hasattr(account, permission_name):
+        raise ValueError(f"Unknown permission: {permission_name}")
+    if not getattr(account, permission_name):
         raise PermissionDenied(
             detail={
                 "error": {

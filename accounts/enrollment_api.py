@@ -56,7 +56,9 @@ class EnrollmentValidateView(StormCloudBaseAPIView):
         token = serializer.validated_data['token']
 
         try:
-            enrollment_key = EnrollmentKey.objects.select_related('organization').get(key=token)
+            enrollment_key = EnrollmentKey.objects.select_related(
+                'organization', 'created_by__user'
+            ).get(key=token)
         except EnrollmentKey.DoesNotExist:
             return Response(
                 {
@@ -68,6 +70,17 @@ class EnrollmentValidateView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Get server name from settings, fallback to request host
+        server_name = getattr(settings, 'STORMCLOUD_SERVER_NAME', None)
+        if not server_name:
+            server_name = request.get_host()
+
+        # Get inviter name
+        inviter_name = None
+        if enrollment_key.created_by and enrollment_key.created_by.user:
+            user = enrollment_key.created_by.user
+            inviter_name = user.get_full_name() or user.username
+
         response_data = {
             'organization_name': enrollment_key.organization.name,
             'organization_id': enrollment_key.organization.id,
@@ -75,6 +88,8 @@ class EnrollmentValidateView(StormCloudBaseAPIView):
             'expires_at': enrollment_key.expires_at,
             'is_valid': enrollment_key.is_valid(),
             'single_use': enrollment_key.single_use,
+            'server_name': server_name,
+            'inviter_name': inviter_name,
         }
 
         return Response(InviteDetailsSerializer(response_data).data)
@@ -285,18 +300,8 @@ class EnrollmentInviteCreateView(StormCloudBaseAPIView):
             created_by=account,
         )
 
-        # Build enrollment URL
-        base_url = getattr(settings, 'STORMCLOUD_ENROLLMENT_URL', None)
-        if base_url:
-            enrollment_url = base_url.format(token=enrollment_key.key)
-        else:
-            # Default to frontend URL pattern
-            frontend_url = getattr(settings, 'STORMCLOUD_FRONTEND_URL', request.build_absolute_uri('/'))
-            enrollment_url = f"{frontend_url.rstrip('/')}/enroll?token={enrollment_key.key}"
-
         response_data = {
             'token': enrollment_key.key,
-            'url': enrollment_url,
             'expires_at': enrollment_key.expires_at,
             'required_email': enrollment_key.required_email,
             'single_use': enrollment_key.single_use,

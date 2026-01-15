@@ -220,6 +220,10 @@ STORMCLOUD_STORAGE_ROOT = Path(config(
     'STORMCLOUD_STORAGE_ROOT',
     default=str(BASE_DIR / 'storage_root')
 ))
+STORMCLOUD_SHARED_STORAGE_ROOT = Path(config(
+    'STORMCLOUD_SHARED_STORAGE_ROOT',
+    default=str(BASE_DIR / 'shared_storage')
+))
 
 # Encryption (ADR 006, ADR 010)
 STORAGE_ENCRYPTION_METHOD = config(

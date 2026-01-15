@@ -40,10 +40,16 @@ LOGGING = {
         },
     },
 }
+CSRF_TRUSTED_ORIGINS = [
+      'http://localhost:8044',
+      'http://127.0.0.1:8044',
+  ]
 
-# Disable CSRF for easier API testing (dev only!)
-# CSRF_COOKIE_SECURE = False
-# SESSION_COOKIE_SECURE = False
+# Cookie settings for local dev (same-site, relaxed)
+SESSION_COOKIE_SECURE = False  # No HTTPS locally
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Show detailed error pages
 DEBUG_PROPAGATE_EXCEPTIONS = False

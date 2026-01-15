@@ -3,6 +3,7 @@ from typing import List, Tuple
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from core.models import AbstractBaseModel
 
@@ -29,12 +30,26 @@ class StoredFile(AbstractBaseModel):
         (ENCRYPTION_CLIENT, "Client-side (user holds key)"),
     ]
 
+    # Ownership: either owner (private file) OR organization (shared file), never both
     owner = models.ForeignKey(
-        "accounts.Account", on_delete=models.CASCADE, related_name="files"
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="files",
+        null=True,
+        blank=True,
+        help_text="Owner account for private files. NULL for shared files.",
+    )
+    organization = models.ForeignKey(
+        "accounts.Organization",
+        on_delete=models.CASCADE,
+        related_name="shared_files",
+        null=True,
+        blank=True,
+        help_text="Organization for shared files. NULL for private files.",
     )
     path = models.CharField(
         max_length=1024
-    )  # Full path including filename, relative to user root
+    )  # Full path including filename, relative to user/org root
     name = models.CharField(max_length=255)  # Filename only
     size = models.BigIntegerField(default=0)
     content_type = models.CharField(max_length=100, blank=True)
@@ -79,13 +94,37 @@ class StoredFile(AbstractBaseModel):
     class Meta:
         verbose_name = "Stored File"
         verbose_name_plural = "Stored Files"
-        unique_together = ["owner", "path"]
+        constraints = [
+            # Private files: unique by (owner, path)
+            models.UniqueConstraint(
+                fields=["owner", "path"],
+                condition=Q(organization__isnull=True),
+                name="unique_private_file",
+            ),
+            # Shared files: unique by (organization, path)
+            models.UniqueConstraint(
+                fields=["organization", "path"],
+                condition=Q(organization__isnull=False),
+                name="unique_shared_file",
+            ),
+            # Must have owner OR organization (XOR) - never both, never neither
+            models.CheckConstraint(
+                condition=(
+                    Q(owner__isnull=False, organization__isnull=True)
+                    | Q(owner__isnull=True, organization__isnull=False)
+                ),
+                name="file_ownership_xor",
+            ),
+        ]
         indexes = [
+            # Private file queries
             models.Index(fields=["owner", "parent_path"]),
             models.Index(fields=["owner", "path"]),
-            models.Index(
-                fields=["encryption_method"]
-            ),  # For querying by encryption status
+            # Shared file queries
+            models.Index(fields=["organization", "parent_path"]),
+            models.Index(fields=["organization", "path"]),
+            # Encryption status
+            models.Index(fields=["encryption_method"]),
         ]
         ordering = ["path"]
 
@@ -98,7 +137,16 @@ class StoredFile(AbstractBaseModel):
             )
 
     def __str__(self):
-        return f"{self.owner.user.username}: {self.path}"
+        if self.owner:
+            return f"{self.owner.user.username}: {self.path}"
+        elif self.organization:
+            return f"[shared:{self.organization.slug}] {self.path}"
+        return f"[orphan] {self.path}"
+
+    @property
+    def is_shared(self) -> bool:
+        """Check if this is a shared (org-owned) file."""
+        return self.organization is not None
 
 
 class ShareLink(AbstractBaseModel):

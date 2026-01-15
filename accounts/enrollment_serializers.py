@@ -27,6 +27,8 @@ class InviteDetailsSerializer(serializers.Serializer):
     expires_at = serializers.DateTimeField(allow_null=True)
     is_valid = serializers.BooleanField()
     single_use = serializers.BooleanField()
+    server_name = serializers.CharField()
+    inviter_name = serializers.CharField(allow_null=True)
 
 
 class EnrollmentRequestSerializer(serializers.Serializer):
@@ -146,7 +148,6 @@ class InviteCreateResponseSerializer(serializers.Serializer):
     """Output serializer for created invite."""
 
     token = serializers.CharField()
-    url = serializers.URLField()
     expires_at = serializers.DateTimeField()
     required_email = serializers.EmailField(allow_null=True)
     single_use = serializers.BooleanField()

@@ -692,8 +692,21 @@ class AuthMeView(StormCloudBaseAPIView):
                 },
             })
 
-        # Session auth - get/create account
-        account, created = Account.objects.get_or_create(user=request.user)
+        # Session auth - get account (don't auto-create, org is required now)
+        try:
+            account = Account.objects.get(user=request.user)
+        except Account.DoesNotExist:
+            # User exists but hasn't completed org setup (two-step enrollment)
+            return Response({
+                "user": {
+                    "id": request.user.id,
+                    "username": request.user.username,
+                    "email": request.user.email,
+                },
+                "account": None,
+                "needs_org_setup": True,
+            })
+
         data = {
             "user": request.user,
             "account": account,
@@ -2330,6 +2343,36 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
                 "status_code": None,
                 "message": f"Request failed: {str(e)}",
             })
+
+
+
+# =============================================================================
+# Admin Organization Endpoints
+# =============================================================================
+
+
+class AdminOrganizationListView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/admin/organizations/
+
+    List all organizations in the system.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request) -> Response:
+        from django.db.models import Count
+
+        from .serializers import AdminOrganizationSerializer
+
+        orgs = Organization.objects.all().order_by('-created_at')
+        orgs = orgs.annotate(member_count=Count('accounts'))
+
+        serializer = AdminOrganizationSerializer(orgs, many=True)
+        return Response({
+            'organizations': serializer.data,
+            'total': orgs.count(),
+        })
 
 
 class UserKeyWebhookView(StormCloudBaseAPIView):

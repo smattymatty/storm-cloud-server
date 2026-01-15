@@ -44,6 +44,8 @@ from accounts.api import (
     AdminUserKeyWebhookView,
     AdminUserKeyWebhookRegenerateView,
     AdminUserKeyWebhookTestView,
+    # Admin Organization Management
+    AdminOrganizationListView,
     # User Per-Key Webhook
     UserKeyWebhookView,
 )
@@ -97,6 +99,16 @@ from storage.admin_api import (
     AdminFileUploadView,
 )
 from storage.search_api import AdminSearchFilesView, SearchFilesView
+from storage.shared_api import (
+    SharedDirectoryCreateView,
+    SharedDirectoryListRootView,
+    SharedDirectoryListView,
+    SharedFileContentView,
+    SharedFileDeleteView,
+    SharedFileDetailView,
+    SharedFileDownloadView,
+    SharedFileUploadView,
+)
 
 # Server start time for uptime calculation
 _server_start_time = time.time()
@@ -301,6 +313,8 @@ urlpatterns = [
         AdminAPIKeyRevokeView.as_view(),
         name="admin-keys-revoke",
     ),
+    # Organization Management (Admin)
+    path("admin/organizations/", AdminOrganizationListView.as_view(), name="admin-organizations"),
     # Admin Webhook Management (per user's key)
     path(
         "admin/users/<int:user_id>/keys/<uuid:key_id>/webhook/",
@@ -455,6 +469,47 @@ urlpatterns = [
     path("audit/me/", UserAuditLogView.as_view(), name="audit-me"),
     # CMS (page-file mappings)
     path("cms/", include("cms.urls")),
+    # =========================================================================
+    # Shared Storage (Organization)
+    # =========================================================================
+    # Shared directories
+    path("shared/", SharedDirectoryListRootView.as_view(), name="shared-dir-list-root"),
+    path(
+        "shared/dirs/<path:dir_path>/create/",
+        SharedDirectoryCreateView.as_view(),
+        name="shared-dir-create",
+    ),
+    path(
+        "shared/dirs/<path:dir_path>/",
+        SharedDirectoryListView.as_view(),
+        name="shared-dir-list",
+    ),
+    # Shared files
+    path(
+        "shared/files/<path:file_path>/upload/",
+        SharedFileUploadView.as_view(),
+        name="shared-file-upload",
+    ),
+    path(
+        "shared/files/<path:file_path>/download/",
+        SharedFileDownloadView.as_view(),
+        name="shared-file-download",
+    ),
+    path(
+        "shared/files/<path:file_path>/delete/",
+        SharedFileDeleteView.as_view(),
+        name="shared-file-delete",
+    ),
+    path(
+        "shared/files/<path:file_path>/content/",
+        SharedFileContentView.as_view(),
+        name="shared-file-content",
+    ),
+    path(
+        "shared/files/<path:file_path>/",
+        SharedFileDetailView.as_view(),
+        name="shared-file-detail",
+    ),
     # =========================================================================
     # Share Links
     # =========================================================================

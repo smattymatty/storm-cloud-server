@@ -1931,9 +1931,20 @@ class BulkStatusView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Verify ownership - task should have user_id in args
-        # For now, we'll allow any authenticated user to check tasks
-        # TODO: Add task ownership verification
+        # Verify ownership - task args contain account_id
+        task_args = getattr(task_result, "args", None) or {}
+        task_account_id = task_args.get("account_id")
+        if task_account_id != str(request.user.account.id):  # type: ignore[union-attr]
+            return Response(
+                {
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "Not authorized to view this task",
+                        "task_id": task_id,
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Build response based on task status
         if task_result.status == "SUCCESSFUL":
