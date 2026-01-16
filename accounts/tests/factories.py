@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-from accounts.models import APIKey, Account, Organization, EmailVerificationToken, EnrollmentKey
+from accounts.models import APIKey, Account, Organization, EmailVerificationToken, EnrollmentKey, PlatformInvite
 
 User = get_user_model()
 
@@ -166,4 +166,29 @@ class EnrollmentKeyFactory(factory.django.DjangoModelFactory):
         )
         with_email = factory.Trait(
             required_email=factory.LazyAttribute(lambda o: f"invite{secrets.token_hex(4)}@example.com"),
+        )
+
+
+class PlatformInviteFactory(factory.django.DjangoModelFactory):
+    """Factory for creating PlatformInvite instances."""
+
+    class Meta:
+        model = PlatformInvite
+
+    email = factory.Sequence(lambda n: f"platforminvite{n}@example.com")
+    name = factory.Sequence(lambda n: f"Platform Invite {n}")
+    created_by = factory.SubFactory(AccountFactory)
+    is_active = True
+    is_used = False
+    expires_at = factory.LazyFunction(lambda: timezone.now() + timedelta(days=7))
+
+    class Params:
+        expired = factory.Trait(
+            expires_at=factory.LazyFunction(
+                lambda: timezone.now() - timedelta(hours=1)
+            ),
+        )
+        used = factory.Trait(
+            is_used=True,
+            used_at=factory.LazyFunction(timezone.now),
         )

@@ -945,7 +945,7 @@ class AdminUserListView(StormCloudBaseAPIView):
 
         TODO: Add pagination in Phase 3 (DRF PageNumberPagination).
         """
-        queryset = User.objects.select_related("account").annotate(
+        queryset = User.objects.select_related("account", "account__organization").annotate(
             api_key_count=Count("account__organization__api_keys")
         )
 
@@ -968,6 +968,7 @@ class AdminUserListView(StormCloudBaseAPIView):
 
         users_data = []
         for user in queryset:
+            org = user.account.organization if user.account else None
             users_data.append(
                 {
                     "id": user.id,
@@ -978,6 +979,8 @@ class AdminUserListView(StormCloudBaseAPIView):
                     "is_email_verified": user.account.email_verified,
                     "date_joined": user.date_joined,
                     "api_key_count": user.api_key_count,
+                    "organization_name": org.name if org else None,
+                    "organization_id": str(org.id) if org else None,
                 }
             )
 

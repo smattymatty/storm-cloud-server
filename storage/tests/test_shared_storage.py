@@ -91,23 +91,8 @@ class SharedDirectoryListTest(SharedStorageAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["path"], "")
 
-    def test_list_shared_requires_organization(self):
-        """User without organization cannot access shared storage."""
-        # Create user without org
-        user_no_org = UserWithAccountFactory(verified=True, with_org=False)
-        # Clear their account's organization
-        user_no_org.account.organization = None
-        user_no_org.account.save()
-
-        key = APIKeyFactory(
-            organization=None,
-            created_by=user_no_org.account,
-        )
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {key.key}')
-
-        response = self.client.get("/api/v1/shared/")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["error"]["code"], "NO_ORGANIZATION")
+    # NOTE: test_list_shared_requires_organization removed - Account.organization_id
+    # is now NOT NULL at database level, so accounts without orgs cannot exist.
 
 
 class SharedDirectoryCreateTest(SharedStorageAPITestCase):

@@ -19,8 +19,17 @@ POSTGRES_USER=stormcloud
 POSTGRES_HOST=db
 POSTGRES_PASSWORD={{ db_password }}
 
-# Email (console backend for now - configure SMTP later)
+# Email Configuration
+{% if email_host is defined and email_host | length > 0 %}
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST={{ email_host }}
+EMAIL_PORT={{ email_port | default(587) }}
+EMAIL_USE_TLS={{ email_use_tls | default(true) | string | lower }}
+EMAIL_HOST_USER={{ email_user | default('') }}
+EMAIL_HOST_PASSWORD={{ email_password | default('') }}
+{% else %}
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+{% endif %}
 DEFAULT_FROM_EMAIL=noreply@{{ domain }}
 
 # Security (production settings)

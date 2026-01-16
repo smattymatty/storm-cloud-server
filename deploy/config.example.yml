@@ -1,116 +1,33 @@
 # =============================================================================
 # Storm Cloud Server - Deployment Configuration
 # =============================================================================
+# Server infrastructure only. App settings (email, DB password, etc.) go in .env
 #
-# Copy this file to config.yml and edit with your values:
+# Setup:
 #   cp config.example.yml config.yml
-#   micro config.yml
-#
-# Then deploy with:
+#   nano config.yml
 #   make deploy
-#
 # =============================================================================
 
-# === REQUIRED - You must fill these in ===
+# Server
+server_ip: ""                    # Your VPS IP address
+domain: ""                       # Your domain (must point to server_ip)
+admin_email: ""                  # Email for SSL cert notifications
 
-# Your VPS IP address (from your hosting provider)
-server_ip: ""
+# SSH
+ssh_user: root                   # SSH user (usually root for fresh VPS)
+app_user: stormcloud             # App user (created on server)
 
-# Your domain name (must point to server_ip via DNS A record)
-domain: ""
-
-# Email for SSL certificate notifications (Let's Encrypt)
-admin_email: ""
-
-# === OPTIONAL - Sensible defaults, change if needed ===
-
-# SSH user for initial connection (usually root for fresh VPS)
-ssh_user: root
-
-# Application user (created on server, runs Docker containers)
-app_user: stormcloud
-
-# Internal port for Django (nginx proxies to this)
-web_port: 8000
-
-# Git branch to deploy
+# Deploy
 git_branch: main
+repo_url: https://github.com/smattymatty/storm-cloud-server.git
 
-# === FEATURES - Toggle what gets installed ===
-
+# Features
 install_docker: true
 install_nginx: true
 install_certbot: true
 configure_firewall: true
 
-# === SECRETS - Sensitive credentials ===
-#
-# IMPORTANT: Secrets are now managed via environment variables for better security.
-# DO NOT store secrets in this config file.
-#
-# Set these environment variables before deploying:
-#
-#   export STORMCLOUD_POSTGRES_PASSWORD="your-secure-password"
-#   export STORMCLOUD_SECRET_KEY="your-django-secret-key"  # Optional (auto-generates if not set)
-#   make deploy
-#
-# If environment variables are not set, you will be prompted during deployment.
-#
-# Generate a secure password:
-#   openssl rand -base64 32
-#
-# Password manager integration:
-#   export STORMCLOUD_POSTGRES_PASSWORD=$(op read "op://vault/stormcloud/postgres_password")  # 1Password
-#   export STORMCLOUD_POSTGRES_PASSWORD=$(bw get password postgres_stormcloud)                # Bitwarden
-
-# === CORS - Cross-Origin Resource Sharing ===
-#
-# CORS allows web browsers to make requests from your frontend application
-# (e.g., React, Vue, Angular) running on a different origin to your API.
-#
-# Example scenarios:
-#   - Frontend at https://app.example.com, API at https://api.example.com
-#   - Frontend at http://localhost:3000 (dev), API at https://cloud.example.com
-#
-# Format: Comma-separated list of full URLs (including protocol)
-#   - Must include protocol: http:// or https://
-#   - Must include port if non-standard: http://localhost:3000
-#   - No trailing slashes
-#
-# Examples:
-#   cors_origins: "https://app.example.com,https://dashboard.example.com"
-#   cors_origins: "http://localhost:3000,http://localhost:3001"
-#   cors_origins: "https://app.example.com,http://localhost:3000"  # Mixed dev/prod
-#
-# Security notes:
-#   - Only include origins you trust (your own frontend domains)
-#   - Never use wildcards (*) in production
-#   - Leave empty to disable CORS (most secure, but frontend won't work)
-#
-cors_origins: "" # Comma-separated list, e.g., "https://app.example.com,https://dashboard.example.com"
-
-# === FILE UPLOAD LIMITS - Storage configuration ===
-#
-# Maximum file size for uploads in megabytes (MB).
-# This is a global limit applied to all uploads regardless of user quota.
-#
-# Default: 100 (100MB per file)
-#
-# Examples:
-#   max_upload_size_mb: 50   # Limit to 50MB files
-#   max_upload_size_mb: 500  # Allow up to 500MB files
-#   max_upload_size_mb: 1024 # Allow up to 1GB files
-#
-# Notes:
-#   - This is separate from per-user storage quotas (set via admin API)
-#   - Very large files (>500MB) may cause memory issues on small VPS instances
-#   - Per-user quotas managed via: PATCH /api/v1/admin/users/{id}/quota/
-#   - See CLAUDE.md for quota management documentation
-#
-max_upload_size_mb: 100 # Maximum file size in MB
-
-# === ADVANCED - Usually don't need to change ===
-
-# Repository URL (change if you forked the project)
-repo_url: https://github.com/smattymatty/storm-cloud-server.git
-
+# CORS (optional - only if frontend is on different origin)
+# Example: "https://app.example.com,http://localhost:3000"
+cors_origins: ""

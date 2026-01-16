@@ -24,6 +24,8 @@ class InviteDetailsSerializer(serializers.Serializer):
     organization_name = serializers.CharField()
     organization_id = serializers.UUIDField()
     required_email = serializers.EmailField(allow_null=True)
+    email = serializers.EmailField(allow_null=True)  # Alias for frontend
+    email_editable = serializers.BooleanField()  # False when email preset by admin
     expires_at = serializers.DateTimeField(allow_null=True)
     is_valid = serializers.BooleanField()
     single_use = serializers.BooleanField()
@@ -104,6 +106,9 @@ class EnrollmentResponseSerializer(serializers.Serializer):
     message = serializers.CharField(
         help_text="Status message"
     )
+    requires_verification = serializers.BooleanField(
+        help_text="Whether email verification is required. False if invite was sent to same email."
+    )
 
 
 class EnrollmentStatusSerializer(serializers.Serializer):
@@ -142,6 +147,16 @@ class InviteCreateSerializer(serializers.Serializer):
         default=True,
         help_text="If true, invite can only be used once"
     )
+    send_email = serializers.BooleanField(
+        default=True,
+        help_text="Send invitation email to the specified email address"
+    )
+    # Permissions for the new user
+    permissions = serializers.DictField(
+        required=False,
+        default=dict,
+        help_text="Permission settings for the new user (can_upload, can_delete, etc.)"
+    )
 
 
 class InviteCreateResponseSerializer(serializers.Serializer):
@@ -151,3 +166,4 @@ class InviteCreateResponseSerializer(serializers.Serializer):
     expires_at = serializers.DateTimeField()
     required_email = serializers.EmailField(allow_null=True)
     single_use = serializers.BooleanField()
+    email_sent = serializers.BooleanField(default=False)

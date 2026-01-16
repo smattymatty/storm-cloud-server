@@ -49,6 +49,22 @@
         storage_encryption_key: "{{ lookup('env', 'STORMCLOUD_ENCRYPTION_KEY') | default('', true) }}"
         storage_encryption_method: "{{ 'server' if (lookup('env', 'STORMCLOUD_ENCRYPTION_KEY') | default('', true) | length > 0) else 'none' }}"
         storage_encryption_key_id: "{{ lookup('env', 'STORMCLOUD_ENCRYPTION_KEY_ID') | default('1', true) }}"
+        # Email settings (from .env, override config.yml if set)
+        email_host_env: "{{ lookup('env', 'EMAIL_HOST') | default('', true) }}"
+        email_port_env: "{{ lookup('env', 'EMAIL_PORT') | default('587', true) }}"
+        email_use_tls_env: "{{ lookup('env', 'EMAIL_USE_TLS') | default('true', true) }}"
+        email_user_env: "{{ lookup('env', 'EMAIL_HOST_USER') | default('', true) }}"
+        email_password_env: "{{ lookup('env', 'EMAIL_HOST_PASSWORD') | default('', true) }}"
+      no_log: true
+      tags: [always]
+
+    - name: Set email config (env vars override config.yml)
+      ansible.builtin.set_fact:
+        email_host: "{{ email_host_env if email_host_env | length > 0 else (email_host | default('')) }}"
+        email_port: "{{ email_port_env if email_host_env | length > 0 else (email_port | default(587)) }}"
+        email_use_tls: "{{ email_use_tls_env if email_host_env | length > 0 else (email_use_tls | default(true)) }}"
+        email_user: "{{ email_user_env if email_host_env | length > 0 else (email_user | default('')) }}"
+        email_password: "{{ email_password_env if email_host_env | length > 0 else (email_password | default('')) }}"
       no_log: true
       tags: [always]
 

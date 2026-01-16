@@ -430,9 +430,9 @@ class EnrollmentInviteCreateTest(StormCloudAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn('token', response.data)
-        self.assertIn('url', response.data)
         self.assertIn('expires_at', response.data)
         self.assertTrue(response.data['single_use'])
+        self.assertFalse(response.data['email_sent'])  # No email provided
 
         # Verify key was created
         key = EnrollmentKey.objects.get(key=response.data['token'])
@@ -529,3 +529,86 @@ class EnrollmentInviteCreateTest(StormCloudAPITestCase):
             'expiry_days': 400,
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_invite_send_email_false(self):
+        """Can disable email sending."""
+        self.user.account.can_invite = True
+        self.user.account.save()
+
+        self.authenticate()
+
+        response = self.client.post('/api/v1/enrollment/invite/create/', {
+            'email': 'test@example.com',
+            'expiry_days': 7,
+            'send_email': False,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertFalse(response.data['email_sent'])
+
+    def test_create_invite_email_sent_on_success(self):
+        """Email is marked as sent when email sending succeeds."""
+        self.user.account.can_invite = True
+        self.user.account.save()
+
+        self.authenticate()
+
+        # With console backend, email "sending" won't raise an exception
+        response = self.client.post('/api/v1/enrollment/invite/create/', {
+            'email': 'test@example.com',
+            'expiry_days': 7,
+            'send_email': True,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # email_sent will be True because console backend doesn't fail
+        self.assertTrue(response.data['email_sent'])
+
+
+class EnrollmentValidateEmailFieldsTest(StormCloudAPITestCase):
+    """Test email and email_editable fields in validate response."""
+
+    def test_validate_returns_email_fields_when_preset(self):
+        """When email is preset by admin, email_editable is False."""
+        enrollment_key = EnrollmentKeyFactory(required_email='preset@example.com')
+
+        response = self.client.post('/api/v1/enrollment/validate/', {
+            'token': enrollment_key.key,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['email'], 'preset@example.com')
+        self.assertFalse(response.data['email_editable'])
+
+    def test_validate_returns_editable_when_no_email(self):
+        """When no email preset, email_editable is True."""
+        enrollment_key = EnrollmentKeyFactory(required_email=None)
+
+        response = self.client.post('/api/v1/enrollment/validate/', {
+            'token': enrollment_key.key,
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['email'])
+        self.assertTrue(response.data['email_editable'])
+
+
+class EmailStatusTest(StormCloudAPITestCase):
+    """Test GET /api/v1/enrollment/email-status/"""
+
+    def test_email_status_requires_auth(self):
+        """Email status endpoint requires authentication."""
+        response = self.client.get('/api/v1/enrollment/email-status/')
+
+        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+
+    def test_email_status_returns_configured(self):
+        """Email status returns configuration status."""
+        self.authenticate()
+
+        response = self.client.get('/api/v1/enrollment/email-status/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('configured', response.data)
+        # In test environment with console backend, should be False
+        self.assertFalse(response.data['configured'])

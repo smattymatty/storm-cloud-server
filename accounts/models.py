@@ -258,6 +258,11 @@ class EnrollmentKey(AbstractBaseModel):
         default=0,
         help_text="Number of times this key has been used."
     )
+    used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the key was first used."
+    )
 
     # Expiration
     expires_at = models.DateTimeField(
@@ -275,6 +280,11 @@ class EnrollmentKey(AbstractBaseModel):
     )
 
     is_active = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this key was revoked. Null = not revoked."
+    )
 
     class Meta:
         verbose_name = "Enrollment Key"
@@ -304,7 +314,10 @@ class EnrollmentKey(AbstractBaseModel):
         self.use_count += 1
         if self.single_use:
             self.used_by = account
-        self.save(update_fields=['use_count', 'used_by', 'updated_at'])
+        # Set used_at only on first use
+        if self.used_at is None:
+            self.used_at = timezone.now()
+        self.save(update_fields=['use_count', 'used_by', 'used_at', 'updated_at'])
 
 
 class EmailVerificationToken(AbstractBaseModel):
@@ -541,6 +554,11 @@ class PlatformInvite(AbstractBaseModel):
     )
 
     is_active = models.BooleanField(default=True)
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this invite was revoked. Null = not revoked."
+    )
 
     class Meta:
         verbose_name = "Platform Invite"

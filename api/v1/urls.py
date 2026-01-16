@@ -55,6 +55,12 @@ from accounts.enrollment_api import (
     EnrollmentStatusView,
     EnrollmentResendView,
     EnrollmentInviteCreateView,
+    EmailStatusView,
+)
+from accounts.admin_invite_api import (
+    AdminInviteListView,
+    AdminInviteRevokeView,
+    AdminInviteResendView,
 )
 from accounts.platform_api import (
     PlatformEnrollView,
@@ -201,6 +207,11 @@ urlpatterns = [
         "enrollment/invite/create/",
         EnrollmentInviteCreateView.as_view(),
         name="enrollment-invite-create",
+    ),
+    path(
+        "enrollment/email-status/",
+        EmailStatusView.as_view(),
+        name="enrollment-email-status",
     ),
     # Platform Invites (client-first enrollment)
     path(
@@ -405,6 +416,20 @@ urlpatterns = [
     path(
         "admin/users/<int:user_id>/cms/",
         include("cms.admin_urls"),
+    ),
+    # -------------------------------------------------------------------------
+    # Admin: Invite Management
+    # -------------------------------------------------------------------------
+    path("admin/invites/", AdminInviteListView.as_view(), name="admin-invites"),
+    path(
+        "admin/invites/<uuid:invite_id>/revoke/",
+        AdminInviteRevokeView.as_view(),
+        name="admin-invite-revoke",
+    ),
+    path(
+        "admin/invites/<uuid:invite_id>/resend/",
+        AdminInviteResendView.as_view(),
+        name="admin-invite-resend",
     ),
     # =========================================================================
     # Storage

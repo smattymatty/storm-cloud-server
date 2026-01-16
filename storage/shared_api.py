@@ -729,7 +729,7 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             )
 
         # Check if text file
-        if not is_text_file(stored_file.name):
+        if not is_text_file(stored_file.name, stored_file.content_type):
             return Response(
                 {"error": {"code": "NOT_TEXT_FILE", "message": "File is not a text file"}},
                 status=status.HTTP_400_BAD_REQUEST,

@@ -81,10 +81,16 @@ class EnrollmentValidateView(StormCloudBaseAPIView):
             user = enrollment_key.created_by.user
             inviter_name = user.get_full_name() or user.username
 
+        # Email fields - editable only if admin didn't preset it
+        email = enrollment_key.required_email
+        email_editable = email is None
+
         response_data = {
             'organization_name': enrollment_key.organization.name,
             'organization_id': enrollment_key.organization.id,
             'required_email': enrollment_key.required_email,
+            'email': email,
+            'email_editable': email_editable,
             'expires_at': enrollment_key.expires_at,
             'is_valid': enrollment_key.is_valid(),
             'single_use': enrollment_key.single_use,
@@ -117,12 +123,20 @@ class EnrollmentEnrollView(StormCloudBaseAPIView):
         serializer.is_valid(raise_exception=True)
 
         enrollment_key = serializer.validated_data['enrollment_key']
+        user_email = serializer.validated_data['email']
+
+        # Check if invite was sent to this email (proves ownership via link click)
+        invite_email = enrollment_key.required_email
+        email_proven = (
+            invite_email and
+            invite_email.lower() == user_email.lower()
+        )
 
         with transaction.atomic():
             # Create user
             user = User.objects.create_user(
                 username=serializer.validated_data['username'],
-                email=serializer.validated_data['email'],
+                email=user_email,
                 password=serializer.validated_data['password'],
             )
 
@@ -132,6 +146,11 @@ class EnrollmentEnrollView(StormCloudBaseAPIView):
                 organization=enrollment_key.organization,
                 is_owner=False,  # Enrolled users are not owners
             )
+
+            # Auto-verify email if proven via invite link
+            if email_proven:
+                account.email_verified = True
+                account.save()
 
             # Apply preset permissions if any
             if enrollment_key.preset_permissions:
@@ -152,16 +171,24 @@ class EnrollmentEnrollView(StormCloudBaseAPIView):
             # Fire signal
             user_registered.send(sender=User, user=user, request=request)
 
-            # Send verification email if required
-            if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION:
+            # Send verification email only if needed
+            requires_verification = not email_proven
+            if requires_verification and settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION:
                 send_verification_email(user, request)
+
+        # Build response message
+        if email_proven:
+            message = 'Account created successfully. Email verified.'
+        elif settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION:
+            message = 'Verification email sent. Please check your inbox.'
+        else:
+            message = 'Account created successfully.'
 
         response_data = {
             'enrollment_id': account.id,
             'email': user.email,
-            'message': 'Verification email sent. Please check your inbox.'
-            if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION
-            else 'Account created successfully.',
+            'message': message,
+            'requires_verification': requires_verification,
         }
 
         return Response(
@@ -290,6 +317,9 @@ class EnrollmentInviteCreateView(StormCloudBaseAPIView):
             else:
                 name = f"Invite created {timezone.now().strftime('%Y-%m-%d %H:%M')}"
 
+        # Get permissions if provided
+        permissions = serializer.validated_data.get('permissions') or {}
+
         # Create enrollment key
         enrollment_key = EnrollmentKey.objects.create(
             organization=account.organization,
@@ -298,16 +328,78 @@ class EnrollmentInviteCreateView(StormCloudBaseAPIView):
             single_use=serializer.validated_data['single_use'],
             expires_at=expires_at,
             created_by=account,
+            preset_permissions=permissions,
         )
+
+        # Send invitation email if requested and email provided
+        email = serializer.validated_data.get('email')
+        send_email = serializer.validated_data.get('send_email', True)
+        email_sent = False
+        
+        if email and send_email:
+            try:
+                from .utils import send_enrollment_invite_email
+
+                # Get inviter name
+                inviter_name = None
+                if account.user:
+                    inviter_name = account.user.get_full_name() or account.user.username
+
+                # Get server URL for the email link
+                server_url = request.build_absolute_uri('/').rstrip('/')
+
+                send_enrollment_invite_email(
+                    email=email,
+                    org_name=account.organization.name,
+                    token=enrollment_key.key,
+                    inviter_name=inviter_name,
+                    server_url=server_url,
+                )
+                email_sent = True
+            except Exception:
+                # Don't fail the invite creation if email fails
+                pass
 
         response_data = {
             'token': enrollment_key.key,
             'expires_at': enrollment_key.expires_at,
             'required_email': enrollment_key.required_email,
             'single_use': enrollment_key.single_use,
+            'email_sent': email_sent,
         }
 
         return Response(
             InviteCreateResponseSerializer(response_data).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class EmailStatusView(StormCloudBaseAPIView):
+    """Check if email sending is configured on this server."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Check email configuration",
+        description="Check if the server has email sending properly configured.",
+        responses={
+            200: OpenApiResponse(
+                description="Email configuration status",
+                response={
+                    'type': 'object',
+                    'properties': {
+                        'configured': {'type': 'boolean'},
+                    },
+                },
+            ),
+        },
+        tags=["Enrollment"],
+    )
+    def get(self, request: Request) -> Response:
+        """Check email configuration status."""
+        # Email is configured if EMAIL_HOST is set and not using console backend
+        configured = bool(
+            settings.EMAIL_HOST and
+            settings.EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend'
+        )
+        return Response({'configured': configured})
