@@ -22,7 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-&oce!2!vbhefu^t%3&64&+pu-^wtm-0mcr(@d&uwx%nc3ub*=p')
+SECRET_KEY = config(
+    "SECRET_KEY",
+    default="django-insecure-&oce!2!vbhefu^t%3&64&+pu-^wtm-0mcr(@d&uwx%nc3ub*=p",
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG and ALLOWED_HOSTS are set in dev.py and production.py
@@ -31,54 +34,54 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-&oce!2!vbhefu^t%3&64&
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'drf_spectacular',
-    'django_mercury',
-    'django_spellbook',
-    'corsheaders',
-    'core',
-    'accounts',
-    'storage',
-    'cms',
-    'docs_app',
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "rest_framework",
+    "drf_spectacular",
+    "django_mercury",
+    "django_spellbook",
+    "corsheaders",
+    "core",
+    "accounts",
+    "storage",
+    "cms",
+    "docs_app",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.middleware.gzip.GZipMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.gzip.GZipMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = '_core.urls'
+ROOT_URLCONF = "_core.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = '_core.wsgi.application'
+WSGI_APPLICATION = "_core.wsgi.application"
 
 
 # Database
@@ -87,9 +90,9 @@ WSGI_APPLICATION = '_core.wsgi.application'
 # Overridden in dev.py and production.py
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -99,16 +102,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -116,9 +119,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -128,82 +131,86 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # REST Framework configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'accounts.authentication.APIKeyAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.APIKeyAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.UserRateThrottle',
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
-        'login': config('THROTTLE_LOGIN_RATE', default='5/min'),
-        'auth': config('THROTTLE_AUTH_RATE', default='10/hour'),
-        'uploads': config('THROTTLE_UPLOAD_RATE', default='100/hour'),
-        'downloads': config('THROTTLE_DOWNLOAD_RATE', default='500/hour'),
-        'user': config('THROTTLE_USER_RATE', default='1000/hour'),
-        'anon_login': config('THROTTLE_ANON_LOGIN_RATE', default='10/hour'),
-        'anon_registration': config('THROTTLE_ANON_REGISTRATION_RATE', default='5/hour'),
-        'public_share': config('THROTTLE_PUBLIC_SHARE_RATE', default='60/min'),
-        'public_share_download': config('THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE', default='30/min'),
+    "DEFAULT_THROTTLE_RATES": {
+        "login": config("THROTTLE_LOGIN_RATE", default="5/min"),
+        "auth": config("THROTTLE_AUTH_RATE", default="10/hour"),
+        "uploads": config("THROTTLE_UPLOAD_RATE", default="100/hour"),
+        "downloads": config("THROTTLE_DOWNLOAD_RATE", default="500/hour"),
+        "user": config("THROTTLE_USER_RATE", default="1000/hour"),
+        "anon_login": config("THROTTLE_ANON_LOGIN_RATE", default="10/hour"),
+        "anon_registration": config(
+            "THROTTLE_ANON_REGISTRATION_RATE", default="5/hour"
+        ),
+        "public_share": config("THROTTLE_PUBLIC_SHARE_RATE", default="60/min"),
+        "public_share_download": config(
+            "THROTTLE_PUBLIC_SHARE_DOWNLOAD_RATE", default="30/min"
+        ),
     },
 }
 
 # drf-spectacular configuration
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Storm Cloud API',
-    'DESCRIPTION': 'Self-hostable cloud storage with markdown CMS capabilities.',
-    'VERSION': '0.1.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-
+    "TITLE": "Storm Cloud API",
+    "DESCRIPTION": "Self-hostable cloud storage with markdown CMS capabilities.",
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
     # Swagger UI settings
-    'SWAGGER_UI_SETTINGS': {
-        'persistAuthorization': True,
-        'displayRequestDuration': True,
-        'filter': True,
-        'deepLinking': True,
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+        "displayRequestDuration": True,
+        "filter": True,
+        "deepLinking": True,
     },
-
     # Security schemes
-    'SECURITY': [
-        {'BearerAuth': []},
-        {'SessionAuth': []},
+    "SECURITY": [
+        {"BearerAuth": []},
+        {"SessionAuth": []},
     ],
-    'COMPONENTS': {
-        'securitySchemes': {
-            'BearerAuth': {
-                'type': 'http',
-                'scheme': 'bearer',
-                'description': 'API key authentication. Get a key from /api/v1/auth/tokens/',
+    "COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "description": "API key authentication. Get a key from /api/v1/auth/tokens/",
             },
-            'SessionAuth': {
-                'type': 'apiKey',
-                'in': 'cookie',
-                'name': 'sessionid',
-                'description': 'Session cookie authentication. Login at /api/v1/auth/login/',
+            "SessionAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid",
+                "description": "Session cookie authentication. Login at /api/v1/auth/login/",
             },
         },
     },
-
     # Tag organization
-    'TAGS': [
-        {'name': 'Authentication', 'description': 'Login, registration, and API key management'},
-        {'name': 'Files', 'description': 'File and directory operations'},
-        {'name': 'CMS', 'description': 'Content management (coming soon)'},
-        {'name': 'Administration', 'description': 'Admin-only user and key management'},
+    "TAGS": [
+        {
+            "name": "Authentication",
+            "description": "Login, registration, and API key management",
+        },
+        {"name": "Files", "description": "File and directory operations"},
+        {"name": "CMS", "description": "Content management (coming soon)"},
+        {"name": "Administration", "description": "Admin-only user and key management"},
     ],
 }
 
@@ -213,49 +220,31 @@ SPECTACULAR_SETTINGS = {
 
 # Storage
 STORMCLOUD_STORAGE_BACKEND = config(
-    'STORMCLOUD_STORAGE_BACKEND',
-    default='core.storage.local.LocalStorageBackend'
+    "STORMCLOUD_STORAGE_BACKEND", default="core.storage.local.LocalStorageBackend"
 )
-STORMCLOUD_STORAGE_ROOT = Path(config(
-    'STORMCLOUD_STORAGE_ROOT',
-    default=str(BASE_DIR / 'storage_root')
-))
-STORMCLOUD_SHARED_STORAGE_ROOT = Path(config(
-    'STORMCLOUD_SHARED_STORAGE_ROOT',
-    default=str(BASE_DIR / 'shared_storage')
-))
+STORMCLOUD_STORAGE_ROOT = Path(
+    config("STORMCLOUD_STORAGE_ROOT", default=str(BASE_DIR / "storage_root"))
+)
+STORMCLOUD_SHARED_STORAGE_ROOT = Path(
+    config("STORMCLOUD_SHARED_STORAGE_ROOT", default=str(BASE_DIR / "shared_storage"))
+)
 
 # Encryption (ADR 006, ADR 010)
-STORAGE_ENCRYPTION_METHOD = config(
-    'STORAGE_ENCRYPTION_METHOD',
-    default='none'
-)
-STORAGE_ENCRYPTION_KEY = config(
-    'STORAGE_ENCRYPTION_KEY',
-    default=''
-)
-STORAGE_ENCRYPTION_KEY_ID = config(
-    'STORAGE_ENCRYPTION_KEY_ID',
-    default='1'
-)
+STORAGE_ENCRYPTION_METHOD = config("STORAGE_ENCRYPTION_METHOD", default="none")
+STORAGE_ENCRYPTION_KEY = config("STORAGE_ENCRYPTION_KEY", default="")
+STORAGE_ENCRYPTION_KEY_ID = config("STORAGE_ENCRYPTION_KEY_ID", default="1")
 
 # Registration
 STORMCLOUD_ALLOW_REGISTRATION = config(
-    'STORMCLOUD_ALLOW_REGISTRATION',
-    default=False,
-    cast=bool
+    "STORMCLOUD_ALLOW_REGISTRATION", default=False, cast=bool
 )
 
 # Email verification
 STORMCLOUD_REQUIRE_EMAIL_VERIFICATION = config(
-    'STORMCLOUD_REQUIRE_EMAIL_VERIFICATION',
-    default=True,
-    cast=bool
+    "STORMCLOUD_REQUIRE_EMAIL_VERIFICATION", default=True, cast=bool
 )
 STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS = config(
-    'STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS',
-    default=24,
-    cast=int
+    "STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS", default=24, cast=int
 )
 
 # Email verification link format
@@ -266,28 +255,20 @@ STORMCLOUD_EMAIL_VERIFICATION_LINK: Optional[str] = None
 
 # API keys
 STORMCLOUD_MAX_API_KEYS_PER_USER = config(
-    'STORMCLOUD_MAX_API_KEYS_PER_USER',
-    default=0,
-    cast=int
+    "STORMCLOUD_MAX_API_KEYS_PER_USER", default=0, cast=int
 )
 
 # Share Links
 STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS = config(
-    'STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS',
-    default=True,
-    cast=bool
+    "STORMCLOUD_ALLOW_UNLIMITED_SHARE_LINKS", default=True, cast=bool
 )
 STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS = config(
-    'STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS',
-    default=7,
-    cast=int
+    "STORMCLOUD_DEFAULT_SHARE_EXPIRY_DAYS", default=7, cast=int
 )
 
 # File Upload Limits (P0-3 Security Fix)
 STORMCLOUD_MAX_UPLOAD_SIZE_MB = config(
-    'STORMCLOUD_MAX_UPLOAD_SIZE_MB',
-    default=100,
-    cast=int
+    "STORMCLOUD_MAX_UPLOAD_SIZE_MB", default=100, cast=int
 )
 
 # Django upload size limits (in bytes)
@@ -297,17 +278,11 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 # File Content Preview Limits
 STORMCLOUD_MAX_PREVIEW_SIZE_MB = config(
-    'STORMCLOUD_MAX_PREVIEW_SIZE_MB',
-    default=5,
-    cast=int
+    "STORMCLOUD_MAX_PREVIEW_SIZE_MB", default=5, cast=int
 )
 
 # CORS
-STORMCLOUD_CORS_ORIGINS = config(
-    'STORMCLOUD_CORS_ORIGINS',
-    default='',
-    cast=Csv()
-)
+STORMCLOUD_CORS_ORIGINS = config("STORMCLOUD_CORS_ORIGINS", default="", cast=Csv())
 
 # Email templates (can be overridden)
 STORMCLOUD_EMAIL_VERIFICATION_SUBJECT = "Verify your Storm Cloud account"
@@ -329,15 +304,14 @@ If you did not create an account, please ignore this email.
 # EMAIL CONFIGURATION
 # =============================================================================
 EMAIL_BACKEND = config(
-    'EMAIL_BACKEND',
-    default='django.core.mail.backends.console.EmailBackend'
+    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
 )
-EMAIL_HOST = config('EMAIL_HOST', default='')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@stormcloud.local')
+EMAIL_HOST = config("EMAIL_HOST", default="")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@stormcloud.local")
 
 # =============================================================================
 # CORS HEADERS
@@ -349,28 +323,28 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Explicitly allow only the HTTP methods your API uses
 CORS_ALLOW_METHODS = [
-    'GET',
-    'POST',
-    'PUT',
-    'PATCH',
-    'DELETE',
-    'OPTIONS',  # Required for preflight requests
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",  # Required for preflight requests
 ]
 
 # Allow only necessary headers
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',  # Required for API key auth
-    'content-type',
-    'x-csrftoken',  # If using CSRF protection
-    'x-requested-with',
+    "accept",
+    "accept-encoding",
+    "authorization",  # Required for API key auth
+    "content-type",
+    "x-csrftoken",  # If using CSRF protection
+    "x-requested-with",
 ]
 
 # Expose headers that clients might need
 CORS_EXPOSE_HEADERS = [
-    'content-type',
-    'content-length',
+    "content-type",
+    "content-length",
 ]
 
 # Cache preflight requests for 1 hour (reduces OPTIONS requests)
@@ -380,34 +354,30 @@ CORS_PREFLIGHT_MAX_AGE = 3600
 # DJANGO SPELLBOOK SETTINGS
 # =============================================================================
 SPELLBOOK_MD_APP = [
-    'docs_app',
+    "docs_app",
 ]
 
 SPELLBOOK_MD_PATH = [
-    'docs_content',
+    "docs_content",
 ]
 
 SPELLBOOK_MD_URL_PREFIX = [
-    'docs',
+    "docs",
 ]
 
 # =============================================================================
 # DJANGO TASKS FRAMEWORK (Django 6.0+)
 # =============================================================================
 TASKS = {
-    'default': {
-        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
+    "default": {
+        "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
     }
 }
 
 # Storm Cloud Tasks Configuration
 STORMCLOUD_INDEX_REBUILD_PRIORITY = config(
-    'STORMCLOUD_INDEX_REBUILD_PRIORITY',
-    default=1,
-    cast=int
+    "STORMCLOUD_INDEX_REBUILD_PRIORITY", default=1, cast=int
 )
 STORMCLOUD_INDEX_REBUILD_QUEUE = config(
-    'STORMCLOUD_INDEX_REBUILD_QUEUE',
-    default='maintenance',
-    cast=str
+    "STORMCLOUD_INDEX_REBUILD_QUEUE", default="maintenance", cast=str
 )

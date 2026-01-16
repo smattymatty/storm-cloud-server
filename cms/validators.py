@@ -19,7 +19,9 @@ FLAG_METADATA_SCHEMAS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def validate_flag_metadata(flag_type: str, metadata: dict[str, Any]) -> tuple[bool, str]:
+def validate_flag_metadata(
+    flag_type: str, metadata: dict[str, Any]
+) -> tuple[bool, str]:
     """
     Validate metadata against schema for flag type.
 

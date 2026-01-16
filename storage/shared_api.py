@@ -148,6 +148,7 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
         if cursor:
             try:
                 from django.utils.dateparse import parse_datetime
+
                 cursor_dt = parse_datetime(cursor)
                 if cursor_dt:
                     queryset = queryset.filter(created_at__lt=cursor_dt)
@@ -155,9 +156,9 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
                 pass
 
         # Sort: custom position first, then by name
-        queryset = queryset.order_by(
-            F("sort_position").asc(nulls_last=True), "name"
-        )[:limit + 1]
+        queryset = queryset.order_by(F("sort_position").asc(nulls_last=True), "name")[
+            : limit + 1
+        ]
 
         items = list(queryset)
         has_more = len(items) > limit
@@ -224,7 +225,12 @@ class SharedDirectoryListView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         # Check directory exists
         if not backend.exists_shared(org.id, dir_path):
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"Directory not found: {dir_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"Directory not found: {dir_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -261,7 +267,12 @@ class SharedDirectoryCreateView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         # Check if already exists
         if backend.exists_shared(org.id, dir_path):
             return Response(
-                {"error": {"code": "ALREADY_EXISTS", "message": f"Path already exists: {dir_path}"}},
+                {
+                    "error": {
+                        "code": "ALREADY_EXISTS",
+                        "message": f"Path already exists: {dir_path}",
+                    }
+                },
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -335,7 +346,12 @@ class SharedFileDetailView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(organization=org, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -559,13 +575,23 @@ class SharedFileDownloadView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(organization=org, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if stored_file.is_directory:
             return Response(
-                {"error": {"code": "IS_DIRECTORY", "message": "Cannot download a directory"}},
+                {
+                    "error": {
+                        "code": "IS_DIRECTORY",
+                        "message": "Cannot download a directory",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -589,12 +615,22 @@ class SharedFileDownloadView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             file_handle = backend.open_shared(org.id, file_path)
         except FileNotFoundError:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
         except DecryptionError:
             return Response(
-                {"error": {"code": "DECRYPTION_FAILED", "message": "Failed to decrypt file"}},
+                {
+                    "error": {
+                        "code": "DECRYPTION_FAILED",
+                        "message": "Failed to decrypt file",
+                    }
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -651,7 +687,12 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(organization=org, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -664,6 +705,7 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
 
             # Delete from filesystem recursively
             import shutil
+
             full_path = backend._resolve_shared_path(org.id, file_path)
             if full_path.exists():
                 shutil.rmtree(full_path)
@@ -718,20 +760,35 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(organization=org, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if stored_file.is_directory:
             return Response(
-                {"error": {"code": "IS_DIRECTORY", "message": "Cannot preview directory"}},
+                {
+                    "error": {
+                        "code": "IS_DIRECTORY",
+                        "message": "Cannot preview directory",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Check if text file
         if not is_text_file(stored_file.name, stored_file.content_type):
             return Response(
-                {"error": {"code": "NOT_TEXT_FILE", "message": "File is not a text file"}},
+                {
+                    "error": {
+                        "code": "NOT_TEXT_FILE",
+                        "message": "File is not a text file",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -759,7 +816,12 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             )
         except UnicodeDecodeError:
             return Response(
-                {"error": {"code": "NOT_TEXT_FILE", "message": "File is not valid UTF-8 text"}},
+                {
+                    "error": {
+                        "code": "NOT_TEXT_FILE",
+                        "message": "File is not valid UTF-8 text",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -771,6 +833,7 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         )
 
         from django.http import HttpResponse
+
         return HttpResponse(content, content_type="text/plain; charset=utf-8")
 
     @extend_schema(
@@ -803,7 +866,12 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(organization=org, path=file_path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "NOT_FOUND", "message": f"File not found: {file_path}"}},
+                {
+                    "error": {
+                        "code": "NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -820,7 +888,12 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
                 content = content.decode("utf-8")
             except UnicodeDecodeError:
                 return Response(
-                    {"error": {"code": "INVALID_CONTENT", "message": "Content must be valid UTF-8"}},
+                    {
+                        "error": {
+                            "code": "INVALID_CONTENT",
+                            "message": "Content must be valid UTF-8",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -845,7 +918,12 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             size_delta = len(content_bytes) - stored_file.size
             if current_usage + size_delta > org_quota:
                 return Response(
-                    {"error": {"code": "QUOTA_EXCEEDED", "message": "Edit would exceed organization quota"}},
+                    {
+                        "error": {
+                            "code": "QUOTA_EXCEEDED",
+                            "message": "Edit would exceed organization quota",
+                        }
+                    },
                     status=status.HTTP_507_INSUFFICIENT_STORAGE,
                 )
 

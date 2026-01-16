@@ -171,9 +171,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         self._create_file_for_user(self.target_user, "signal_test.txt")
 
         # Trigger via admin endpoint
-        response = self.client.get(
-            f"/api/v1/admin/users/{self.target_user.id}/dirs/"
-        )
+        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
@@ -224,9 +222,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         """is_admin_action=True for admin ops."""
         self._create_file_for_user(self.target_user, "admin_flag.txt")
 
-        response = self.client.get(
-            f"/api/v1/admin/users/{self.target_user.id}/dirs/"
-        )
+        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(
@@ -241,9 +237,7 @@ class FileAuditSignalTest(StormCloudAdminTestCase):
         """Correct user assignment."""
         self._create_file_for_user(self.target_user, "user_assign.txt")
 
-        response = self.client.get(
-            f"/api/v1/admin/users/{self.target_user.id}/dirs/"
-        )
+        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         log = FileAuditLog.objects.filter(

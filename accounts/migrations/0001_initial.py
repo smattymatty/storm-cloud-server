@@ -17,121 +17,431 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='Organization',
+            name="Organization",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=255)),
-                ('slug', models.SlugField(max_length=255, unique=True)),
-                ('storage_quota_bytes', models.BigIntegerField(default=0, help_text='Maximum storage for entire org in bytes. 0 = unlimited.')),
-                ('storage_used_bytes', models.BigIntegerField(default=0, help_text='Current storage usage across all accounts.')),
-                ('is_active', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=255)),
+                ("slug", models.SlugField(max_length=255, unique=True)),
+                (
+                    "storage_quota_bytes",
+                    models.BigIntegerField(
+                        default=0,
+                        help_text="Maximum storage for entire org in bytes. 0 = unlimited.",
+                    ),
+                ),
+                (
+                    "storage_used_bytes",
+                    models.BigIntegerField(
+                        default=0,
+                        help_text="Current storage usage across all accounts.",
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
             ],
             options={
-                'verbose_name': 'Organization',
-                'verbose_name_plural': 'Organizations',
+                "verbose_name": "Organization",
+                "verbose_name_plural": "Organizations",
             },
         ),
         migrations.CreateModel(
-            name='Account',
+            name="Account",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('email_verified', models.BooleanField(default=False)),
-                ('storage_quota_bytes', models.BigIntegerField(default=0, help_text='Maximum storage for this account in bytes. 0 = unlimited.')),
-                ('storage_used_bytes', models.BigIntegerField(default=0, help_text='Current storage usage in bytes.')),
-                ('can_upload', models.BooleanField(default=True, help_text='Account can upload new files.')),
-                ('can_delete', models.BooleanField(default=True, help_text='Account can delete files and folders.')),
-                ('can_move', models.BooleanField(default=True, help_text='Account can move/rename files and folders.')),
-                ('can_overwrite', models.BooleanField(default=True, help_text='Account can overwrite/edit existing files.')),
-                ('can_create_shares', models.BooleanField(default=True, help_text='Account can create share links.')),
-                ('max_share_links', models.PositiveIntegerField(default=0, help_text='Maximum active share links allowed. 0 = unlimited.')),
-                ('max_upload_bytes', models.BigIntegerField(default=0, help_text='Per-file upload size limit in bytes. 0 = use server default.')),
-                ('can_invite', models.BooleanField(default=False, help_text='Account can create enrollment keys to invite others.')),
-                ('can_manage_members', models.BooleanField(default=False, help_text='Account can view and modify other accounts in the org.')),
-                ('can_manage_api_keys', models.BooleanField(default=False, help_text='Account can create and revoke org API keys.')),
-                ('is_owner', models.BooleanField(default=False, help_text='Account is an org owner. At least one owner must exist per org.')),
-                ('is_active', models.BooleanField(default=True)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='account', to=settings.AUTH_USER_MODEL)),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='accounts', to='accounts.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("email_verified", models.BooleanField(default=False)),
+                (
+                    "storage_quota_bytes",
+                    models.BigIntegerField(
+                        default=0,
+                        help_text="Maximum storage for this account in bytes. 0 = unlimited.",
+                    ),
+                ),
+                (
+                    "storage_used_bytes",
+                    models.BigIntegerField(
+                        default=0, help_text="Current storage usage in bytes."
+                    ),
+                ),
+                (
+                    "can_upload",
+                    models.BooleanField(
+                        default=True, help_text="Account can upload new files."
+                    ),
+                ),
+                (
+                    "can_delete",
+                    models.BooleanField(
+                        default=True, help_text="Account can delete files and folders."
+                    ),
+                ),
+                (
+                    "can_move",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Account can move/rename files and folders.",
+                    ),
+                ),
+                (
+                    "can_overwrite",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Account can overwrite/edit existing files.",
+                    ),
+                ),
+                (
+                    "can_create_shares",
+                    models.BooleanField(
+                        default=True, help_text="Account can create share links."
+                    ),
+                ),
+                (
+                    "max_share_links",
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text="Maximum active share links allowed. 0 = unlimited.",
+                    ),
+                ),
+                (
+                    "max_upload_bytes",
+                    models.BigIntegerField(
+                        default=0,
+                        help_text="Per-file upload size limit in bytes. 0 = use server default.",
+                    ),
+                ),
+                (
+                    "can_invite",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Account can create enrollment keys to invite others.",
+                    ),
+                ),
+                (
+                    "can_manage_members",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Account can view and modify other accounts in the org.",
+                    ),
+                ),
+                (
+                    "can_manage_api_keys",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Account can create and revoke org API keys.",
+                    ),
+                ),
+                (
+                    "is_owner",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Account is an org owner. At least one owner must exist per org.",
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="account",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="accounts",
+                        to="accounts.organization",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Account',
-                'verbose_name_plural': 'Accounts',
+                "verbose_name": "Account",
+                "verbose_name_plural": "Accounts",
             },
         ),
         migrations.CreateModel(
-            name='APIKey',
+            name="APIKey",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('name', models.CharField(max_length=100)),
-                ('key', models.CharField(editable=False, max_length=64, unique=True)),
-                ('last_used_at', models.DateTimeField(blank=True, null=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('permissions', models.JSONField(blank=True, default=dict, help_text='Permission flags for this key. Keys not present default to True.')),
-                ('revoked_at', models.DateTimeField(blank=True, help_text='Timestamp when key was revoked. Set alongside is_active=False.', null=True)),
-                ('webhook_url', models.URLField(blank=True, help_text='URL to POST when content changes. Leave blank to disable.', max_length=500, null=True)),
-                ('webhook_secret', models.CharField(blank=True, help_text='HMAC secret for signing webhook payloads. Auto-generated.', max_length=64, null=True)),
-                ('webhook_enabled', models.BooleanField(default=False, help_text='Whether webhook notifications are active.')),
-                ('webhook_last_triggered', models.DateTimeField(blank=True, help_text='Last time webhook was triggered.', null=True)),
-                ('webhook_last_status', models.CharField(blank=True, choices=[('success', 'Success'), ('failed', 'Failed'), ('timeout', 'Timeout')], help_text='Status of last webhook delivery.', max_length=20, null=True)),
-                ('created_by', models.ForeignKey(help_text='Account that created this key (for audit).', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_api_keys', to='accounts.account')),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='api_keys', to='accounts.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("name", models.CharField(max_length=100)),
+                ("key", models.CharField(editable=False, max_length=64, unique=True)),
+                ("last_used_at", models.DateTimeField(blank=True, null=True)),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "permissions",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                        help_text="Permission flags for this key. Keys not present default to True.",
+                    ),
+                ),
+                (
+                    "revoked_at",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Timestamp when key was revoked. Set alongside is_active=False.",
+                        null=True,
+                    ),
+                ),
+                (
+                    "webhook_url",
+                    models.URLField(
+                        blank=True,
+                        help_text="URL to POST when content changes. Leave blank to disable.",
+                        max_length=500,
+                        null=True,
+                    ),
+                ),
+                (
+                    "webhook_secret",
+                    models.CharField(
+                        blank=True,
+                        help_text="HMAC secret for signing webhook payloads. Auto-generated.",
+                        max_length=64,
+                        null=True,
+                    ),
+                ),
+                (
+                    "webhook_enabled",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Whether webhook notifications are active.",
+                    ),
+                ),
+                (
+                    "webhook_last_triggered",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Last time webhook was triggered.",
+                        null=True,
+                    ),
+                ),
+                (
+                    "webhook_last_status",
+                    models.CharField(
+                        blank=True,
+                        choices=[
+                            ("success", "Success"),
+                            ("failed", "Failed"),
+                            ("timeout", "Timeout"),
+                        ],
+                        help_text="Status of last webhook delivery.",
+                        max_length=20,
+                        null=True,
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        help_text="Account that created this key (for audit).",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="created_api_keys",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="api_keys",
+                        to="accounts.organization",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'API Key',
-                'verbose_name_plural': 'API Keys',
-                'ordering': ['-created_at'],
+                "verbose_name": "API Key",
+                "verbose_name_plural": "API Keys",
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='EmailVerificationToken',
+            name="EmailVerificationToken",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('token', models.CharField(default=accounts.models.generate_verification_token, max_length=64, unique=True)),
-                ('expires_at', models.DateTimeField()),
-                ('used_at', models.DateTimeField(blank=True, null=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='verification_tokens', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "token",
+                    models.CharField(
+                        default=accounts.models.generate_verification_token,
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                ("expires_at", models.DateTimeField()),
+                ("used_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="verification_tokens",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Email Verification Token',
-                'verbose_name_plural': 'Email Verification Tokens',
-                'indexes': [models.Index(fields=['token'], name='accounts_em_token_5f2b37_idx'), models.Index(fields=['user', 'used_at'], name='accounts_em_user_id_a7f3d6_idx')],
+                "verbose_name": "Email Verification Token",
+                "verbose_name_plural": "Email Verification Tokens",
+                "indexes": [
+                    models.Index(fields=["token"], name="accounts_em_token_5f2b37_idx"),
+                    models.Index(
+                        fields=["user", "used_at"],
+                        name="accounts_em_user_id_a7f3d6_idx",
+                    ),
+                ],
             },
         ),
         migrations.CreateModel(
-            name='EnrollmentKey',
+            name="EnrollmentKey",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('key', models.CharField(default=accounts.models.generate_enrollment_key, max_length=64, unique=True)),
-                ('name', models.CharField(help_text="Descriptive name, e.g., 'CEO Bootstrap', 'Sales Team Invite'", max_length=255)),
-                ('required_email', models.EmailField(blank=True, help_text='If set, only this email can use this key.', max_length=254, null=True)),
-                ('preset_permissions', models.JSONField(blank=True, default=dict, help_text='Permission overrides for accounts created with this key.')),
-                ('single_use', models.BooleanField(default=True, help_text='If true, key becomes invalid after first use.')),
-                ('use_count', models.PositiveIntegerField(default=0, help_text='Number of times this key has been used.')),
-                ('expires_at', models.DateTimeField(blank=True, help_text='Key expires after this time. Null = never expires.', null=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_enrollment_keys', to='accounts.account')),
-                ('used_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='used_enrollment_key', to='accounts.account')),
-                ('organization', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='enrollment_keys', to='accounts.organization')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "key",
+                    models.CharField(
+                        default=accounts.models.generate_enrollment_key,
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "name",
+                    models.CharField(
+                        help_text="Descriptive name, e.g., 'CEO Bootstrap', 'Sales Team Invite'",
+                        max_length=255,
+                    ),
+                ),
+                (
+                    "required_email",
+                    models.EmailField(
+                        blank=True,
+                        help_text="If set, only this email can use this key.",
+                        max_length=254,
+                        null=True,
+                    ),
+                ),
+                (
+                    "preset_permissions",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                        help_text="Permission overrides for accounts created with this key.",
+                    ),
+                ),
+                (
+                    "single_use",
+                    models.BooleanField(
+                        default=True,
+                        help_text="If true, key becomes invalid after first use.",
+                    ),
+                ),
+                (
+                    "use_count",
+                    models.PositiveIntegerField(
+                        default=0, help_text="Number of times this key has been used."
+                    ),
+                ),
+                (
+                    "expires_at",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Key expires after this time. Null = never expires.",
+                        null=True,
+                    ),
+                ),
+                ("is_active", models.BooleanField(default=True)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="created_enrollment_keys",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "used_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="used_enrollment_key",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="enrollment_keys",
+                        to="accounts.organization",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Enrollment Key',
-                'verbose_name_plural': 'Enrollment Keys',
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['key'], name='accounts_en_key_ea5183_idx'), models.Index(fields=['organization', 'is_active'], name='accounts_en_organiz_9da10d_idx')],
+                "verbose_name": "Enrollment Key",
+                "verbose_name_plural": "Enrollment Keys",
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(fields=["key"], name="accounts_en_key_ea5183_idx"),
+                    models.Index(
+                        fields=["organization", "is_active"],
+                        name="accounts_en_organiz_9da10d_idx",
+                    ),
+                ],
             },
         ),
         migrations.AddConstraint(
-            model_name='account',
-            constraint=models.UniqueConstraint(fields=('user',), name='unique_user_account'),
+            model_name="account",
+            constraint=models.UniqueConstraint(
+                fields=("user",), name="unique_user_account"
+            ),
         ),
     ]

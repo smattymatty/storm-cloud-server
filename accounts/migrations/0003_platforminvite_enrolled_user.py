@@ -8,14 +8,21 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0002_platforminvite'),
+        ("accounts", "0002_platforminvite"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='platforminvite',
-            name='enrolled_user',
-            field=models.OneToOneField(blank=True, help_text="User who enrolled but hasn't created org yet.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='pending_platform_invite', to=settings.AUTH_USER_MODEL),
+            model_name="platforminvite",
+            name="enrolled_user",
+            field=models.OneToOneField(
+                blank=True,
+                help_text="User who enrolled but hasn't created org yet.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="pending_platform_invite",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]

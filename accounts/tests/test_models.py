@@ -17,7 +17,7 @@ class AccountModelTest(TestCase):
 
     def test_string_representation(self):
         """Test __str__ method."""
-        user = UserFactory(username='testuser')
+        user = UserFactory(username="testuser")
         account = AccountFactory(user=user)
         self.assertIn(user.username, str(account))
 
@@ -39,13 +39,13 @@ class EmailVerificationTokenModelTest(TestCase):
 
     def test_string_representation(self):
         """Test __str__ method shows status."""
-        user = UserFactory(username='testuser')
+        user = UserFactory(username="testuser")
         token = EmailVerificationTokenFactory(user=user)
         self.assertIn(user.username, str(token))
-        self.assertIn('pending', str(token).lower())
+        self.assertIn("pending", str(token).lower())
 
         token.mark_used()
-        self.assertIn('used', str(token).lower())
+        self.assertIn("used", str(token).lower())
 
     def test_is_expired_property_with_expired_token(self):
         """Test is_expired returns True for expired tokens."""
@@ -92,10 +92,11 @@ class APIKeyModelTest(TestCase):
     def test_string_representation(self):
         """Test __str__ method includes name and organization."""
         from accounts.tests.factories import OrganizationFactory
-        org = OrganizationFactory(name='Test Org')
-        api_key = APIKeyFactory(organization=org, name='test-key')
-        self.assertIn('test-key', str(api_key))
-        self.assertIn('Test Org', str(api_key))
+
+        org = OrganizationFactory(name="Test Org")
+        api_key = APIKeyFactory(organization=org, name="test-key")
+        self.assertIn("test-key", str(api_key))
+        self.assertIn("Test Org", str(api_key))
 
     def test_key_is_generated_on_creation(self):
         """Test API key is auto-generated on save."""

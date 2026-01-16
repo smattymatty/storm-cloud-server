@@ -1,23 +1,11 @@
 """Storage API views package.
 
 Re-exports all views for backwards compatibility.
-New modules are imported explicitly.
 """
 
-# Re-export everything from legacy module (backwards compat)
-from storage.api_legacy import (
-    BulkOperationView,
-    BulkStatusView,
-    FileContentView,
-    FileCreateView,
-    FileDeleteView,
-    FileDetailView,
-    FileDownloadView,
-    FileUploadView,
-    emit_user_file_action,
-)
+from storage.api.bulk import BulkOperationView, BulkStatusView
+from storage.api.utils import emit_user_file_action
 
-# New modular imports
 from storage.api.admin import IndexRebuildView
 from storage.api.audit import UserAuditLogPagination, UserAuditLogView
 from storage.api.directories import (
@@ -27,6 +15,14 @@ from storage.api.directories import (
     DirectoryListView,
     DirectoryReorderView,
     DirectoryResetOrderView,
+)
+from storage.api.files import (
+    FileContentView,
+    FileCreateView,
+    FileDeleteView,
+    FileDetailView,
+    FileDownloadView,
+    FileUploadView,
 )
 from storage.api.shares import (
     PublicShareDownloadView,

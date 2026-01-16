@@ -238,11 +238,15 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Root file should still have position
-        root_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-root.txt")
+        root_file = StoredFile.objects.get(
+            owner=self.user.account, path=f"{prefix}-root.txt"
+        )
         self.assertIsNotNone(root_file.sort_position)
 
         # Subdir file should be null
-        sub_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}/sub.txt")
+        sub_file = StoredFile.objects.get(
+            owner=self.user.account, path=f"{prefix}/sub.txt"
+        )
         self.assertIsNone(sub_file.sort_position)
 
 
@@ -260,8 +264,12 @@ class SortPositionTest(StormCloudAPITestCase):
         self.client.post(f"/api/v1/files/{prefix}-first.txt/create/")
         self.client.post(f"/api/v1/files/{prefix}-second.txt/create/")
 
-        first = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-first.txt")
-        second = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-second.txt")
+        first = StoredFile.objects.get(
+            owner=self.user.account, path=f"{prefix}-first.txt"
+        )
+        second = StoredFile.objects.get(
+            owner=self.user.account, path=f"{prefix}-second.txt"
+        )
 
         # Second file pushes first down
         self.assertEqual(second.sort_position, 0)

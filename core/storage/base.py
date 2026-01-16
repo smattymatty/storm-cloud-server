@@ -9,6 +9,7 @@ from datetime import datetime
 @dataclass
 class FileInfo:
     """File metadata returned by storage backend operations."""
+
     path: str
     name: str
     size: int  # Original/plaintext size
@@ -92,7 +93,9 @@ class AbstractStorageBackend(ABC):
         pass
 
     @abstractmethod
-    def list(self, path: str = "", glob_pattern: str | None = None) -> Iterator[FileInfo]:
+    def list(
+        self, path: str = "", glob_pattern: str | None = None
+    ) -> Iterator[FileInfo]:
         """
         List contents of directory.
 
@@ -158,7 +161,9 @@ class AbstractStorageBackend(ABC):
         pass
 
     @abstractmethod
-    def copy(self, source: str, destination: str, new_name: str | None = None) -> FileInfo:
+    def copy(
+        self, source: str, destination: str, new_name: str | None = None
+    ) -> FileInfo:
         """
         Copy file or directory to new location.
 

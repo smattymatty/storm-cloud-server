@@ -16,37 +16,37 @@ class LoginTest(StormCloudAPITestCase):
         # assert response.status_code == 200
         # assert 'user' in response.data
         # Verify session is created (check cookies or session store)
-        user = UserWithProfileFactory(username='testuser', verified=True)
+        user = UserWithProfileFactory(username="testuser", verified=True)
         data = {
-            'username': 'testuser',
-            'password': 'testpass123',
+            "username": "testuser",
+            "password": "testpass123",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('user', response.data)
+        self.assertIn("user", response.data)
 
     def test_login_with_invalid_password_returns_401(self):
         """Login with wrong password returns 401."""
         # POST with correct username but wrong password
         # assert response.status_code == 401
         # assert response.data['error']['code'] == 'INVALID_CREDENTIALS'
-        user = UserWithProfileFactory(username='testuser', verified=True)
+        user = UserWithProfileFactory(username="testuser", verified=True)
         data = {
-            'username': 'testuser',
-            'password': 'wrongpassword',
+            "username": "testuser",
+            "password": "wrongpassword",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(response.data['error']['code'], 'INVALID_CREDENTIALS')
+        self.assertEqual(response.data["error"]["code"], "INVALID_CREDENTIALS")
 
     def test_login_with_nonexistent_user_returns_401(self):
         """Login with non-existent username returns 401."""
         # assert response.status_code == 401
         data = {
-            'username': 'nonexistent',
-            'password': 'testpass123',
+            "username": "nonexistent",
+            "password": "testpass123",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_login_with_inactive_user_returns_403(self):
@@ -54,14 +54,16 @@ class LoginTest(StormCloudAPITestCase):
         # POST login
         # assert response.status_code == 403
         # assert response.data['error']['code'] == 'ACCOUNT_DISABLED'
-        user = UserWithProfileFactory(username='testuser', verified=True, is_active=False)
+        user = UserWithProfileFactory(
+            username="testuser", verified=True, is_active=False
+        )
         data = {
-            'username': 'testuser',
-            'password': 'testpass123',
+            "username": "testuser",
+            "password": "testpass123",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error']['code'], 'ACCOUNT_DISABLED')
+        self.assertEqual(response.data["error"]["code"], "ACCOUNT_DISABLED")
 
     @override_settings(STORMCLOUD_REQUIRE_EMAIL_VERIFICATION=True)
     def test_login_with_unverified_email_returns_403(self):
@@ -69,14 +71,14 @@ class LoginTest(StormCloudAPITestCase):
         # POST login
         # assert response.status_code == 403
         # assert response.data['error']['code'] == 'EMAIL_NOT_VERIFIED'
-        user = UserWithProfileFactory(username='testuser')
+        user = UserWithProfileFactory(username="testuser")
         data = {
-            'username': 'testuser',
-            'password': 'testpass123',
+            "username": "testuser",
+            "password": "testpass123",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error']['code'], 'EMAIL_NOT_VERIFIED')
+        self.assertEqual(response.data["error"]["code"], "EMAIL_NOT_VERIFIED")
 
     def test_login_fires_login_failed_signal_on_error(self):
         """Failed login fires login_failed signal."""
@@ -90,12 +92,12 @@ class LoginTest(StormCloudAPITestCase):
 
         login_failed.connect(signal_handler)
 
-        user = UserWithProfileFactory(username='testuser', verified=True)
+        user = UserWithProfileFactory(username="testuser", verified=True)
         data = {
-            'username': 'testuser',
-            'password': 'wrongpassword',
+            "username": "testuser",
+            "password": "wrongpassword",
         }
-        response = self.client.post('/api/v1/auth/login/', data)
+        response = self.client.post("/api/v1/auth/login/", data)
 
         login_failed.disconnect(signal_handler)
 
@@ -110,14 +112,14 @@ class LogoutTest(StormCloudAPITestCase):
         # POST to /api/v1/auth/logout/
         # assert response.status_code == 200
         # Verify session is destroyed
-        user = UserWithProfileFactory(username='testuser', verified=True)
-        self.client.login(username='testuser', password='testpass123')
+        user = UserWithProfileFactory(username="testuser", verified=True)
+        self.client.login(username="testuser", password="testpass123")
 
-        response = self.client.post('/api/v1/auth/logout/')
+        response = self.client.post("/api/v1/auth/logout/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_logout_while_not_logged_in_succeeds(self):
         """Logout without being logged in still returns 200."""
         # assert response.status_code == 200
-        response = self.client.post('/api/v1/auth/logout/')
+        response = self.client.post("/api/v1/auth/logout/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)

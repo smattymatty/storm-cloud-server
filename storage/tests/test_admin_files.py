@@ -18,6 +18,7 @@ User = get_user_model()
 @override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class AdminFileTestCase(StormCloudAdminTestCase):
     """Base test case for admin file tests with encryption disabled."""
+
     pass
 
 
@@ -96,7 +97,9 @@ class AdminFileTestMixin:
             target_user=target_user.account,
         ).first()
 
-        self.assertIsNotNone(log, f"No audit log found for action={action}, path={path}")
+        self.assertIsNotNone(
+            log, f"No audit log found for action={action}, path={path}"
+        )
         self.assertEqual(log.performed_by, performed_by.account)
         self.assertEqual(log.is_admin_action, is_admin_action)
         self.assertEqual(log.success, success)
@@ -194,7 +197,9 @@ class AdminDirectoryCreateTest(AdminFileTestMixin, AdminFileTestCase):
         self.assertTrue(response.data["is_directory"])
 
         # Verify filesystem
-        dir_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "newdir"
+        dir_path = (
+            Path(self.test_storage_root) / str(self.target_user.account.id) / "newdir"
+        )
         self.assertTrue(dir_path.exists())
         self.assertTrue(dir_path.is_dir())
 
@@ -269,7 +274,11 @@ class AdminFileUploadTest(AdminFileTestMixin, AdminFileTestCase):
         self.assertEqual(response.data["size"], len(b"admin uploaded content"))
 
         # Verify filesystem
-        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "uploaded.txt"
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "uploaded.txt"
+        )
         self.assertTrue(file_path.exists())
         self.assertEqual(file_path.read_text(), "admin uploaded content")
 
@@ -283,7 +292,11 @@ class AdminFileUploadTest(AdminFileTestMixin, AdminFileTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "existing.txt"
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "existing.txt"
+        )
         self.assertEqual(file_path.read_text(), "new content")
 
     def test_upload_creates_parent_dirs(self):
@@ -313,9 +326,7 @@ class AdminFileUploadTest(AdminFileTestMixin, AdminFileTestCase):
     def test_creates_audit_log_with_size(self):
         """Verify action=upload, file_size logged."""
         content = b"audit upload content"
-        response = self._upload_file_as_admin(
-            self.target_user.id, "audit.txt", content
-        )
+        response = self._upload_file_as_admin(self.target_user.id, "audit.txt", content)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         log = self._assert_audit_log_created(
@@ -350,7 +361,11 @@ class AdminFileCreateTest(AdminFileTestMixin, AdminFileTestCase):
         self.assertIn("detail", response.data)
 
         # Verify filesystem
-        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "newfile.txt"
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "newfile.txt"
+        )
         self.assertTrue(file_path.exists())
         self.assertEqual(file_path.read_text(), "")
 
@@ -406,9 +421,7 @@ class AdminFileCreateTest(AdminFileTestMixin, AdminFileTestCase):
 
     def test_create_nonexistent_user_returns_404(self):
         """Returns 404 for invalid user_id."""
-        response = self.client.post(
-            "/api/v1/admin/users/99999/files/file.txt/create/"
-        )
+        response = self.client.post("/api/v1/admin/users/99999/files/file.txt/create/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
@@ -500,7 +513,11 @@ class AdminFileDeleteTest(AdminFileTestMixin, AdminFileTestCase):
     def test_admin_delete_user_file(self):
         """Admin can delete user's file."""
         self._create_file_for_user(self.target_user, "todelete.txt")
-        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "todelete.txt"
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "todelete.txt"
+        )
         self.assertTrue(file_path.exists())
 
         response = self.client.delete(
@@ -510,7 +527,9 @@ class AdminFileDeleteTest(AdminFileTestMixin, AdminFileTestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(file_path.exists())
         self.assertFalse(
-            StoredFile.objects.filter(owner=self.target_user.account, path="todelete.txt").exists()
+            StoredFile.objects.filter(
+                owner=self.target_user.account, path="todelete.txt"
+            ).exists()
         )
 
     def test_delete_directory_recursive(self):
@@ -519,7 +538,9 @@ class AdminFileDeleteTest(AdminFileTestMixin, AdminFileTestCase):
         self._create_file_for_user(self.target_user, "deldir/file1.txt")
         self._create_file_for_user(self.target_user, "deldir/file2.txt")
 
-        dir_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "deldir"
+        dir_path = (
+            Path(self.test_storage_root) / str(self.target_user.account.id) / "deldir"
+        )
         self.assertTrue(dir_path.exists())
 
         response = self.client.delete(
@@ -602,13 +623,21 @@ class AdminFileContentTest(AdminFileTestMixin, AdminFileTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify file was updated
-        file_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "editable.txt"
+        file_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "editable.txt"
+        )
         self.assertEqual(file_path.read_text(), "updated content")
 
     def test_preview_binary_returns_400(self):
         """Binary files return NOT_TEXT_FILE error."""
         # Create a binary file
-        storage_path = Path(self.test_storage_root) / str(self.target_user.account.id) / "image.png"
+        storage_path = (
+            Path(self.test_storage_root)
+            / str(self.target_user.account.id)
+            / "image.png"
+        )
         storage_path.parent.mkdir(parents=True, exist_ok=True)
         storage_path.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00")
 
@@ -873,9 +902,7 @@ class AdminSelfAccessTest(AdminFileTestMixin, AdminFileTestCase):
         self._create_file_for_user(self.admin, "myfile.txt", "admin's file")
 
         # Admin accesses their own file via admin endpoint
-        response = self.client.get(
-            f"/api/v1/admin/users/{self.admin.id}/dirs/"
-        )
+        response = self.client.get(f"/api/v1/admin/users/{self.admin.id}/dirs/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -887,4 +914,7 @@ class AdminSelfAccessTest(AdminFileTestMixin, AdminFileTestCase):
         ).first()
 
         self.assertIsNotNone(log)
-        self.assertTrue(log.is_admin_action, "is_admin_action should be True even when admin accesses own files via admin endpoint")
+        self.assertTrue(
+            log.is_admin_action,
+            "is_admin_action should be True even when admin accesses own files via admin endpoint",
+        )

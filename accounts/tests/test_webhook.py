@@ -17,7 +17,9 @@ class WebhookConfigTests(TestCase):
             username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
         self.api_key = APIKey.objects.create(organization=self.org, name="test-key")
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
@@ -74,7 +76,9 @@ class WebhookConfigTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["webhook_url"], "https://new.example.com/webhook/")
+        self.assertEqual(
+            response.data["webhook_url"], "https://new.example.com/webhook/"
+        )
         self.assertEqual(response.data["message"], "Webhook URL updated.")
         # Secret should remain the same when just updating URL
         self.assertEqual(response.data["webhook_secret"], old_secret)
@@ -145,7 +149,9 @@ class WebhookSecretGenerationTests(TestCase):
             username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
 
     def test_secret_generated_on_url_set(self):
         """Secret is auto-generated when URL is set."""
@@ -161,7 +167,9 @@ class WebhookSecretGenerationTests(TestCase):
     def test_secret_cleared_on_url_removed(self):
         """Secret is cleared when URL is removed."""
         api_key = APIKey.objects.create(
-            organization=self.org, name="test", webhook_url="https://example.com/webhook/"
+            organization=self.org,
+            name="test",
+            webhook_url="https://example.com/webhook/",
         )
         self.assertIsNotNone(api_key.webhook_secret)
 
@@ -187,7 +195,9 @@ class WebhookSecretGenerationTests(TestCase):
     def test_secret_not_regenerated_on_update(self):
         """Existing secret is preserved when updating URL."""
         api_key = APIKey.objects.create(
-            organization=self.org, name="test", webhook_url="https://old.example.com/webhook/"
+            organization=self.org,
+            name="test",
+            webhook_url="https://old.example.com/webhook/",
         )
         old_secret = api_key.webhook_secret
 
@@ -205,7 +215,9 @@ class WebhookTestEndpointTests(TestCase):
             username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
         self.api_key = APIKey.objects.create(organization=self.org, name="test-key")
         self.client = APIClient()
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
@@ -264,6 +276,7 @@ class AdminWebhookConfigTests(TestCase):
     def test_get_webhook_config_not_found(self):
         """Returns 404 for non-existent key."""
         import uuid
+
         response = self.client.get(
             f"/api/v1/admin/users/{self.user.id}/keys/{uuid.uuid4()}/webhook/"
         )
@@ -350,7 +363,9 @@ class UserKeyWebhookTests(TestCase):
             username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
         self.key1 = APIKey.objects.create(organization=self.org, name="key1")
         self.key2 = APIKey.objects.create(organization=self.org, name="key2")
 
@@ -368,7 +383,9 @@ class UserKeyWebhookTests(TestCase):
         """Cannot access another user's key."""
         other_user = User.objects.create_user(username="other", password="pass")
         other_org = Organization.objects.create(name="Other Org", slug="other-org")
-        Account.objects.create(user=other_user, organization=other_org, email_verified=True)
+        Account.objects.create(
+            user=other_user, organization=other_org, email_verified=True
+        )
         other_key = APIKey.objects.create(organization=other_org, name="other-key")
 
         response = self.client.get(f"/api/v1/auth/tokens/{other_key.id}/webhook/")
@@ -404,7 +421,9 @@ class UserKeyWebhookTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["webhook_url"], "https://new.example.com/webhook/")
+        self.assertEqual(
+            response.data["webhook_url"], "https://new.example.com/webhook/"
+        )
         self.assertTrue(response.data["webhook_enabled"])
 
     def test_copy_secret_from_another_key(self):
@@ -445,7 +464,9 @@ class UserKeyWebhookTests(TestCase):
         """Cannot copy from another user's key."""
         other_user = User.objects.create_user(username="other", password="pass")
         other_org = Organization.objects.create(name="Other Org", slug="other-org-2")
-        Account.objects.create(user=other_user, organization=other_org, email_verified=True)
+        Account.objects.create(
+            user=other_user, organization=other_org, email_verified=True
+        )
         other_key = APIKey.objects.create(
             organization=other_org,
             name="other-key",

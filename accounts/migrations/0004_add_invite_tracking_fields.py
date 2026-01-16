@@ -6,23 +6,33 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0003_platforminvite_enrolled_user'),
+        ("accounts", "0003_platforminvite_enrolled_user"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='enrollmentkey',
-            name='revoked_at',
-            field=models.DateTimeField(blank=True, help_text='When this key was revoked. Null = not revoked.', null=True),
+            model_name="enrollmentkey",
+            name="revoked_at",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="When this key was revoked. Null = not revoked.",
+                null=True,
+            ),
         ),
         migrations.AddField(
-            model_name='enrollmentkey',
-            name='used_at',
-            field=models.DateTimeField(blank=True, help_text='When the key was first used.', null=True),
+            model_name="enrollmentkey",
+            name="used_at",
+            field=models.DateTimeField(
+                blank=True, help_text="When the key was first used.", null=True
+            ),
         ),
         migrations.AddField(
-            model_name='platforminvite',
-            name='revoked_at',
-            field=models.DateTimeField(blank=True, help_text='When this invite was revoked. Null = not revoked.', null=True),
+            model_name="platforminvite",
+            name="revoked_at",
+            field=models.DateTimeField(
+                blank=True,
+                help_text="When this invite was revoked. Null = not revoked.",
+                null=True,
+            ),
         ),
     ]

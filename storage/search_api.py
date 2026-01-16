@@ -69,7 +69,12 @@ class SearchFilesView(StormCloudBaseAPIView):
         query = request.query_params.get("q", "").strip()
         if not query:
             return Response(
-                {"error": {"code": "MISSING_QUERY", "message": "Query parameter 'q' is required"}},
+                {
+                    "error": {
+                        "code": "MISSING_QUERY",
+                        "message": "Query parameter 'q' is required",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -80,7 +85,13 @@ class SearchFilesView(StormCloudBaseAPIView):
                 search_path = normalize_path(search_path)
             except PathValidationError as e:
                 return Response(
-                    {"error": {"code": "INVALID_PATH", "message": str(e), "path": search_path}},
+                    {
+                        "error": {
+                            "code": "INVALID_PATH",
+                            "message": str(e),
+                            "path": search_path,
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -108,7 +119,12 @@ class SearchFilesView(StormCloudBaseAPIView):
 
         if not str(real_search).startswith(str(real_root)):
             return Response(
-                {"error": {"code": "INVALID_PATH", "message": "Path traversal not allowed"}},
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": "Path traversal not allowed",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -125,7 +141,12 @@ class SearchFilesView(StormCloudBaseAPIView):
 
         if not full_search_path.is_dir():
             return Response(
-                {"error": {"code": "PATH_IS_FILE", "message": "Search path must be a directory"}},
+                {
+                    "error": {
+                        "code": "PATH_IS_FILE",
+                        "message": "Search path must be a directory",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -145,11 +166,13 @@ class SearchFilesView(StormCloudBaseAPIView):
                         break
                     dir_path = root_path / dir_name
                     rel_path = str(dir_path.relative_to(storage_root))
-                    results.append({
-                        "name": dir_name,
-                        "path": rel_path,
-                        "type": "directory",
-                    })
+                    results.append(
+                        {
+                            "name": dir_name,
+                            "path": rel_path,
+                            "type": "directory",
+                        }
+                    )
 
             if truncated:
                 break
@@ -163,25 +186,29 @@ class SearchFilesView(StormCloudBaseAPIView):
                     file_path = root_path / file_name
                     rel_path = str(file_path.relative_to(storage_root))
                     stat = file_path.stat()
-                    results.append({
-                        "name": file_name,
-                        "path": rel_path,
-                        "type": "file",
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(
-                            stat.st_mtime, tz=dt_timezone.utc
-                        ).isoformat(),
-                    })
+                    results.append(
+                        {
+                            "name": file_name,
+                            "path": rel_path,
+                            "type": "file",
+                            "size": stat.st_size,
+                            "modified": datetime.fromtimestamp(
+                                stat.st_mtime, tz=dt_timezone.utc
+                            ).isoformat(),
+                        }
+                    )
 
             if truncated:
                 break
 
-        return Response({
-            "results": results,
-            "count": len(results),
-            "truncated": truncated,
-            "search_path": f"/{search_path}" if search_path else "/",
-        })
+        return Response(
+            {
+                "results": results,
+                "count": len(results),
+                "truncated": truncated,
+                "search_path": f"/{search_path}" if search_path else "/",
+            }
+        )
 
 
 class AdminSearchFilesView(StormCloudBaseAPIView):
@@ -238,7 +265,12 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
         query = request.query_params.get("q", "").strip()
         if not query:
             return Response(
-                {"error": {"code": "MISSING_QUERY", "message": "Query parameter 'q' is required"}},
+                {
+                    "error": {
+                        "code": "MISSING_QUERY",
+                        "message": "Query parameter 'q' is required",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -249,7 +281,13 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
                 search_path = normalize_path(search_path)
             except PathValidationError as e:
                 return Response(
-                    {"error": {"code": "INVALID_PATH", "message": str(e), "path": search_path}},
+                    {
+                        "error": {
+                            "code": "INVALID_PATH",
+                            "message": str(e),
+                            "path": search_path,
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -277,7 +315,12 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
 
         if not str(real_search).startswith(str(real_root)):
             return Response(
-                {"error": {"code": "INVALID_PATH", "message": "Path traversal not allowed"}},
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": "Path traversal not allowed",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -298,7 +341,12 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
 
         if not full_search_path.is_dir():
             return Response(
-                {"error": {"code": "PATH_IS_FILE", "message": "Search path must be a directory"}},
+                {
+                    "error": {
+                        "code": "PATH_IS_FILE",
+                        "message": "Search path must be a directory",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -318,11 +366,13 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
                         break
                     dir_path = root_path / dir_name
                     rel_path = str(dir_path.relative_to(storage_root))
-                    results.append({
-                        "name": dir_name,
-                        "path": rel_path,
-                        "type": "directory",
-                    })
+                    results.append(
+                        {
+                            "name": dir_name,
+                            "path": rel_path,
+                            "type": "directory",
+                        }
+                    )
 
             if truncated:
                 break
@@ -336,23 +386,27 @@ class AdminSearchFilesView(StormCloudBaseAPIView):
                     file_path = root_path / file_name
                     rel_path = str(file_path.relative_to(storage_root))
                     stat = file_path.stat()
-                    results.append({
-                        "name": file_name,
-                        "path": rel_path,
-                        "type": "file",
-                        "size": stat.st_size,
-                        "modified": datetime.fromtimestamp(
-                            stat.st_mtime, tz=dt_timezone.utc
-                        ).isoformat(),
-                    })
+                    results.append(
+                        {
+                            "name": file_name,
+                            "path": rel_path,
+                            "type": "file",
+                            "size": stat.st_size,
+                            "modified": datetime.fromtimestamp(
+                                stat.st_mtime, tz=dt_timezone.utc
+                            ).isoformat(),
+                        }
+                    )
 
             if truncated:
                 break
 
-        return Response({
-            "results": results,
-            "count": len(results),
-            "truncated": truncated,
-            "search_path": f"/{search_path}" if search_path else "/",
-            "target_user": {"id": target_user.id, "username": target_user.username},
-        })
+        return Response(
+            {
+                "results": results,
+                "count": len(results),
+                "truncated": truncated,
+                "search_path": f"/{search_path}" if search_path else "/",
+                "target_user": {"id": target_user.id, "username": target_user.username},
+            }
+        )

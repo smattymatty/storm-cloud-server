@@ -51,7 +51,9 @@ class AdminCmsTestMixin:
             mapping.refresh_from_db()
         return mapping
 
-    def _create_page_stats(self, user: User, page_path: str, view_count: int = 1) -> PageStats:
+    def _create_page_stats(
+        self, user: User, page_path: str, view_count: int = 1
+    ) -> PageStats:
         """Create PageStats for a user."""
         return PageStats.objects.create(
             owner=user,
@@ -69,7 +71,9 @@ class AdminCmsTestMixin:
     ) -> ContentFlag:
         """Create a ContentFlag for a file."""
         if metadata is None:
-            metadata = {"model": "claude-3.5-sonnet"} if flag_type == "ai_generated" else {}
+            metadata = (
+                {"model": "claude-3.5-sonnet"} if flag_type == "ai_generated" else {}
+            )
         return ContentFlag.objects.create(
             stored_file=stored_file,
             flag_type=flag_type,
@@ -98,7 +102,9 @@ class AdminPageListTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self._create_page_mapping(self.target_user, "/contact", "content/contact.md")
         self._create_page_stats(self.target_user, "/about", view_count=10)
 
-        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/cms/pages/")
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.target_user.id}/cms/pages/"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["total"], 2)  # 2 unique pages
@@ -106,14 +112,18 @@ class AdminPageListTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.data["target_user"]["id"], self.target_user.id)
 
         # Find /about page and verify file count
-        about_page = next(p for p in response.data["pages"] if p["page_path"] == "/about")
+        about_page = next(
+            p for p in response.data["pages"] if p["page_path"] == "/about"
+        )
         self.assertEqual(about_page["file_count"], 2)
         self.assertEqual(about_page["view_count"], 10)
 
     def test_admin_list_stale_pages(self):
         """Admin can filter stale pages."""
         self._create_page_mapping(self.target_user, "/fresh", "content/fresh.md")
-        self._create_page_mapping(self.target_user, "/stale", "content/stale.md", stale=True)
+        self._create_page_mapping(
+            self.target_user, "/stale", "content/stale.md", stale=True
+        )
 
         response = self.client.get(
             f"/api/v1/admin/users/{self.target_user.id}/cms/pages/?stale=true"
@@ -135,7 +145,9 @@ class AdminPageListTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         regular_key = APIKeyFactory(user=regular_user)
         self.authenticate(api_key=regular_key)
 
-        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/cms/pages/")
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.target_user.id}/cms/pages/"
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -173,7 +185,9 @@ class AdminPageDetailTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertIn("target_user", response.data)
 
         # Check flag on first file
-        about_file = next(f for f in response.data["files"] if f["file_path"] == "content/about.md")
+        about_file = next(
+            f for f in response.data["files"] if f["file_path"] == "content/about.md"
+        )
         self.assertTrue(about_file["flags"]["ai_generated"])
 
     def test_admin_delete_page_mappings(self):
@@ -191,7 +205,9 @@ class AdminPageDetailTests(AdminCmsTestMixin, StormCloudAdminTestCase):
 
         # Verify mappings are gone
         self.assertEqual(
-            PageFileMapping.objects.filter(owner=self.target_user, page_path="/old-page").count(),
+            PageFileMapping.objects.filter(
+                owner=self.target_user, page_path="/old-page"
+            ).count(),
             0,
         )
 
@@ -234,7 +250,9 @@ class AdminPageFlagsTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("target_user", response.data)
 
-        about_page = next(p for p in response.data["pages"] if p["page_path"] == "/about")
+        about_page = next(
+            p for p in response.data["pages"] if p["page_path"] == "/about"
+        )
         self.assertEqual(about_page["flags"]["ai_generated"], 2)
         self.assertEqual(about_page["flags"]["user_approved"], 1)
 
@@ -260,7 +278,9 @@ class AdminFlagListTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self._create_flag(file2, "ai_generated", is_active=True)
         self._create_flag(file2, "user_approved", is_active=True)
 
-        response = self.client.get(f"/api/v1/admin/users/{self.target_user.id}/cms/flags/")
+        response = self.client.get(
+            f"/api/v1/admin/users/{self.target_user.id}/cms/flags/"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 2)
@@ -281,7 +301,9 @@ class AdminFlagListTests(AdminCmsTestMixin, StormCloudAdminTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 1)
-        self.assertEqual(response.data["files"][0]["file_path"], "content/needs-review.md")
+        self.assertEqual(
+            response.data["files"][0]["file_path"], "content/needs-review.md"
+        )
 
 
 # =============================================================================
@@ -342,7 +364,9 @@ class AdminFileFlagsTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertIn("target_user", response.data)
 
         # Find ai_generated flag
-        ai_flag = next(f for f in response.data["flags"] if f["flag_type"] == "ai_generated")
+        ai_flag = next(
+            f for f in response.data["flags"] if f["flag_type"] == "ai_generated"
+        )
         self.assertTrue(ai_flag["is_active"])
 
     def test_get_flags_nonexistent_file_returns_404(self):
@@ -382,7 +406,9 @@ class AdminSetFlagTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertIn("target_user", response.data)
 
         # Verify flag was created
-        flag = ContentFlag.objects.get(stored_file=self.test_file, flag_type="ai_generated")
+        flag = ContentFlag.objects.get(
+            stored_file=self.test_file, flag_type="ai_generated"
+        )
         self.assertTrue(flag.is_active)
 
     def test_admin_set_flag_records_admin_as_changed_by(self):
@@ -399,7 +425,9 @@ class AdminSetFlagTests(AdminCmsTestMixin, StormCloudAdminTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify changed_by is the admin, NOT the target user
-        flag = ContentFlag.objects.get(stored_file=self.test_file, flag_type="user_approved")
+        flag = ContentFlag.objects.get(
+            stored_file=self.test_file, flag_type="user_approved"
+        )
         self.assertEqual(flag.changed_by, self.admin)
         self.assertNotEqual(flag.changed_by, self.target_user)
 
@@ -495,7 +523,9 @@ class AdminStaleCleanupTests(AdminCmsTestMixin, StormCloudAdminTestCase):
     def test_admin_cleanup_stale_mappings(self):
         """Admin can cleanup stale mappings for a user."""
         self._create_page_mapping(self.target_user, "/fresh", "content/fresh.md")
-        self._create_page_mapping(self.target_user, "/stale", "content/stale.md", stale=True)
+        self._create_page_mapping(
+            self.target_user, "/stale", "content/stale.md", stale=True
+        )
 
         response = self.client.post(
             f"/api/v1/admin/users/{self.target_user.id}/cms/cleanup/",

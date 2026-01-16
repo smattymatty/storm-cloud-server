@@ -17,18 +17,18 @@ class AuthMeTest(StormCloudAPITestCase):
         """GET /auth/me/ returns user, account, and current API key info."""
         # Use session auth to get full user/account response
         self.authenticate_session(self.user)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('user', response.data)
-        self.assertIn('account', response.data)
-        self.assertIn('api_key', response.data)
-        self.assertEqual(response.data['user']['username'], self.user.username)
+        self.assertIn("user", response.data)
+        self.assertIn("account", response.data)
+        self.assertIn("api_key", response.data)
+        self.assertEqual(response.data["user"]["username"], self.user.username)
 
     def test_auth_me_without_authentication_returns_401(self):
         """GET /auth/me/ without auth returns 403."""
         # GET /auth/me/
         # Note: DRF returns 403 for unauthenticated requests with IsAuthenticated permission
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -42,11 +42,13 @@ class DeactivateAccountTest(StormCloudAPITestCase):
         # assert response.status_code == 200
         # Refresh user from DB, assert is_active == False
         # Verify all keys were revoked
-        self.authenticate_session(self.user)  # Session auth required for account management
+        self.authenticate_session(
+            self.user
+        )  # Session auth required for account management
         key2 = APIKeyFactory(organization=self.user.account.organization)
 
-        data = {'password': 'testpass123'}
-        response = self.client.post('/api/v1/auth/deactivate/', data)
+        data = {"password": "testpass123"}
+        response = self.client.post("/api/v1/auth/deactivate/", data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         self.user.refresh_from_db()
@@ -63,10 +65,10 @@ class DeactivateAccountTest(StormCloudAPITestCase):
         # assert response.data['error']['code'] == 'INVALID_PASSWORD'
         self.authenticate_session(self.user)  # Session auth required
 
-        data = {'password': 'wrongpassword'}
-        response = self.client.post('/api/v1/auth/deactivate/', data)
+        data = {"password": "wrongpassword"}
+        response = self.client.post("/api/v1/auth/deactivate/", data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'INVALID_PASSWORD')
+        self.assertEqual(response.data["error"]["code"], "INVALID_PASSWORD")
 
     def test_deactivate_fires_signal(self):
         """Deactivating account fires account_deactivated signal."""
@@ -80,8 +82,8 @@ class DeactivateAccountTest(StormCloudAPITestCase):
         account_deactivated.connect(signal_handler)
 
         self.authenticate_session(self.user)  # Session auth required
-        data = {'password': 'testpass123'}
-        response = self.client.post('/api/v1/auth/deactivate/', data)
+        data = {"password": "testpass123"}
+        response = self.client.post("/api/v1/auth/deactivate/", data)
 
         account_deactivated.disconnect(signal_handler)
 
@@ -100,8 +102,8 @@ class DeleteAccountTest(StormCloudAPITestCase):
         self.authenticate_session(self.user)  # Session auth required
         user_id = self.user.id
 
-        data = {'password': 'testpass123'}
-        response = self.client.delete('/api/v1/auth/delete/', data)
+        data = {"password": "testpass123"}
+        response = self.client.delete("/api/v1/auth/delete/", data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify user no longer exists
@@ -113,10 +115,10 @@ class DeleteAccountTest(StormCloudAPITestCase):
         # assert response.data['error']['code'] == 'INVALID_PASSWORD'
         self.authenticate_session(self.user)  # Session auth required
 
-        data = {'password': 'wrongpassword'}
-        response = self.client.delete('/api/v1/auth/delete/', data)
+        data = {"password": "wrongpassword"}
+        response = self.client.delete("/api/v1/auth/delete/", data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'INVALID_PASSWORD')
+        self.assertEqual(response.data["error"]["code"], "INVALID_PASSWORD")
 
     def test_delete_account_cascades_to_profile(self):
         """Deleting account also deletes profile but org API keys remain."""
@@ -125,8 +127,8 @@ class DeleteAccountTest(StormCloudAPITestCase):
         profile_id = self.user.account.id
         key_id = self.api_key.id
 
-        data = {'password': 'testpass123'}
-        response = self.client.delete('/api/v1/auth/delete/', data)
+        data = {"password": "testpass123"}
+        response = self.client.delete("/api/v1/auth/delete/", data)
 
         # Account is deleted
         self.assertFalse(Account.objects.filter(id=profile_id).exists())
@@ -145,11 +147,11 @@ class DeleteAccountTest(StormCloudAPITestCase):
         account_deleted.connect(signal_handler)
 
         self.authenticate_session(self.user)  # Session auth required
-        data = {'password': 'testpass123'}
-        response = self.client.delete('/api/v1/auth/delete/', data)
+        data = {"password": "testpass123"}
+        response = self.client.delete("/api/v1/auth/delete/", data)
 
         account_deleted.disconnect(signal_handler)
 
         self.assertTrue(len(signal_received) > 0)
-        self.assertIn('user_id', signal_received[0])
-        self.assertIn('username', signal_received[0])
+        self.assertIn("user_id", signal_received[0])
+        self.assertIn("username", signal_received[0])

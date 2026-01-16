@@ -8,7 +8,7 @@ from core.storage.local import LocalStorageBackend
 from io import BytesIO
 
 
-@override_settings(STORAGE_ENCRYPTION_METHOD='none')
+@override_settings(STORAGE_ENCRYPTION_METHOD="none")
 class LocalStorageBackendTest(TestCase):
     """Tests for LocalStorageBackend."""
 

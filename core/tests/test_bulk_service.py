@@ -46,7 +46,9 @@ class BulkOperationServiceTestCase(TestCase):
 
         # Create service
         self.backend = LocalStorageBackend()
-        self.service = BulkOperationService(account=self.user.account, backend=self.backend)
+        self.service = BulkOperationService(
+            account=self.user.account, backend=self.backend
+        )
 
     def tearDown(self):
         """Clean up test-specific storage."""
@@ -280,7 +282,9 @@ class BulkOperationServiceTestCase(TestCase):
         self.assertTrue((self.user_storage / "dest" / "source.txt").exists())
 
         # Verify DB updated
-        db_file = StoredFile.objects.get(owner=self.user.account, path="dest/source.txt")
+        db_file = StoredFile.objects.get(
+            owner=self.user.account, path="dest/source.txt"
+        )
         self.assertEqual(db_file.parent_path, "dest")
 
     def test_move_to_root(self):

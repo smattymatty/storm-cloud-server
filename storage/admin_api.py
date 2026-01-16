@@ -142,7 +142,13 @@ class AdminDirectoryListRootView(AdminFileBaseView):
                 error_message=str(e),
             )
             return Response(
-                {"error": {"code": "INVALID_PATH", "message": str(e), "path": dir_path}},
+                {
+                    "error": {
+                        "code": "INVALID_PATH",
+                        "message": str(e),
+                        "path": dir_path,
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -198,8 +204,13 @@ class AdminDirectoryListRootView(AdminFileBaseView):
         # Fetch metadata from database
         entry_paths = [entry.path.replace(f"{user_prefix}/", "") for entry in entries]
         db_files = {
-            f.path: {"encryption_method": f.encryption_method, "sort_position": f.sort_position}
-            for f in StoredFile.objects.filter(owner=target_user.account, path__in=entry_paths)
+            f.path: {
+                "encryption_method": f.encryption_method,
+                "sort_position": f.sort_position,
+            }
+            for f in StoredFile.objects.filter(
+                owner=target_user.account, path__in=entry_paths
+            )
         }
 
         # Build entry data
@@ -237,8 +248,7 @@ class AdminDirectoryListRootView(AdminFileBaseView):
         if search:
             search_lower = search.lower()
             entry_data = [
-                e for e in entry_data
-                if search_lower in str(e["name"]).lower()
+                e for e in entry_data if search_lower in str(e["name"]).lower()
             ]
 
         # Pagination
@@ -364,7 +374,12 @@ class AdminDirectoryCreateView(AdminFileBaseView):
         full_path = f"{user_prefix}/{dir_path}"
 
         # Check if exists on filesystem OR in database
-        if backend.exists(full_path) or StoredFile.objects.filter(owner=target_user.account, path=dir_path).exists():
+        if (
+            backend.exists(full_path)
+            or StoredFile.objects.filter(
+                owner=target_user.account, path=dir_path
+            ).exists()
+        ):
             emit_admin_file_action(
                 self.__class__,
                 request,
@@ -454,7 +469,12 @@ class AdminFileDetailView(AdminFileBaseView):
             file_info = backend.info(full_path)
         except FileNotFoundError:
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File '{file_path}' not found."}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' not found.",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -760,13 +780,23 @@ class AdminFileDownloadView(AdminFileBaseView):
                 error_code="FILE_NOT_FOUND",
             )
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File '{file_path}' not found."}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' not found.",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if file_info.is_directory:
             return Response(
-                {"error": {"code": "PATH_IS_DIRECTORY", "message": "Cannot download a directory."}},
+                {
+                    "error": {
+                        "code": "PATH_IS_DIRECTORY",
+                        "message": "Cannot download a directory.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -870,7 +900,12 @@ class AdminFileDeleteView(AdminFileBaseView):
                 error_code="FILE_NOT_FOUND",
             )
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File '{file_path}' not found."}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' not found.",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -943,13 +978,23 @@ class AdminFileContentView(AdminFileBaseView):
                 error_code="FILE_NOT_FOUND",
             )
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File '{file_path}' not found."}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' not found.",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if file_info.is_directory:
             return Response(
-                {"error": {"code": "PATH_IS_DIRECTORY", "message": "Cannot preview a directory."}},
+                {
+                    "error": {
+                        "code": "PATH_IS_DIRECTORY",
+                        "message": "Cannot preview a directory.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -964,14 +1009,26 @@ class AdminFileContentView(AdminFileBaseView):
                 error_code="NOT_TEXT_FILE",
             )
             return Response(
-                {"error": {"code": "NOT_TEXT_FILE", "message": "File is not a text file."}},
+                {
+                    "error": {
+                        "code": "NOT_TEXT_FILE",
+                        "message": "File is not a text file.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        max_preview_size = getattr(settings, "STORMCLOUD_MAX_PREVIEW_SIZE_MB", 5) * 1024 * 1024
+        max_preview_size = (
+            getattr(settings, "STORMCLOUD_MAX_PREVIEW_SIZE_MB", 5) * 1024 * 1024
+        )
         if file_info.size > max_preview_size:
             return Response(
-                {"error": {"code": "FILE_TOO_LARGE", "message": "File too large for preview."}},
+                {
+                    "error": {
+                        "code": "FILE_TOO_LARGE",
+                        "message": "File too large for preview.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1059,7 +1116,12 @@ class AdminFileContentView(AdminFileBaseView):
                 error_code="FILE_NOT_FOUND",
             )
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File '{file_path}' not found."}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File '{file_path}' not found.",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -1127,7 +1189,12 @@ class AdminBulkOperationView(AdminFileBaseView):
 
         if operation not in ["delete", "move", "copy"]:
             return Response(
-                {"error": {"code": "INVALID_OPERATION", "message": "Invalid operation."}},
+                {
+                    "error": {
+                        "code": "INVALID_OPERATION",
+                        "message": "Invalid operation.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

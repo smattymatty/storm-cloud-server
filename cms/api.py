@@ -216,8 +216,7 @@ class PageListView(StormCloudBaseAPIView):
 
         # Get view counts for all pages
         stats_map = {
-            s.page_path: s.view_count
-            for s in PageStats.objects.filter(owner=owner)
+            s.page_path: s.view_count for s in PageStats.objects.filter(owner=owner)
         }
 
         # Sort pages (handle view_count sort specially since it's from different table)
@@ -496,7 +495,9 @@ class StaleCleanupView(StormCloudBaseAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        deleted = PageFileMapping.cleanup_stale(get_user_from_request(request), hours=hours)
+        deleted = PageFileMapping.cleanup_stale(
+            get_user_from_request(request), hours=hours
+        )
 
         return Response(
             {
@@ -568,7 +569,10 @@ class FileFlagsView(StormCloudBaseAPIView):
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string"},
-                    "flags": {"type": "array", "items": {"$ref": "#/components/schemas/ContentFlag"}},
+                    "flags": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/ContentFlag"},
+                    },
                 },
             },
         },
@@ -580,7 +584,12 @@ class FileFlagsView(StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -648,11 +657,18 @@ class SetFlagView(StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = SetFlagSerializer(data=request.data, context={"flag_type": flag_type})
+        serializer = SetFlagSerializer(
+            data=request.data, context={"flag_type": flag_type}
+        )
         serializer.is_valid(raise_exception=True)
 
         flag, created = ContentFlag.objects.get_or_create(
@@ -689,7 +705,10 @@ class FlagHistoryView(StormCloudBaseAPIView):
                 "type": "object",
                 "properties": {
                     "flag_type": {"type": "string"},
-                    "history": {"type": "array", "items": {"$ref": "#/components/schemas/ContentFlagHistory"}},
+                    "history": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/ContentFlagHistory"},
+                    },
                 },
             },
         },
@@ -714,7 +733,12 @@ class FlagHistoryView(StormCloudBaseAPIView):
             stored_file = StoredFile.objects.get(owner=request.user.account, path=path)
         except StoredFile.DoesNotExist:
             return Response(
-                {"error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {path}"}},
+                {
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {path}",
+                    }
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -751,8 +775,7 @@ class FlagListView(StormCloudBaseAPIView):
     @extend_schema(
         summary="List files with flags",
         description=(
-            "List all files that have any flags. "
-            "Supports filtering by flag status."
+            "List all files that have any flags. " "Supports filtering by flag status."
         ),
         parameters=[
             OpenApiParameter(
@@ -776,7 +799,10 @@ class FlagListView(StormCloudBaseAPIView):
                 "type": "object",
                 "properties": {
                     "count": {"type": "integer"},
-                    "files": {"type": "array", "items": {"$ref": "#/components/schemas/FileWithFlags"}},
+                    "files": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/FileWithFlags"},
+                    },
                 },
             },
         },
@@ -788,7 +814,9 @@ class FlagListView(StormCloudBaseAPIView):
         # Get query parameters
         ai_generated_filter = request.query_params.get("ai_generated")
         user_approved_filter = request.query_params.get("user_approved")
-        needs_review_filter = request.query_params.get("needs_review", "").lower() == "true"
+        needs_review_filter = (
+            request.query_params.get("needs_review", "").lower() == "true"
+        )
 
         # Build the file list with flag status
         # Get all files for this user that have any flags
@@ -801,7 +829,9 @@ class FlagListView(StormCloudBaseAPIView):
         for stored_file in files_with_flags:
             # Get flag status
             ai_flag = stored_file.content_flags.filter(flag_type="ai_generated").first()
-            approved_flag = stored_file.content_flags.filter(flag_type="user_approved").first()
+            approved_flag = stored_file.content_flags.filter(
+                flag_type="user_approved"
+            ).first()
 
             ai_generated = ai_flag.is_active if ai_flag else None
             user_approved = approved_flag.is_active if approved_flag else None
@@ -885,44 +915,47 @@ class PageFlagsView(StormCloudBaseAPIView):
         account_owner = request.user.account
 
         # Get all pages for this user
-        pages = PageFileMapping.objects.filter(
-            owner=user_owner
-        ).values('page_path').distinct()
+        pages = (
+            PageFileMapping.objects.filter(owner=user_owner)
+            .values("page_path")
+            .distinct()
+        )
 
         result = []
         for page in pages:
-            page_path = page['page_path']
+            page_path = page["page_path"]
 
             # Get file paths on this page
             file_paths = PageFileMapping.objects.filter(
-                owner=user_owner,
-                page_path=page_path
-            ).values_list('file_path', flat=True)
+                owner=user_owner, page_path=page_path
+            ).values_list("file_path", flat=True)
 
             # Count active flags on those files
             ai_count = ContentFlag.objects.filter(
                 stored_file__owner=account_owner,
                 stored_file__path__in=file_paths,
-                flag_type='ai_generated',
-                is_active=True
+                flag_type="ai_generated",
+                is_active=True,
             ).count()
 
             approved_count = ContentFlag.objects.filter(
                 stored_file__owner=account_owner,
                 stored_file__path__in=file_paths,
-                flag_type='user_approved',
-                is_active=True
+                flag_type="user_approved",
+                is_active=True,
             ).count()
 
-            result.append({
-                'page_path': page_path,
-                'flags': {
-                    'ai_generated': ai_count,
-                    'user_approved': approved_count,
+            result.append(
+                {
+                    "page_path": page_path,
+                    "flags": {
+                        "ai_generated": ai_count,
+                        "user_approved": approved_count,
+                    },
                 }
-            })
+            )
 
-        return Response({'pages': result})
+        return Response({"pages": result})
 
 
 class PendingReviewView(StormCloudBaseAPIView):
@@ -943,7 +976,10 @@ class PendingReviewView(StormCloudBaseAPIView):
                 "type": "object",
                 "properties": {
                     "count": {"type": "integer"},
-                    "files": {"type": "array", "items": {"$ref": "#/components/schemas/FileWithFlags"}},
+                    "files": {
+                        "type": "array",
+                        "items": {"$ref": "#/components/schemas/FileWithFlags"},
+                    },
                 },
             },
         },

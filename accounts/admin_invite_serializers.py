@@ -29,10 +29,12 @@ class AdminInviteSerializer(serializers.Serializer):
 
     id = serializers.UUIDField()
     token = serializers.CharField()
-    type = serializers.ChoiceField(choices=['org', 'platform'])
+    type = serializers.ChoiceField(choices=["org", "platform"])
     email = serializers.EmailField(allow_null=True)
     name = serializers.CharField()
-    status = serializers.ChoiceField(choices=['pending', 'accepted', 'expired', 'revoked'])
+    status = serializers.ChoiceField(
+        choices=["pending", "accepted", "expired", "revoked"]
+    )
     created_at = serializers.DateTimeField()
     expires_at = serializers.DateTimeField(allow_null=True)
     accepted_at = serializers.DateTimeField(allow_null=True)
@@ -65,3 +67,32 @@ class AdminInviteResendResponseSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     email = serializers.EmailField()
     message = serializers.CharField()
+
+
+class AdminInviteBulkRevokeRequestSerializer(serializers.Serializer):
+    """Request serializer for bulk revoke action."""
+
+    ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        min_length=1,
+        max_length=100,
+        help_text="List of invite IDs to revoke (1-100)",
+    )
+
+
+class AdminInviteBulkRevokeResultSerializer(serializers.Serializer):
+    """Serializer for a single result in bulk revoke response."""
+
+    id = serializers.UUIDField()
+    status = serializers.CharField(required=False)
+    revoked_at = serializers.DateTimeField(required=False, allow_null=True)
+    error = serializers.CharField(required=False)
+    message = serializers.CharField(required=False)
+
+
+class AdminInviteBulkRevokeResponseSerializer(serializers.Serializer):
+    """Response serializer for bulk revoke action."""
+
+    revoked = serializers.IntegerField()
+    failed = serializers.IntegerField()
+    results = AdminInviteBulkRevokeResultSerializer(many=True)

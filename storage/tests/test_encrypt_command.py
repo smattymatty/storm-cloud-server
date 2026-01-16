@@ -57,7 +57,9 @@ class EncryptExistingFilesCommandTest(TestCase):
         )
         # Create organization and account for the user
         org = Organization.objects.create(name="Test Org", slug="test-org-encrypt")
-        self.account = Account.objects.create(user=self.user, organization=org, email_verified=True)
+        self.account = Account.objects.create(
+            user=self.user, organization=org, email_verified=True
+        )
         # Create user directory
         user_dir = Path(self.temp_dir) / str(self.account.id)
         user_dir.mkdir(parents=True, exist_ok=True)
@@ -166,7 +168,9 @@ class EncryptExistingFilesCommandTest(TestCase):
 
             # DB should be updated
             stored_file.refresh_from_db()
-            self.assertEqual(stored_file.encryption_method, StoredFile.ENCRYPTION_SERVER)
+            self.assertEqual(
+                stored_file.encryption_method, StoredFile.ENCRYPTION_SERVER
+            )
             self.assertEqual(stored_file.size, 12)  # Original size
             self.assertEqual(stored_file.encrypted_size, 12 + OVERHEAD)
             self.assertEqual(stored_file.key_id, "test-key-1")
@@ -180,7 +184,9 @@ class EncryptExistingFilesCommandTest(TestCase):
             username="other", email="other@example.com", password="pass"
         )
         other_org = Organization.objects.create(name="Other Org", slug="other-org")
-        other_account = Account.objects.create(user=other_user, organization=other_org, email_verified=True)
+        other_account = Account.objects.create(
+            user=other_user, organization=other_org, email_verified=True
+        )
         other_dir = Path(self.temp_dir) / str(other_account.id)
         other_dir.mkdir(parents=True, exist_ok=True)
 
@@ -240,6 +246,7 @@ class EncryptExistingFilesCommandTest(TestCase):
         """Command should skip already encrypted files."""
         # Create an encrypted file via the backend
         from io import BytesIO
+
         user_prefix = str(self.account.id)
         content = BytesIO(b"encrypted content")
 

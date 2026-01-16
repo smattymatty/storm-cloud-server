@@ -97,7 +97,9 @@ class Command(BaseCommand):
             if user_id:
                 self.stdout.write(f"User ID: {user_id}")
             if dry_run:
-                self.stdout.write(self.style.WARNING("DRY RUN: No changes will be made"))
+                self.stdout.write(
+                    self.style.WARNING("DRY RUN: No changes will be made")
+                )
             self.stdout.write("")
 
         # Get users to process
@@ -126,7 +128,9 @@ class Command(BaseCommand):
         # Summary
         self._display_summary(stats, mode, dry_run, verbosity)
 
-    def _process_user(self, user, mode: str, dry_run: bool, verbosity: int, stats: dict):
+    def _process_user(
+        self, user, mode: str, dry_run: bool, verbosity: int, stats: dict
+    ):
         """Process all files for a single user."""
         user_prefix = str(user.account.id)
 
@@ -142,7 +146,9 @@ class Command(BaseCommand):
                 if stored_file.encryption_method != StoredFile.ENCRYPTION_NONE:
                     stats["already_encrypted"] += 1
                     if verbosity >= 2:
-                        self.stdout.write(f"  [SKIP] {stored_file.path} (already encrypted)")
+                        self.stdout.write(
+                            f"  [SKIP] {stored_file.path} (already encrypted)"
+                        )
                     continue
 
                 # Verify file exists and check actual encryption
@@ -153,7 +159,9 @@ class Command(BaseCommand):
                 except FileNotFoundError:
                     if verbosity >= 2:
                         self.stdout.write(
-                            self.style.WARNING(f"  [SKIP] {stored_file.path} (file not found)")
+                            self.style.WARNING(
+                                f"  [SKIP] {stored_file.path} (file not found)"
+                            )
                         )
                     continue
 
@@ -220,9 +228,15 @@ class Command(BaseCommand):
         stored_file.encrypted_size = encrypted_size
         stored_file.encryption_method = StoredFile.ENCRYPTION_SERVER
         stored_file.key_id = self.encryption.key_id
-        stored_file.save(update_fields=[
-            "size", "encrypted_size", "encryption_method", "key_id", "updated_at"
-        ])
+        stored_file.save(
+            update_fields=[
+                "size",
+                "encrypted_size",
+                "encryption_method",
+                "key_id",
+                "updated_at",
+            ]
+        )
 
     def _update_db_encryption_state(self, stored_file: StoredFile, full_path: str):
         """Update DB record to reflect actual encryption state on disk."""
@@ -246,9 +260,15 @@ class Command(BaseCommand):
             stored_file.encrypted_size = encrypted_size
             stored_file.encryption_method = StoredFile.ENCRYPTION_SERVER
             stored_file.key_id = self.encryption.key_id
-            stored_file.save(update_fields=[
-                "size", "encrypted_size", "encryption_method", "key_id", "updated_at"
-            ])
+            stored_file.save(
+                update_fields=[
+                    "size",
+                    "encrypted_size",
+                    "encryption_method",
+                    "key_id",
+                    "updated_at",
+                ]
+            )
         except Exception as e:
             logger.error(f"Error updating encryption state for {stored_file.path}: {e}")
 
@@ -289,12 +309,12 @@ class Command(BaseCommand):
                     )
                 )
             else:
-                self.stdout.write(
-                    self.style.SUCCESS("All files are encrypted.")
-                )
+                self.stdout.write(self.style.SUCCESS("All files are encrypted."))
         elif dry_run:
             self.stdout.write(
-                self.style.WARNING("Dry run complete. Run with --force to apply changes.")
+                self.style.WARNING(
+                    "Dry run complete. Run with --force to apply changes."
+                )
             )
         else:
             self.stdout.write(self.style.SUCCESS("Encryption complete."))

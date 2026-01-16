@@ -25,18 +25,23 @@ def render_simple(template_path: Path, context: dict) -> str:
 
         # Extract blocks from child template
         import re
+
         blocks = {}
-        for match in re.finditer(r'{%\s*block\s+(\w+)\s*%}(.*?){%\s*endblock\s*%}', content, re.DOTALL):
+        for match in re.finditer(
+            r"{%\s*block\s+(\w+)\s*%}(.*?){%\s*endblock\s*%}", content, re.DOTALL
+        ):
             blocks[match.group(1)] = match.group(2).strip()
 
         # Replace blocks in base
         for block_name, block_content in blocks.items():
             # Replace the block in base template
-            pattern = r'{%\s*block\s+' + block_name + r'\s*%}.*?{%\s*endblock\s*%}'
+            pattern = r"{%\s*block\s+" + block_name + r"\s*%}.*?{%\s*endblock\s*%}"
             base_content = re.sub(pattern, block_content, base_content, flags=re.DOTALL)
 
         # Remove any remaining empty blocks
-        base_content = re.sub(r'{%\s*block\s+\w+\s*%}\s*{%\s*endblock\s*%}', '', base_content)
+        base_content = re.sub(
+            r"{%\s*block\s+\w+\s*%}\s*{%\s*endblock\s*%}", "", base_content
+        )
 
         content = base_content
 
@@ -52,15 +57,29 @@ def render_simple(template_path: Path, context: dict) -> str:
     for key, value in context.items():
         if value:
             # Remove the if/endif tags but keep content
-            content = re.sub(r'{%\s*if\s+' + key + r'\s*%}(.*?){%\s*endif\s*%}', r'\1', content, flags=re.DOTALL)
+            content = re.sub(
+                r"{%\s*if\s+" + key + r"\s*%}(.*?){%\s*endif\s*%}",
+                r"\1",
+                content,
+                flags=re.DOTALL,
+            )
         else:
             # Remove the entire block
-            content = re.sub(r'{%\s*if\s+' + key + r'\s*%}.*?{%\s*endif\s*%}', '', content, flags=re.DOTALL)
+            content = re.sub(
+                r"{%\s*if\s+" + key + r"\s*%}.*?{%\s*endif\s*%}",
+                "",
+                content,
+                flags=re.DOTALL,
+            )
 
     # Clean up remaining template tags
-    content = re.sub(r'{%\s*csrf_token\s*%}', '<input type="hidden" name="csrftoken" value="fake-csrf">', content)
-    content = re.sub(r'{%.*?%}', '', content)
-    content = re.sub(r'{{.*?}}', '', content)
+    content = re.sub(
+        r"{%\s*csrf_token\s*%}",
+        '<input type="hidden" name="csrftoken" value="fake-csrf">',
+        content,
+    )
+    content = re.sub(r"{%.*?%}", "", content)
+    content = re.sub(r"{{.*?}}", "", content)
 
     return content
 
@@ -85,7 +104,7 @@ def main():
                 "created_at": "Jan 13, 2025 at 14:30",
                 "expires_at": "Jan 20, 2025 at 14:30",
                 "has_password": False,
-            }
+            },
         ),
         (
             "share_protected.html",
@@ -102,7 +121,7 @@ def main():
                 "created_at": "Jan 10, 2025 at 09:15",
                 "expires_at": "",
                 "has_password": True,
-            }
+            },
         ),
         (
             "share_other.html",
@@ -119,17 +138,17 @@ def main():
                 "created_at": "Jan 12, 2025 at 16:45",
                 "expires_at": "Feb 12, 2025 at 16:45",
                 "has_password": False,
-            }
+            },
         ),
         (
             "password.html",
             TEMPLATE_DIR / "password.html",
-            {"token": "protected-token", "error": ""}
+            {"token": "protected-token", "error": ""},
         ),
         (
             "password_error.html",
             TEMPLATE_DIR / "password.html",
-            {"token": "protected-token", "error": "Incorrect password"}
+            {"token": "protected-token", "error": "Incorrect password"},
         ),
         (
             "error_not_found.html",
@@ -138,7 +157,7 @@ def main():
                 "error_code": "not_found",
                 "error_title": "Link Not Found",
                 "error_message": "This share link doesn't exist.",
-            }
+            },
         ),
         (
             "error_expired.html",
@@ -147,7 +166,7 @@ def main():
                 "error_code": "expired",
                 "error_title": "Link Expired",
                 "error_message": "This share link has expired.",
-            }
+            },
         ),
     ]
 

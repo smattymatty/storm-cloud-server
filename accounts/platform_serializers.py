@@ -19,19 +19,19 @@ class PlatformInviteCreateSerializer(serializers.Serializer):
     )
     name = serializers.CharField(
         max_length=255,
-        help_text="Descriptive name for this invite, e.g., 'Acme Corp Onboarding'"
+        help_text="Descriptive name for this invite, e.g., 'Acme Corp Onboarding'",
     )
     quota_gb = serializers.IntegerField(
         default=0,
         min_value=0,
-        help_text="Storage quota for the new org in GB. 0 = unlimited."
+        help_text="Storage quota for the new org in GB. 0 = unlimited.",
     )
     expires_in_days = serializers.IntegerField(
         default=7,
         min_value=1,
         max_value=365,
         required=False,
-        help_text="Days until invite expires. Default 7."
+        help_text="Days until invite expires. Default 7.",
     )
 
 
@@ -44,8 +44,15 @@ class PlatformInviteResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlatformInvite
         fields = [
-            'id', 'key', 'email', 'name', 'is_valid', 'is_used',
-            'quota_gb', 'expires_at', 'created_at'
+            "id",
+            "key",
+            "email",
+            "name",
+            "is_valid",
+            "is_used",
+            "quota_gb",
+            "expires_at",
+            "created_at",
         ]
         read_only_fields = fields
 
@@ -60,8 +67,7 @@ class PlatformInviteValidateSerializer(serializers.Serializer):
     """Serializer for validating a platform invite token (public)."""
 
     token = serializers.CharField(
-        max_length=64,
-        help_text="The platform invite token (pi_xxx)"
+        max_length=64, help_text="The platform invite token (pi_xxx)"
     )
 
 
@@ -78,20 +84,16 @@ class PlatformEnrollSerializer(serializers.Serializer):
     """Serializer for step 1: Create user account (no org yet)."""
 
     token = serializers.CharField(
-        max_length=64,
-        help_text="The platform invite token (pi_xxx)"
+        max_length=64, help_text="The platform invite token (pi_xxx)"
     )
     username = serializers.CharField(
-        max_length=150,
-        help_text="Username for the new account"
+        max_length=150, help_text="Username for the new account"
     )
-    email = serializers.EmailField(
-        help_text="Email address (must match invite email)"
-    )
+    email = serializers.EmailField(help_text="Email address (must match invite email)")
     password = serializers.CharField(
         write_only=True,
-        style={'input_type': 'password'},
-        help_text="Password for the new account"
+        style={"input_type": "password"},
+        help_text="Password for the new account",
     )
 
     def validate_username(self, value):
@@ -134,20 +136,21 @@ class PlatformSetupOrgSerializer(serializers.Serializer):
     """Serializer for step 2: Create organization (authenticated user)."""
 
     organization_name = serializers.CharField(
-        max_length=255,
-        help_text="Name for the new organization"
+        max_length=255, help_text="Name for the new organization"
     )
     organization_slug = serializers.SlugField(
         max_length=255,
         required=False,
         allow_blank=True,
-        help_text="Optional URL slug for organization. Auto-generated if not provided."
+        help_text="Optional URL slug for organization. Auto-generated if not provided.",
     )
 
     def validate_organization_slug(self, value):
         """Check slug is unique if provided."""
         if value and Organization.objects.filter(slug=value).exists():
-            raise serializers.ValidationError("This organization slug is already taken.")
+            raise serializers.ValidationError(
+                "This organization slug is already taken."
+            )
         return value
 
 

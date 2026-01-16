@@ -362,9 +362,11 @@ class AdminPageFlagsView(AdminCmsBaseView):
         target_user = self.get_target_user(user_id)
 
         # Get all pages for this user
-        pages = PageFileMapping.objects.filter(
-            owner=target_user
-        ).values("page_path").distinct()
+        pages = (
+            PageFileMapping.objects.filter(owner=target_user)
+            .values("page_path")
+            .distinct()
+        )
 
         result = []
         for page in pages:
@@ -372,8 +374,7 @@ class AdminPageFlagsView(AdminCmsBaseView):
 
             # Get file paths on this page
             file_paths = PageFileMapping.objects.filter(
-                owner=target_user,
-                page_path=page_path
+                owner=target_user, page_path=page_path
             ).values_list("file_path", flat=True)
 
             # Count active flags on those files
@@ -381,28 +382,32 @@ class AdminPageFlagsView(AdminCmsBaseView):
                 stored_file__owner=target_user.account,
                 stored_file__path__in=file_paths,
                 flag_type="ai_generated",
-                is_active=True
+                is_active=True,
             ).count()
 
             approved_count = ContentFlag.objects.filter(
                 stored_file__owner=target_user.account,
                 stored_file__path__in=file_paths,
                 flag_type="user_approved",
-                is_active=True
+                is_active=True,
             ).count()
 
-            result.append({
-                "page_path": page_path,
-                "flags": {
-                    "ai_generated": ai_count,
-                    "user_approved": approved_count,
+            result.append(
+                {
+                    "page_path": page_path,
+                    "flags": {
+                        "ai_generated": ai_count,
+                        "user_approved": approved_count,
+                    },
                 }
-            })
+            )
 
-        return Response({
-            "pages": result,
-            "target_user": _target_user_response(target_user),
-        })
+        return Response(
+            {
+                "pages": result,
+                "target_user": _target_user_response(target_user),
+            }
+        )
 
 
 # =============================================================================
@@ -452,7 +457,9 @@ class AdminFlagListView(AdminCmsBaseView):
         # Get query parameters
         ai_generated_filter = request.query_params.get("ai_generated")
         user_approved_filter = request.query_params.get("user_approved")
-        needs_review_filter = request.query_params.get("needs_review", "").lower() == "true"
+        needs_review_filter = (
+            request.query_params.get("needs_review", "").lower() == "true"
+        )
 
         # Get all files for this user that have any flags
         files_with_flags = StoredFile.objects.filter(
@@ -464,7 +471,9 @@ class AdminFlagListView(AdminCmsBaseView):
         for stored_file in files_with_flags:
             # Get flag status
             ai_flag = stored_file.content_flags.filter(flag_type="ai_generated").first()
-            approved_flag = stored_file.content_flags.filter(flag_type="user_approved").first()
+            approved_flag = stored_file.content_flags.filter(
+                flag_type="user_approved"
+            ).first()
 
             ai_generated = ai_flag.is_active if ai_flag else None
             user_approved = approved_flag.is_active if approved_flag else None
@@ -600,11 +609,16 @@ class AdminFileFlagsView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
+            stored_file = StoredFile.objects.get(
+                owner=target_user.account, path=file_path
+            )
         except StoredFile.DoesNotExist:
             return Response(
                 {
-                    "error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {file_path}"},
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    },
                     "target_user": _target_user_response(target_user),
                 },
                 status=status.HTTP_404_NOT_FOUND,
@@ -662,7 +676,9 @@ class AdminSetFlagView(AdminCmsBaseView):
         responses={200: ContentFlagSerializer},
         tags=["Admin - CMS"],
     )
-    def put(self, request: Request, user_id: int, file_path: str, flag_type: str) -> Response:
+    def put(
+        self, request: Request, user_id: int, file_path: str, flag_type: str
+    ) -> Response:
         target_user = self.get_target_user(user_id)
 
         # Validate flag_type
@@ -681,17 +697,24 @@ class AdminSetFlagView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
+            stored_file = StoredFile.objects.get(
+                owner=target_user.account, path=file_path
+            )
         except StoredFile.DoesNotExist:
             return Response(
                 {
-                    "error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {file_path}"},
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    },
                     "target_user": _target_user_response(target_user),
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = SetFlagSerializer(data=request.data, context={"flag_type": flag_type})
+        serializer = SetFlagSerializer(
+            data=request.data, context={"flag_type": flag_type}
+        )
         serializer.is_valid(raise_exception=True)
 
         # Admin is recorded as changed_by (audit trail)
@@ -738,7 +761,9 @@ class AdminFlagHistoryView(AdminCmsBaseView):
         responses={200: dict},
         tags=["Admin - CMS"],
     )
-    def get(self, request: Request, user_id: int, file_path: str, flag_type: str) -> Response:
+    def get(
+        self, request: Request, user_id: int, file_path: str, flag_type: str
+    ) -> Response:
         target_user = self.get_target_user(user_id)
 
         # Validate flag_type
@@ -757,11 +782,16 @@ class AdminFlagHistoryView(AdminCmsBaseView):
 
         # Find the file owned by the target user
         try:
-            stored_file = StoredFile.objects.get(owner=target_user.account, path=file_path)
+            stored_file = StoredFile.objects.get(
+                owner=target_user.account, path=file_path
+            )
         except StoredFile.DoesNotExist:
             return Response(
                 {
-                    "error": {"code": "FILE_NOT_FOUND", "message": f"File not found: {file_path}"},
+                    "error": {
+                        "code": "FILE_NOT_FOUND",
+                        "message": f"File not found: {file_path}",
+                    },
                     "target_user": _target_user_response(target_user),
                 },
                 status=status.HTTP_404_NOT_FOUND,

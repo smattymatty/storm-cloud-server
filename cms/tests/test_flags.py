@@ -72,7 +72,9 @@ class SetFlagTests(ContentFlagBaseTestCase):
         self.assertEqual(response.data["metadata"]["model"], "claude-3.5-sonnet")
 
         # Verify database
-        flag = ContentFlag.objects.get(stored_file=self.test_file, flag_type="ai_generated")
+        flag = ContentFlag.objects.get(
+            stored_file=self.test_file, flag_type="ai_generated"
+        )
         self.assertTrue(flag.is_active)
         self.assertEqual(flag.metadata["model"], "claude-3.5-sonnet")
 
@@ -407,10 +409,15 @@ class FlagAuthTests(ContentFlagBaseTestCase):
         # Create another user and their file
         from django.contrib.auth import get_user_model
         from accounts.models import Account, Organization
+
         User = get_user_model()
         other_user = User.objects.create_user(username="other", password="pass")
-        other_org = Organization.objects.create(name="Other Org", slug="other-org-flags")
-        other_account = Account.objects.create(user=other_user, organization=other_org, email_verified=True)
+        other_org = Organization.objects.create(
+            name="Other Org", slug="other-org-flags"
+        )
+        other_account = Account.objects.create(
+            user=other_user, organization=other_org, email_verified=True
+        )
         other_file = StoredFile.objects.create(
             owner=other_account,
             path="other/secret.md",

@@ -16,7 +16,8 @@ class LoginRateThrottle(UserRateThrottle):
     Applied to: /api/v1/auth/login/
     Purpose: Prevent brute force password attacks
     """
-    scope = 'login'
+
+    scope = "login"
 
 
 class AuthRateThrottle(UserRateThrottle):
@@ -32,7 +33,8 @@ class AuthRateThrottle(UserRateThrottle):
 
     Purpose: Prevent spam registration and API key farming
     """
-    scope = 'auth'
+
+    scope = "auth"
 
 
 class UploadRateThrottle(UserRateThrottle):
@@ -45,7 +47,8 @@ class UploadRateThrottle(UserRateThrottle):
     Applied to: /api/v1/files/*/upload/
     Purpose: Manage bandwidth and storage resources
     """
-    scope = 'uploads'
+
+    scope = "uploads"
 
 
 class DownloadRateThrottle(UserRateThrottle):
@@ -58,7 +61,8 @@ class DownloadRateThrottle(UserRateThrottle):
     Applied to: /api/v1/files/*/download/
     Purpose: Manage bandwidth, higher than upload for read-heavy workloads
     """
-    scope = 'downloads'
+
+    scope = "downloads"
 
 
 class AnonLoginThrottle(AnonRateThrottle):
@@ -71,7 +75,8 @@ class AnonLoginThrottle(AnonRateThrottle):
     Applied to: /api/v1/auth/login/ for unauthenticated requests
     Purpose: Additional IP-based protection against distributed brute force
     """
-    scope = 'anon_login'
+
+    scope = "anon_login"
 
 
 class AnonRegistrationThrottle(AnonRateThrottle):
@@ -84,7 +89,8 @@ class AnonRegistrationThrottle(AnonRateThrottle):
     Applied to: /api/v1/auth/register/ for unauthenticated requests
     Purpose: Prevent spam account creation from single IP
     """
-    scope = 'anon_registration'
+
+    scope = "anon_registration"
 
 
 class PublicShareRateThrottle(AnonRateThrottle):
@@ -97,7 +103,8 @@ class PublicShareRateThrottle(AnonRateThrottle):
     Applied to: /api/v1/public/{token}/ endpoints
     Purpose: Prevent abuse of public share links
     """
-    scope = 'public_share'
+
+    scope = "public_share"
 
 
 class PublicShareDownloadRateThrottle(AnonRateThrottle):
@@ -110,4 +117,5 @@ class PublicShareDownloadRateThrottle(AnonRateThrottle):
     Applied to: /api/v1/public/{token}/download/ endpoint
     Purpose: Prevent bandwidth abuse via downloads
     """
-    scope = 'public_share_download'
+
+    scope = "public_share_download"

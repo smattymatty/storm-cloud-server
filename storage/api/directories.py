@@ -9,11 +9,13 @@ from core.utils import PathValidationError, normalize_path
 from core.views import StormCloudBaseAPIView
 
 from storage.models import FileAuditLog, StoredFile
-from storage.serializers import DirectoryListResponseSerializer, FileInfoResponseSerializer
+from storage.serializers import (
+    DirectoryListResponseSerializer,
+    FileInfoResponseSerializer,
+)
 from storage.services import DirectoryService
 
-# Import emit_user_file_action from legacy module
-from storage.api_legacy import emit_user_file_action
+from storage.api.utils import emit_user_file_action
 
 
 class DirectoryListBaseView(StormCloudBaseAPIView):
@@ -27,7 +29,9 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
         cursor = request.query_params.get("cursor")
         search = request.query_params.get("search", "").strip() or None
 
-        result = service.list_directory(dir_path, limit=limit, cursor=cursor, search=search)
+        result = service.list_directory(
+            dir_path, limit=limit, cursor=cursor, search=search
+        )
 
         if not result.success:
             error_status = status.HTTP_400_BAD_REQUEST
@@ -45,13 +49,15 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
                 status=error_status,
             )
 
-        return Response({
-            "path": result.path,
-            "entries": result.entries,
-            "count": result.count,
-            "total": result.total,
-            "next_cursor": result.next_cursor,
-        })
+        return Response(
+            {
+                "path": result.path,
+                "entries": result.entries,
+                "count": result.count,
+                "total": result.total,
+                "next_cursor": result.next_cursor,
+            }
+        )
 
 
 class DirectoryListRootView(DirectoryListBaseView):

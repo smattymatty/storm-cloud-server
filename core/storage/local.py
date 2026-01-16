@@ -63,7 +63,7 @@ class LocalStorageBackend(AbstractStorageBackend):
             ValueError: If path attempts directory traversal
         """
         # Strip leading slashes if present
-        path = path.lstrip('/')
+        path = path.lstrip("/")
 
         # Resolve to absolute path
         full_path = (self.storage_root / path).resolve()
@@ -91,7 +91,7 @@ class LocalStorageBackend(AbstractStorageBackend):
             ValueError: If path attempts directory traversal
         """
         # Strip leading slashes if present
-        path = path.lstrip('/') if path else ''
+        path = path.lstrip("/") if path else ""
 
         # Org's shared storage root
         org_root = self.shared_root / str(org_id)
@@ -124,7 +124,9 @@ class LocalStorageBackend(AbstractStorageBackend):
         org_root.mkdir(parents=True, exist_ok=True)
         return org_root
 
-    def _shared_file_info(self, path: Path, relative_path: str, org_id: str | int) -> FileInfo:
+    def _shared_file_info(
+        self, path: Path, relative_path: str, org_id: str | int
+    ) -> FileInfo:
         """
         Create FileInfo from filesystem path in shared storage.
 
@@ -144,7 +146,7 @@ class LocalStorageBackend(AbstractStorageBackend):
             size=stat.st_size if path.is_file() else 0,
             is_directory=path.is_dir(),
             modified_at=datetime.fromtimestamp(stat.st_mtime),
-            content_type=mimetypes.guess_type(path.name)[0] if path.is_file() else None
+            content_type=mimetypes.guess_type(path.name)[0] if path.is_file() else None,
         )
 
     # ==========================================================================
@@ -291,7 +293,11 @@ class LocalStorageBackend(AbstractStorageBackend):
         return self._shared_file_info(new_full_path, new_relative_path, org_id)
 
     def copy_shared(
-        self, org_id: str | int, source: str, destination: str, new_name: str | None = None
+        self,
+        org_id: str | int,
+        source: str,
+        destination: str,
+        new_name: str | None = None,
     ) -> FileInfo:
         """Copy shared file or directory to new location."""
         import shutil
@@ -359,7 +365,7 @@ class LocalStorageBackend(AbstractStorageBackend):
             size=stat.st_size if path.is_file() else 0,
             is_directory=path.is_dir(),
             modified_at=datetime.fromtimestamp(stat.st_mtime),
-            content_type=mimetypes.guess_type(path.name)[0] if path.is_file() else None
+            content_type=mimetypes.guess_type(path.name)[0] if path.is_file() else None,
         )
 
     def save(self, path: str, content: BinaryIO) -> FileInfo:
@@ -448,7 +454,9 @@ class LocalStorageBackend(AbstractStorageBackend):
             # Invalid path (traversal attempt)
             return False
 
-    def list(self, path: str = "", glob_pattern: str | None = None) -> Iterator[FileInfo]:
+    def list(
+        self, path: str = "", glob_pattern: str | None = None
+    ) -> Iterator[FileInfo]:
         """List contents of directory."""
         full_path = self._resolve_path(path) if path else self.storage_root
 
@@ -486,70 +494,72 @@ class LocalStorageBackend(AbstractStorageBackend):
     def move(self, source: str, destination: str) -> FileInfo:
         """Move file or directory to new location."""
         import shutil
-        
+
         source_full = self._resolve_path(source)
         dest_full = self._resolve_path(destination)
-        
+
         # Validate source exists
         if not source_full.exists():
             raise FileNotFoundError(f"Source not found: {source}")
-        
+
         # Validate destination is a directory
         if not dest_full.exists():
             raise FileNotFoundError(f"Destination directory not found: {destination}")
-        
+
         if not dest_full.is_dir():
             raise NotADirectoryError(f"Destination is not a directory: {destination}")
-        
+
         # Calculate new path
         source_name = source_full.name
         new_full_path = dest_full / source_name
-        
+
         # Check for collision
         if new_full_path.exists():
             raise FileExistsError(
                 f"File '{source_name}' already exists at destination: {destination}"
             )
-        
+
         # Perform move
         shutil.move(str(source_full), str(new_full_path))
-        
+
         # Calculate relative path for return value
         new_relative_path = str(new_full_path.relative_to(self.storage_root))
-        
+
         return self._file_info(new_full_path, new_relative_path)
 
-    def copy(self, source: str, destination: str, new_name: str | None = None) -> FileInfo:
+    def copy(
+        self, source: str, destination: str, new_name: str | None = None
+    ) -> FileInfo:
         """Copy file or directory to new location."""
         import shutil
-        
+
         source_full = self._resolve_path(source)
         dest_full = self._resolve_path(destination)
-        
+
         # Validate source exists
         if not source_full.exists():
             raise FileNotFoundError(f"Source not found: {source}")
-        
+
         # Validate destination is a directory
         if not dest_full.exists():
             raise FileNotFoundError(f"Destination directory not found: {destination}")
-        
+
         if not dest_full.is_dir():
             raise NotADirectoryError(f"Destination is not a directory: {destination}")
-        
+
         # Determine final name (with collision handling)
         if new_name:
             final_name = new_name
         else:
             final_name = source_full.name
             new_full_path = dest_full / final_name
-            
+
             # Handle name collisions by appending " (copy)", " (copy 2)", etc.
             if new_full_path.exists():
                 base_name = source_full.stem
                 extension = source_full.suffix
                 counter = 1
-                
+
                 while new_full_path.exists():
                     if counter == 1:
                         final_name = f"{base_name} (copy){extension}"
@@ -557,16 +567,16 @@ class LocalStorageBackend(AbstractStorageBackend):
                         final_name = f"{base_name} (copy {counter}){extension}"
                     new_full_path = dest_full / final_name
                     counter += 1
-        
+
         new_full_path = dest_full / final_name
-        
+
         # Perform copy
         if source_full.is_dir():
             shutil.copytree(str(source_full), str(new_full_path))
         else:
             shutil.copy2(str(source_full), str(new_full_path))
-        
+
         # Calculate relative path for return value
         new_relative_path = str(new_full_path.relative_to(self.storage_root))
-        
+
         return self._file_info(new_full_path, new_relative_path)

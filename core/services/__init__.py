@@ -9,8 +9,8 @@ from .index_sync import IndexSyncService
 from .bulk import BulkOperationService, BulkOperationResult, BulkOperationStats
 
 __all__ = [
-    'IndexSyncService',
-    'BulkOperationService',
-    'BulkOperationResult',
-    'BulkOperationStats',
+    "IndexSyncService",
+    "BulkOperationService",
+    "BulkOperationResult",
+    "BulkOperationStats",
 ]

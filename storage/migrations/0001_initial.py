@@ -10,115 +10,380 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('accounts', '0001_initial'),
+        ("accounts", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='StoredFile',
+            name="StoredFile",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('path', models.CharField(max_length=1024)),
-                ('name', models.CharField(max_length=255)),
-                ('size', models.BigIntegerField(default=0)),
-                ('content_type', models.CharField(blank=True, max_length=100)),
-                ('is_directory', models.BooleanField(default=False)),
-                ('parent_path', models.CharField(blank=True, max_length=1024)),
-                ('sort_position', models.IntegerField(blank=True, db_index=True, help_text='Custom sort position (lower = first, null = alphabetical)', null=True)),
-                ('encryption_method', models.CharField(choices=[('none', 'No encryption'), ('server', 'Server-side (master key)'), ('server-user', 'Server-side (per-user key)'), ('client', 'Client-side (user holds key)')], default='none', help_text='Encryption method used for this file', max_length=20)),
-                ('key_id', models.CharField(blank=True, help_text='Identifier for encryption key (for key rotation)', max_length=255, null=True)),
-                ('encrypted_filename', models.CharField(blank=True, help_text='Encrypted filename for client-side encrypted files', max_length=1024, null=True)),
-                ('encrypted_size', models.BigIntegerField(blank=True, help_text='Size on disk including encryption overhead (ADR 010)', null=True)),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='files', to='accounts.account')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("path", models.CharField(max_length=1024)),
+                ("name", models.CharField(max_length=255)),
+                ("size", models.BigIntegerField(default=0)),
+                ("content_type", models.CharField(blank=True, max_length=100)),
+                ("is_directory", models.BooleanField(default=False)),
+                ("parent_path", models.CharField(blank=True, max_length=1024)),
+                (
+                    "sort_position",
+                    models.IntegerField(
+                        blank=True,
+                        db_index=True,
+                        help_text="Custom sort position (lower = first, null = alphabetical)",
+                        null=True,
+                    ),
+                ),
+                (
+                    "encryption_method",
+                    models.CharField(
+                        choices=[
+                            ("none", "No encryption"),
+                            ("server", "Server-side (master key)"),
+                            ("server-user", "Server-side (per-user key)"),
+                            ("client", "Client-side (user holds key)"),
+                        ],
+                        default="none",
+                        help_text="Encryption method used for this file",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "key_id",
+                    models.CharField(
+                        blank=True,
+                        help_text="Identifier for encryption key (for key rotation)",
+                        max_length=255,
+                        null=True,
+                    ),
+                ),
+                (
+                    "encrypted_filename",
+                    models.CharField(
+                        blank=True,
+                        help_text="Encrypted filename for client-side encrypted files",
+                        max_length=1024,
+                        null=True,
+                    ),
+                ),
+                (
+                    "encrypted_size",
+                    models.BigIntegerField(
+                        blank=True,
+                        help_text="Size on disk including encryption overhead (ADR 010)",
+                        null=True,
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="files",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Stored File',
-                'verbose_name_plural': 'Stored Files',
-                'ordering': ['path'],
+                "verbose_name": "Stored File",
+                "verbose_name_plural": "Stored Files",
+                "ordering": ["path"],
             },
         ),
         migrations.CreateModel(
-            name='ShareLink',
+            name="ShareLink",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('file_path', models.CharField(editable=False, help_text='Auto-populated from stored_file.path', max_length=1024)),
-                ('token', models.UUIDField(db_index=True, default=uuid.uuid4, unique=True)),
-                ('custom_slug', models.CharField(blank=True, db_index=True, help_text='Custom URL slug (alphanumeric and hyphens, 3-64 chars)', max_length=64, null=True, unique=True)),
-                ('password_hash', models.CharField(blank=True, help_text='Hashed password for protected links', max_length=128, null=True)),
-                ('expiry_days', models.IntegerField(choices=[(1, '1 day'), (3, '3 days'), (7, '7 days'), (30, '30 days'), (90, '90 days'), (0, 'Never')], default=7, help_text='Number of days until link expires (0 = never)')),
-                ('expires_at', models.DateTimeField(blank=True, help_text='Calculated expiration timestamp', null=True)),
-                ('allow_download', models.BooleanField(default=True, help_text='Allow file download (for future read-only links)')),
-                ('view_count', models.PositiveIntegerField(default=0, help_text="Number of times this link's info was viewed")),
-                ('download_count', models.PositiveIntegerField(default=0, help_text='Number of times the file was downloaded')),
-                ('last_accessed_at', models.DateTimeField(blank=True, help_text='Last time this link was viewed or downloaded', null=True)),
-                ('is_active', models.BooleanField(default=True, help_text='Whether this link is active (false = revoked)')),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='share_links', to='accounts.account')),
-                ('stored_file', models.ForeignKey(help_text='The file being shared', on_delete=django.db.models.deletion.CASCADE, related_name='share_links', to='storage.storedfile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "file_path",
+                    models.CharField(
+                        editable=False,
+                        help_text="Auto-populated from stored_file.path",
+                        max_length=1024,
+                    ),
+                ),
+                (
+                    "token",
+                    models.UUIDField(db_index=True, default=uuid.uuid4, unique=True),
+                ),
+                (
+                    "custom_slug",
+                    models.CharField(
+                        blank=True,
+                        db_index=True,
+                        help_text="Custom URL slug (alphanumeric and hyphens, 3-64 chars)",
+                        max_length=64,
+                        null=True,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "password_hash",
+                    models.CharField(
+                        blank=True,
+                        help_text="Hashed password for protected links",
+                        max_length=128,
+                        null=True,
+                    ),
+                ),
+                (
+                    "expiry_days",
+                    models.IntegerField(
+                        choices=[
+                            (1, "1 day"),
+                            (3, "3 days"),
+                            (7, "7 days"),
+                            (30, "30 days"),
+                            (90, "90 days"),
+                            (0, "Never"),
+                        ],
+                        default=7,
+                        help_text="Number of days until link expires (0 = never)",
+                    ),
+                ),
+                (
+                    "expires_at",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Calculated expiration timestamp",
+                        null=True,
+                    ),
+                ),
+                (
+                    "allow_download",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Allow file download (for future read-only links)",
+                    ),
+                ),
+                (
+                    "view_count",
+                    models.PositiveIntegerField(
+                        default=0,
+                        help_text="Number of times this link's info was viewed",
+                    ),
+                ),
+                (
+                    "download_count",
+                    models.PositiveIntegerField(
+                        default=0, help_text="Number of times the file was downloaded"
+                    ),
+                ),
+                (
+                    "last_accessed_at",
+                    models.DateTimeField(
+                        blank=True,
+                        help_text="Last time this link was viewed or downloaded",
+                        null=True,
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=True,
+                        help_text="Whether this link is active (false = revoked)",
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="share_links",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "stored_file",
+                    models.ForeignKey(
+                        help_text="The file being shared",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="share_links",
+                        to="storage.storedfile",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Share Link',
-                'verbose_name_plural': 'Share Links',
-                'ordering': ['-created_at'],
+                "verbose_name": "Share Link",
+                "verbose_name_plural": "Share Links",
+                "ordering": ["-created_at"],
             },
         ),
         migrations.CreateModel(
-            name='FileAuditLog',
+            name="FileAuditLog",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('is_admin_action', models.BooleanField(db_index=True, default=False, help_text="True if admin acted on another user's files")),
-                ('action', models.CharField(choices=[('list', 'List directory'), ('upload', 'Upload file'), ('download', 'Download file'), ('delete', 'Delete file'), ('move', 'Move file'), ('copy', 'Copy file'), ('edit', 'Edit content'), ('preview', 'Preview content'), ('create_dir', 'Create directory'), ('bulk_delete', 'Bulk delete'), ('bulk_move', 'Bulk move'), ('bulk_copy', 'Bulk copy')], db_index=True, max_length=20)),
-                ('path', models.CharField(help_text='Primary path affected', max_length=1024)),
-                ('destination_path', models.CharField(blank=True, help_text='Destination path for move/copy operations', max_length=1024, null=True)),
-                ('paths_affected', models.JSONField(blank=True, help_text='List of paths for bulk operations', null=True)),
-                ('success', models.BooleanField(default=True)),
-                ('error_code', models.CharField(blank=True, max_length=50, null=True)),
-                ('error_message', models.TextField(blank=True, null=True)),
-                ('ip_address', models.GenericIPAddressField(blank=True, null=True)),
-                ('user_agent', models.CharField(blank=True, max_length=500, null=True)),
-                ('file_size', models.BigIntegerField(blank=True, null=True)),
-                ('content_type', models.CharField(blank=True, max_length=100, null=True)),
-                ('performed_by', models.ForeignKey(help_text='Account who performed the action (admin for admin actions)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='file_actions_performed', to='accounts.account')),
-                ('target_user', models.ForeignKey(help_text='Account whose files were affected', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='file_actions_received', to='accounts.account')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "is_admin_action",
+                    models.BooleanField(
+                        db_index=True,
+                        default=False,
+                        help_text="True if admin acted on another user's files",
+                    ),
+                ),
+                (
+                    "action",
+                    models.CharField(
+                        choices=[
+                            ("list", "List directory"),
+                            ("upload", "Upload file"),
+                            ("download", "Download file"),
+                            ("delete", "Delete file"),
+                            ("move", "Move file"),
+                            ("copy", "Copy file"),
+                            ("edit", "Edit content"),
+                            ("preview", "Preview content"),
+                            ("create_dir", "Create directory"),
+                            ("bulk_delete", "Bulk delete"),
+                            ("bulk_move", "Bulk move"),
+                            ("bulk_copy", "Bulk copy"),
+                        ],
+                        db_index=True,
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "path",
+                    models.CharField(
+                        help_text="Primary path affected", max_length=1024
+                    ),
+                ),
+                (
+                    "destination_path",
+                    models.CharField(
+                        blank=True,
+                        help_text="Destination path for move/copy operations",
+                        max_length=1024,
+                        null=True,
+                    ),
+                ),
+                (
+                    "paths_affected",
+                    models.JSONField(
+                        blank=True,
+                        help_text="List of paths for bulk operations",
+                        null=True,
+                    ),
+                ),
+                ("success", models.BooleanField(default=True)),
+                ("error_code", models.CharField(blank=True, max_length=50, null=True)),
+                ("error_message", models.TextField(blank=True, null=True)),
+                ("ip_address", models.GenericIPAddressField(blank=True, null=True)),
+                ("user_agent", models.CharField(blank=True, max_length=500, null=True)),
+                ("file_size", models.BigIntegerField(blank=True, null=True)),
+                (
+                    "content_type",
+                    models.CharField(blank=True, max_length=100, null=True),
+                ),
+                (
+                    "performed_by",
+                    models.ForeignKey(
+                        help_text="Account who performed the action (admin for admin actions)",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="file_actions_performed",
+                        to="accounts.account",
+                    ),
+                ),
+                (
+                    "target_user",
+                    models.ForeignKey(
+                        help_text="Account whose files were affected",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="file_actions_received",
+                        to="accounts.account",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'File Audit Log',
-                'verbose_name_plural': 'File Audit Logs',
-                'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['performed_by', '-created_at'], name='storage_fil_perform_643e24_idx'), models.Index(fields=['target_user', '-created_at'], name='storage_fil_target__a17774_idx'), models.Index(fields=['action', '-created_at'], name='storage_fil_action_5068c7_idx'), models.Index(fields=['-created_at'], name='storage_fil_created_3691ed_idx')],
+                "verbose_name": "File Audit Log",
+                "verbose_name_plural": "File Audit Logs",
+                "ordering": ["-created_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["performed_by", "-created_at"],
+                        name="storage_fil_perform_643e24_idx",
+                    ),
+                    models.Index(
+                        fields=["target_user", "-created_at"],
+                        name="storage_fil_target__a17774_idx",
+                    ),
+                    models.Index(
+                        fields=["action", "-created_at"],
+                        name="storage_fil_action_5068c7_idx",
+                    ),
+                    models.Index(
+                        fields=["-created_at"], name="storage_fil_created_3691ed_idx"
+                    ),
+                ],
             },
         ),
         migrations.AddIndex(
-            model_name='storedfile',
-            index=models.Index(fields=['owner', 'parent_path'], name='storage_sto_owner_i_522cc6_idx'),
+            model_name="storedfile",
+            index=models.Index(
+                fields=["owner", "parent_path"], name="storage_sto_owner_i_522cc6_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='storedfile',
-            index=models.Index(fields=['owner', 'path'], name='storage_sto_owner_i_b8340b_idx'),
+            model_name="storedfile",
+            index=models.Index(
+                fields=["owner", "path"], name="storage_sto_owner_i_b8340b_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='storedfile',
-            index=models.Index(fields=['encryption_method'], name='storage_sto_encrypt_949213_idx'),
+            model_name="storedfile",
+            index=models.Index(
+                fields=["encryption_method"], name="storage_sto_encrypt_949213_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='storedfile',
-            unique_together={('owner', 'path')},
+            name="storedfile",
+            unique_together={("owner", "path")},
         ),
         migrations.AddIndex(
-            model_name='sharelink',
-            index=models.Index(fields=['owner', 'stored_file'], name='storage_sha_owner_i_f8dcab_idx'),
+            model_name="sharelink",
+            index=models.Index(
+                fields=["owner", "stored_file"], name="storage_sha_owner_i_f8dcab_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='sharelink',
-            index=models.Index(fields=['expires_at'], name='storage_sha_expires_8aacd1_idx'),
+            model_name="sharelink",
+            index=models.Index(
+                fields=["expires_at"], name="storage_sha_expires_8aacd1_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='sharelink',
-            index=models.Index(fields=['is_active'], name='storage_sha_is_acti_e0e6b3_idx'),
+            model_name="sharelink",
+            index=models.Index(
+                fields=["is_active"], name="storage_sha_is_acti_e0e6b3_idx"
+            ),
         ),
     ]

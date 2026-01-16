@@ -16,10 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def trigger_webhook(
-    api_key: APIKey,
-    event: str,
-    path: str,
-    extra_data: Optional[dict] = None
+    api_key: APIKey, event: str, path: str, extra_data: Optional[dict] = None
 ) -> None:
     """
     Trigger webhook for an API key (non-blocking).
@@ -47,10 +44,7 @@ def trigger_webhook(
 
 
 def _deliver_webhook(
-    api_key_id: str,
-    event: str,
-    path: str,
-    extra_data: Optional[dict] = None
+    api_key_id: str, event: str, path: str, extra_data: Optional[dict] = None
 ) -> None:
     """
     Actually deliver the webhook (runs in background thread).
@@ -79,9 +73,7 @@ def _deliver_webhook(
     # Sign payload
     payload_bytes = json.dumps(payload, sort_keys=True).encode()
     signature = hmac.new(
-        api_key.webhook_secret.encode(),
-        payload_bytes,
-        hashlib.sha256
+        api_key.webhook_secret.encode(), payload_bytes, hashlib.sha256
     ).hexdigest()
 
     headers = {

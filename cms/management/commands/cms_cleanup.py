@@ -37,18 +37,14 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
 
         if hours < 24:
-            self.stderr.write(
-                self.style.ERROR("Minimum threshold is 24 hours")
-            )
+            self.stderr.write(self.style.ERROR("Minimum threshold is 24 hours"))
             return
 
         if username:
             try:
                 users = [User.objects.get(username=username)]
             except User.DoesNotExist:
-                self.stderr.write(
-                    self.style.ERROR(f"User not found: {username}")
-                )
+                self.stderr.write(self.style.ERROR(f"User not found: {username}"))
                 return
         else:
             # All users with mappings
@@ -87,10 +83,6 @@ class Command(BaseCommand):
                     )
 
         if dry_run:
-            self.stdout.write(
-                self.style.WARNING("\nDry run - nothing deleted")
-            )
+            self.stdout.write(self.style.WARNING("\nDry run - nothing deleted"))
         else:
-            self.stdout.write(
-                self.style.SUCCESS(f"\nTotal deleted: {total_deleted}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"\nTotal deleted: {total_deleted}"))

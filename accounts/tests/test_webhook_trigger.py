@@ -16,12 +16,12 @@ class WebhookTriggerTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass"
+            username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
         self.api_key = APIKey.objects.create(
             organization=self.org,
             name="test-key",
@@ -105,6 +105,7 @@ class WebhookTriggerTests(TestCase):
     def test_deliver_webhook_timeout(self, mock_post):
         """Timeout updates status."""
         import requests
+
         mock_post.side_effect = requests.Timeout()
 
         _deliver_webhook(self.api_key.id, "file.updated", "pages/about.md")
@@ -117,6 +118,7 @@ class WebhookTriggerTests(TestCase):
     def test_deliver_webhook_connection_error(self, mock_post):
         """Connection error updates status."""
         import requests
+
         mock_post.side_effect = requests.ConnectionError()
 
         _deliver_webhook(self.api_key.id, "file.updated", "pages/about.md")
@@ -141,9 +143,7 @@ class WebhookTriggerTests(TestCase):
 
         # Verify signature matches the exact bytes sent
         expected = hmac.new(
-            self.api_key.webhook_secret.encode(),
-            payload_bytes,
-            hashlib.sha256
+            self.api_key.webhook_secret.encode(), payload_bytes, hashlib.sha256
         ).hexdigest()
 
         self.assertEqual(signature, expected)
@@ -157,7 +157,7 @@ class WebhookTriggerTests(TestCase):
             self.api_key.id,
             "file.moved",
             "new/path.md",
-            extra_data={"old_path": "old/path.md"}
+            extra_data={"old_path": "old/path.md"},
         )
 
         payload = json.loads(mock_post.call_args[1]["data"])
@@ -168,6 +168,7 @@ class WebhookTriggerTests(TestCase):
     def test_deliver_webhook_missing_api_key(self):
         """Delivery fails gracefully for missing API key."""
         import uuid
+
         # Should not raise, just log warning
         _deliver_webhook(uuid.uuid4(), "file.updated", "test.md")
 
@@ -198,12 +199,12 @@ class WebhookEventTypesTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="testuser",
-            email="test@example.com",
-            password="testpass"
+            username="testuser", email="test@example.com", password="testpass"
         )
         self.org = Organization.objects.create(name="Test Org", slug="test-org")
-        Account.objects.create(user=self.user, organization=self.org, email_verified=True)
+        Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
         self.api_key = APIKey.objects.create(
             organization=self.org,
             name="test-key",
@@ -255,7 +256,7 @@ class WebhookEventTypesTests(TestCase):
             self.api_key.id,
             "file.moved",
             "new/location.md",
-            extra_data={"old_path": "old/location.md"}
+            extra_data={"old_path": "old/location.md"},
         )
 
         payload = json.loads(mock_post.call_args[1]["data"])

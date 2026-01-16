@@ -98,7 +98,9 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
 
         # Check if file exists
         try:
-            stored_file = StoredFile.objects.get(owner=request.user.account, path=file_path)
+            stored_file = StoredFile.objects.get(
+                owner=request.user.account, path=file_path
+            )
         except StoredFile.DoesNotExist:
             return Response(
                 {
@@ -247,12 +249,14 @@ class PublicShareInfoView(StormCloudBaseAPIView):
             return Response(
                 {
                     "error": {
-                        "code": "PASSWORD_REQUIRED"
-                        if not password
-                        else "INVALID_PASSWORD",
-                        "message": "This link requires a password"
-                        if not password
-                        else "Invalid password",
+                        "code": (
+                            "PASSWORD_REQUIRED" if not password else "INVALID_PASSWORD"
+                        ),
+                        "message": (
+                            "This link requires a password"
+                            if not password
+                            else "Invalid password"
+                        ),
                     }
                 },
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -339,12 +343,14 @@ class PublicShareDownloadView(StormCloudBaseAPIView):
             return Response(
                 {
                     "error": {
-                        "code": "PASSWORD_REQUIRED"
-                        if not password
-                        else "INVALID_PASSWORD",
-                        "message": "This link requires a password"
-                        if not password
-                        else "Invalid password",
+                        "code": (
+                            "PASSWORD_REQUIRED" if not password else "INVALID_PASSWORD"
+                        ),
+                        "message": (
+                            "This link requires a password"
+                            if not password
+                            else "Invalid password"
+                        ),
                     }
                 },
                 status=status.HTTP_401_UNAUTHORIZED,

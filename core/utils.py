@@ -5,6 +5,7 @@ import re
 
 class PathValidationError(Exception):
     """Raised when path contains invalid characters or traversal attempts."""
+
     pass
 
 
@@ -27,19 +28,19 @@ def normalize_path(path: str) -> str:
         PathValidationError: For invalid paths
     """
     if not path:
-        return ''
+        return ""
 
     # Block null bytes and control characters
-    if '\x00' in path or re.search(r'[\x00-\x1f]', path):
+    if "\x00" in path or re.search(r"[\x00-\x1f]", path):
         raise PathValidationError("Path contains invalid characters")
 
     # Normalize slashes
-    path = re.sub(r'/+', '/', path)
-    path = path.strip('/')
+    path = re.sub(r"/+", "/", path)
+    path = path.strip("/")
 
     # Block path traversal
-    parts = path.split('/')
-    if '..' in parts:
+    parts = path.split("/")
+    if ".." in parts:
         raise PathValidationError("Path traversal not allowed")
 
     return path
@@ -61,14 +62,14 @@ def validate_filename(name: str) -> str:
     if not name:
         raise PathValidationError("Filename cannot be empty")
 
-    if '/' in name or '\\' in name:
+    if "/" in name or "\\" in name:
         raise PathValidationError("Filename cannot contain slashes")
 
-    if name in ('.', '..'):
+    if name in (".", ".."):
         raise PathValidationError("Invalid filename")
 
     # Check for null bytes and control characters
-    if '\x00' in name or re.search(r'[\x00-\x1f]', name):
+    if "\x00" in name or re.search(r"[\x00-\x1f]", name):
         raise PathValidationError("Filename contains invalid characters")
 
     return name

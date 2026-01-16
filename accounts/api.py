@@ -54,10 +54,10 @@ User = get_user_model()
 
 def get_user_organization(user):
     """Get organization for either User or APIKeyUser."""
-    if hasattr(user, 'organization') and user.organization:
+    if hasattr(user, "organization") and user.organization:
         # APIKeyUser - has organization directly
         return user.organization
-    elif hasattr(user, 'account') and user.account:
+    elif hasattr(user, "account") and user.account:
         # Regular User - get via account
         return user.account.organization
     return None
@@ -130,9 +130,11 @@ class RegistrationView(StormCloudBaseAPIView):
         return Response(
             {
                 "user": UserSerializer(user).data,
-                "message": "Verification email sent"
-                if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION
-                else "Registration successful",
+                "message": (
+                    "Verification email sent"
+                    if settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION
+                    else "Registration successful"
+                ),
                 "requires_verification": settings.STORMCLOUD_REQUIRE_EMAIL_VERIFICATION,
             },
             status=status.HTTP_201_CREATED,
@@ -680,32 +682,36 @@ class AuthMeView(StormCloudBaseAPIView):
         """Get current user info."""
         if isinstance(request.user, APIKeyUser):
             # API key auth - return simplified response (can't use UserSerializer)
-            return Response({
-                "user": None,
-                "account": None,
-                "api_key": {
-                    "id": str(request.auth.id),
-                    "name": request.auth.name,
-                    "organization_id": str(request.user.organization.id),
-                    "organization_name": request.user.organization.name,
-                    "last_used_at": request.auth.last_used_at,
-                },
-            })
+            return Response(
+                {
+                    "user": None,
+                    "account": None,
+                    "api_key": {
+                        "id": str(request.auth.id),
+                        "name": request.auth.name,
+                        "organization_id": str(request.user.organization.id),
+                        "organization_name": request.user.organization.name,
+                        "last_used_at": request.auth.last_used_at,
+                    },
+                }
+            )
 
         # Session auth - get account (don't auto-create, org is required now)
         try:
             account = Account.objects.get(user=request.user)
         except Account.DoesNotExist:
             # User exists but hasn't completed org setup (two-step enrollment)
-            return Response({
-                "user": {
-                    "id": request.user.id,
-                    "username": request.user.username,
-                    "email": request.user.email,
-                },
-                "account": None,
-                "needs_org_setup": True,
-            })
+            return Response(
+                {
+                    "user": {
+                        "id": request.user.id,
+                        "username": request.user.username,
+                        "email": request.user.email,
+                    },
+                    "account": None,
+                    "needs_org_setup": True,
+                }
+            )
 
         data = {
             "user": request.user,
@@ -884,7 +890,12 @@ class AdminUserCreateView(StormCloudBaseAPIView):
                 organization = Organization.objects.get(slug=org_slug)
             except Organization.DoesNotExist:
                 return Response(
-                    {"error": {"code": "ORG_NOT_FOUND", "message": f"Organization not found: {org_slug}"}},
+                    {
+                        "error": {
+                            "code": "ORG_NOT_FOUND",
+                            "message": f"Organization not found: {org_slug}",
+                        }
+                    },
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
@@ -892,7 +903,12 @@ class AdminUserCreateView(StormCloudBaseAPIView):
             organization = get_user_organization(request.user)
             if not organization:
                 return Response(
-                    {"error": {"code": "ORG_REQUIRED", "message": "Organization slug is required"}},
+                    {
+                        "error": {
+                            "code": "ORG_REQUIRED",
+                            "message": "Organization slug is required",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -945,9 +961,9 @@ class AdminUserListView(StormCloudBaseAPIView):
 
         TODO: Add pagination in Phase 3 (DRF PageNumberPagination).
         """
-        queryset = User.objects.select_related("account", "account__organization").annotate(
-            api_key_count=Count("account__organization__api_keys")
-        )
+        queryset = User.objects.select_related(
+            "account", "account__organization"
+        ).annotate(api_key_count=Count("account__organization__api_keys"))
 
         # Filters
         is_active = request.query_params.get("is_active")
@@ -969,6 +985,19 @@ class AdminUserListView(StormCloudBaseAPIView):
         users_data = []
         for user in queryset:
             org = user.account.organization if user.account else None
+
+            # Calculate storage fields
+            storage_used = user.account.storage_used_bytes if user.account else 0
+            storage_quota = user.account.storage_quota_bytes if user.account else None
+
+            # Effective quota: user quota if set (>0), otherwise org quota
+            effective_quota = None
+            if user.account:
+                if user.account.storage_quota_bytes > 0:
+                    effective_quota = user.account.storage_quota_bytes
+                elif org:
+                    effective_quota = org.storage_quota_bytes
+
             users_data.append(
                 {
                     "id": user.id,
@@ -981,6 +1010,9 @@ class AdminUserListView(StormCloudBaseAPIView):
                     "api_key_count": user.api_key_count,
                     "organization_name": org.name if org else None,
                     "organization_id": str(org.id) if org else None,
+                    "storage_used_bytes": storage_used,
+                    "storage_quota_bytes": storage_quota,
+                    "effective_quota_bytes": effective_quota,
                 }
             )
 
@@ -1021,7 +1053,12 @@ class AdminUserListView(StormCloudBaseAPIView):
                 organization = Organization.objects.get(slug=org_slug)
             except Organization.DoesNotExist:
                 return Response(
-                    {"error": {"code": "ORG_NOT_FOUND", "message": f"Organization not found: {org_slug}"}},
+                    {
+                        "error": {
+                            "code": "ORG_NOT_FOUND",
+                            "message": f"Organization not found: {org_slug}",
+                        }
+                    },
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
@@ -1029,7 +1066,12 @@ class AdminUserListView(StormCloudBaseAPIView):
             organization = get_user_organization(request.user)
             if not organization:
                 return Response(
-                    {"error": {"code": "ORG_REQUIRED", "message": "Organization slug is required"}},
+                    {
+                        "error": {
+                            "code": "ORG_REQUIRED",
+                            "message": "Organization slug is required",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -1128,7 +1170,9 @@ class AdminUserDetailView(StormCloudBaseAPIView):
 
         # P0-3: Calculate storage used
         storage_used = (
-            StoredFile.objects.filter(owner=user.account).aggregate(total=Sum("size"))["total"]
+            StoredFile.objects.filter(owner=user.account).aggregate(total=Sum("size"))[
+                "total"
+            ]
             or 0
         )
 
@@ -1206,9 +1250,9 @@ class AdminUserDetailView(StormCloudBaseAPIView):
 
             if updated_fields:
                 user.save(
-                    update_fields=updated_fields
-                    if "password" not in updated_fields
-                    else None
+                    update_fields=(
+                        updated_fields if "password" not in updated_fields else None
+                    )
                 )
 
             return Response(
@@ -1568,8 +1612,13 @@ class AdminUserPermissionsUpdateView(StormCloudBaseAPIView):
 
         # Update only the fields that were provided
         permission_fields = [
-            'can_upload', 'can_delete', 'can_move', 'can_overwrite',
-            'can_create_shares', 'max_share_links', 'max_upload_bytes'
+            "can_upload",
+            "can_delete",
+            "can_move",
+            "can_overwrite",
+            "can_create_shares",
+            "max_share_links",
+            "max_upload_bytes",
         ]
 
         for field in permission_fields:
@@ -1580,21 +1629,23 @@ class AdminUserPermissionsUpdateView(StormCloudBaseAPIView):
         if updated_fields:
             profile.save(update_fields=updated_fields)
 
-        return Response({
-            "message": "Permissions updated",
-            "user_id": user.id,
-            "username": user.username,
-            "updated_fields": updated_fields,
-            "permissions": {
-                "can_upload": profile.can_upload,
-                "can_delete": profile.can_delete,
-                "can_move": profile.can_move,
-                "can_overwrite": profile.can_overwrite,
-                "can_create_shares": profile.can_create_shares,
-                "max_share_links": profile.max_share_links,
-                "max_upload_bytes": profile.max_upload_bytes,
+        return Response(
+            {
+                "message": "Permissions updated",
+                "user_id": user.id,
+                "username": user.username,
+                "updated_fields": updated_fields,
+                "permissions": {
+                    "can_upload": profile.can_upload,
+                    "can_delete": profile.can_delete,
+                    "can_move": profile.can_move,
+                    "can_overwrite": profile.can_overwrite,
+                    "can_create_shares": profile.can_create_shares,
+                    "max_share_links": profile.max_share_links,
+                    "max_upload_bytes": profile.max_upload_bytes,
+                },
             }
-        })
+        )
 
 
 class AdminUserAPIKeyCreateView(StormCloudBaseAPIView):
@@ -1710,7 +1761,9 @@ class AdminAPIKeyRevokeView(StormCloudBaseAPIView):
     def post(self, request: Request, key_id: int) -> Response:
         """Revoke an API key."""
         try:
-            api_key = APIKey.objects.select_related("organization", "created_by").get(id=key_id)
+            api_key = APIKey.objects.select_related("organization", "created_by").get(
+                id=key_id
+            )
         except APIKey.DoesNotExist:
             return Response(
                 {
@@ -2095,13 +2148,15 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({
-            "webhook_url": api_key.webhook_url,
-            "webhook_enabled": api_key.webhook_enabled,
-            "webhook_secret": api_key.webhook_secret,
-            "webhook_last_triggered": api_key.webhook_last_triggered,
-            "webhook_last_status": api_key.webhook_last_status,
-        })
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "webhook_last_triggered": api_key.webhook_last_triggered,
+                "webhook_last_status": api_key.webhook_last_status,
+            }
+        )
 
     @extend_schema(
         summary="Admin: Set webhook URL",
@@ -2109,7 +2164,10 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
         request={
             "type": "object",
             "properties": {
-                "webhook_url": {"type": "string", "description": "Webhook URL or empty to disable"},
+                "webhook_url": {
+                    "type": "string",
+                    "description": "Webhook URL or empty to disable",
+                },
             },
         },
         responses={
@@ -2147,19 +2205,28 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
                 validator(webhook_url)
             except ValidationError:
                 return Response(
-                    {"error": {"code": "INVALID_URL", "message": "Invalid URL format."}},
+                    {
+                        "error": {
+                            "code": "INVALID_URL",
+                            "message": "Invalid URL format.",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         api_key.webhook_url = webhook_url
         api_key.save()
 
-        return Response({
-            "webhook_url": api_key.webhook_url,
-            "webhook_enabled": api_key.webhook_enabled,
-            "webhook_secret": api_key.webhook_secret,
-            "message": "Webhook configured." if webhook_url else "Webhook disabled.",
-        })
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "message": (
+                    "Webhook configured." if webhook_url else "Webhook disabled."
+                ),
+            }
+        )
 
     @extend_schema(
         summary="Admin: Disable webhook",
@@ -2227,10 +2294,12 @@ class AdminUserKeyWebhookRegenerateView(StormCloudBaseAPIView):
         new_secret = api_key.generate_webhook_secret()
         api_key.save()
 
-        return Response({
-            "webhook_secret": new_secret,
-            "message": "Secret regenerated.",
-        })
+        return Response(
+            {
+                "webhook_secret": new_secret,
+                "message": "Secret regenerated.",
+            }
+        )
 
 
 class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
@@ -2315,11 +2384,13 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
                 update_fields=["webhook_last_triggered", "webhook_last_status"]
             )
 
-            return Response({
-                "success": response.ok,
-                "status_code": response.status_code,
-                "message": f"Webhook returned {response.status_code}",
-            })
+            return Response(
+                {
+                    "success": response.ok,
+                    "status_code": response.status_code,
+                    "message": f"Webhook returned {response.status_code}",
+                }
+            )
 
         except requests.Timeout:
             api_key.webhook_last_triggered = timezone.now()
@@ -2328,11 +2399,13 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
                 update_fields=["webhook_last_triggered", "webhook_last_status"]
             )
 
-            return Response({
-                "success": False,
-                "status_code": None,
-                "message": "Webhook timed out (10s)",
-            })
+            return Response(
+                {
+                    "success": False,
+                    "status_code": None,
+                    "message": "Webhook timed out (10s)",
+                }
+            )
 
         except requests.RequestException as e:
             api_key.webhook_last_triggered = timezone.now()
@@ -2341,12 +2414,13 @@ class AdminUserKeyWebhookTestView(StormCloudBaseAPIView):
                 update_fields=["webhook_last_triggered", "webhook_last_status"]
             )
 
-            return Response({
-                "success": False,
-                "status_code": None,
-                "message": f"Request failed: {str(e)}",
-            })
-
+            return Response(
+                {
+                    "success": False,
+                    "status_code": None,
+                    "message": f"Request failed: {str(e)}",
+                }
+            )
 
 
 # =============================================================================
@@ -2368,14 +2442,121 @@ class AdminOrganizationListView(StormCloudBaseAPIView):
 
         from .serializers import AdminOrganizationSerializer
 
-        orgs = Organization.objects.all().order_by('-created_at')
-        orgs = orgs.annotate(member_count=Count('accounts'))
+        orgs = Organization.objects.all().order_by("-created_at")
+        orgs = orgs.annotate(member_count=Count("accounts"))
 
         serializer = AdminOrganizationSerializer(orgs, many=True)
-        return Response({
-            'organizations': serializer.data,
-            'total': orgs.count(),
-        })
+        return Response(
+            {
+                "organizations": serializer.data,
+                "total": orgs.count(),
+            }
+        )
+
+
+class AdminOrganizationDetailView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/admin/organizations/{org_id}/
+    PATCH /api/v1/admin/organizations/{org_id}/
+
+    Get or update organization details.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request, org_id: str) -> Response:
+        """Get organization details."""
+        org = get_object_or_404(Organization, id=org_id)
+
+        return Response(
+            {
+                "id": str(org.id),
+                "name": org.name,
+                "slug": org.slug,
+                "is_active": org.is_active,
+                "storage_quota_bytes": org.storage_quota_bytes,
+                "storage_used_bytes": org.storage_used_bytes,
+                "member_count": Account.objects.filter(organization=org).count(),
+                "created_at": org.created_at,
+                "updated_at": org.updated_at,
+            }
+        )
+
+    def patch(self, request: Request, org_id: str) -> Response:
+        """Update organization settings."""
+        org = get_object_or_404(Organization, id=org_id)
+
+        # Allowed fields
+        if "name" in request.data:
+            org.name = request.data["name"]
+        if "slug" in request.data:
+            org.slug = request.data["slug"]
+        if "is_active" in request.data:
+            org.is_active = request.data["is_active"]
+        if "storage_quota_bytes" in request.data:
+            org.storage_quota_bytes = request.data["storage_quota_bytes"] or 0
+
+        org.save()
+
+        return Response(
+            {
+                "id": str(org.id),
+                "name": org.name,
+                "slug": org.slug,
+                "is_active": org.is_active,
+                "storage_quota_bytes": org.storage_quota_bytes,
+                "storage_used_bytes": org.storage_used_bytes,
+                "message": "Organization updated",
+            }
+        )
+
+
+class AdminOrganizationMembersView(StormCloudBaseAPIView):
+    """
+    GET /api/v1/admin/organizations/{org_id}/members/
+
+    List organization members with their quota info.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request: Request, org_id: str) -> Response:
+        """List members with their quota info."""
+        org = get_object_or_404(Organization, id=org_id)
+        accounts = Account.objects.filter(organization=org).select_related("user")
+
+        members = []
+        for account in accounts:
+            # Effective quota: user quota if set (>0), otherwise org quota
+            effective_quota = (
+                account.storage_quota_bytes
+                if account.storage_quota_bytes > 0
+                else org.storage_quota_bytes
+            )
+            members.append(
+                {
+                    "id": account.user.id,
+                    "username": account.user.username,
+                    "email": account.user.email,
+                    "is_owner": account.is_owner,
+                    "storage_used_bytes": account.storage_used_bytes,
+                    "storage_quota_bytes": (
+                        account.storage_quota_bytes
+                        if account.storage_quota_bytes > 0
+                        else None
+                    ),
+                    "effective_quota_bytes": effective_quota,
+                }
+            )
+
+        return Response(
+            {
+                "organization_id": str(org.id),
+                "organization_name": org.name,
+                "members": members,
+                "total": len(members),
+            }
+        )
 
 
 class UserKeyWebhookView(StormCloudBaseAPIView):
@@ -2390,7 +2571,9 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
         """Get user's own APIKey or None."""
         try:
             organization = get_user_organization(request.user)
-            return APIKey.objects.get(id=key_id, organization=organization, is_active=True)
+            return APIKey.objects.get(
+                id=key_id, organization=organization, is_active=True
+            )
         except APIKey.DoesNotExist:
             return None
 
@@ -2420,13 +2603,15 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({
-            "webhook_url": api_key.webhook_url,
-            "webhook_enabled": api_key.webhook_enabled,
-            "webhook_secret": api_key.webhook_secret,
-            "webhook_last_triggered": api_key.webhook_last_triggered,
-            "webhook_last_status": api_key.webhook_last_status,
-        })
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "webhook_last_triggered": api_key.webhook_last_triggered,
+                "webhook_last_status": api_key.webhook_last_status,
+            }
+        )
 
     @extend_schema(
         summary="Set webhook URL for own key",
@@ -2435,7 +2620,10 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
             "type": "object",
             "properties": {
                 "webhook_url": {"type": "string", "description": "Webhook URL"},
-                "source_key_id": {"type": "string", "description": "Optional: copy secret from this key"},
+                "source_key_id": {
+                    "type": "string",
+                    "description": "Optional: copy secret from this key",
+                },
             },
         },
         responses={
@@ -2474,7 +2662,12 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
                 validator(webhook_url)
             except ValidationError:
                 return Response(
-                    {"error": {"code": "INVALID_URL", "message": "Invalid URL format."}},
+                    {
+                        "error": {
+                            "code": "INVALID_URL",
+                            "message": "Invalid URL format.",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -2486,20 +2679,30 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
                     id=source_key_id,
                     organization=organization,
                     is_active=True,
-                    webhook_secret__isnull=False
+                    webhook_secret__isnull=False,
                 )
                 # Copy the secret from source key
                 api_key.webhook_secret = source_key.webhook_secret
             except APIKey.DoesNotExist:
                 return Response(
-                    {"error": {"code": "SOURCE_NOT_FOUND", "message": "Source key not found or has no webhook."}},
+                    {
+                        "error": {
+                            "code": "SOURCE_NOT_FOUND",
+                            "message": "Source key not found or has no webhook.",
+                        }
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         # If no source and no existing secret, user can't set webhook (admin must do it)
         if webhook_url and not api_key.webhook_secret and not source_key_id:
             return Response(
-                {"error": {"code": "NO_SECRET", "message": "Contact administrator to configure webhook for this key."}},
+                {
+                    "error": {
+                        "code": "NO_SECRET",
+                        "message": "Contact administrator to configure webhook for this key.",
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -2510,9 +2713,13 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
             api_key.webhook_enabled = False
         api_key.save()
 
-        return Response({
-            "webhook_url": api_key.webhook_url,
-            "webhook_enabled": api_key.webhook_enabled,
-            "webhook_secret": api_key.webhook_secret,
-            "message": "Webhook configured." if webhook_url else "Webhook disabled.",
-        })
+        return Response(
+            {
+                "webhook_url": api_key.webhook_url,
+                "webhook_enabled": api_key.webhook_enabled,
+                "webhook_secret": api_key.webhook_secret,
+                "message": (
+                    "Webhook configured." if webhook_url else "Webhook disabled."
+                ),
+            }
+        )

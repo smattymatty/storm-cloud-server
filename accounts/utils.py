@@ -10,10 +10,10 @@ from .models import EmailVerificationToken
 
 def get_client_ip(request) -> str:
     """Extract client IP from request."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
+        return x_forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "unknown")
 
 
 def send_verification_email(user, request):
@@ -21,12 +21,15 @@ def send_verification_email(user, request):
     # Create token
     token = EmailVerificationToken.objects.create(
         user=user,
-        expires_at=timezone.now() + timedelta(hours=settings.STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS)
+        expires_at=timezone.now()
+        + timedelta(hours=settings.STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS),
     )
 
     # Build verification link
     if settings.STORMCLOUD_EMAIL_VERIFICATION_LINK:
-        verification_link = settings.STORMCLOUD_EMAIL_VERIFICATION_LINK.format(token=token.token)
+        verification_link = settings.STORMCLOUD_EMAIL_VERIFICATION_LINK.format(
+            token=token.token
+        )
     else:
         # Default to API endpoint
         verification_link = f"{request.build_absolute_uri('/api/v1/auth/verify-email/')}?token={token.token}"
@@ -35,7 +38,7 @@ def send_verification_email(user, request):
     email_body = settings.STORMCLOUD_EMAIL_VERIFICATION_BODY.format(
         username=user.username,
         verification_link=verification_link,
-        expiry_hours=settings.STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS
+        expiry_hours=settings.STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS,
     )
 
     send_mail(
@@ -47,9 +50,15 @@ def send_verification_email(user, request):
     )
 
 
-def send_enrollment_invite_email(email: str, org_name: str, token: str, inviter_name: str = None, server_url: str = None) -> None:
+def send_enrollment_invite_email(
+    email: str,
+    org_name: str,
+    token: str,
+    inviter_name: str = None,
+    server_url: str = None,
+) -> None:
     """Send enrollment invitation email.
-    
+
     Args:
         email: Recipient email address
         org_name: Organization name for the invite
@@ -59,22 +68,22 @@ def send_enrollment_invite_email(email: str, org_name: str, token: str, inviter_
     """
     from urllib.parse import urlencode
     from django.core.mail import EmailMultiAlternatives
-    
+
     # Get frontend URL from settings
-    frontend_url = getattr(settings, 'STORMCLOUD_FRONTEND_URL', None)
-    
+    frontend_url = getattr(settings, "STORMCLOUD_FRONTEND_URL", None)
+
     if frontend_url:
-        params = {'token': token}
+        params = {"token": token}
         if server_url:
-            params['server'] = server_url
+            params["server"] = server_url
         invite_link = f"{frontend_url}/cloud/enroll?{urlencode(params)}"
     else:
         invite_link = None
-    
+
     inviter_text = f" by {inviter_name}" if inviter_name else ""
-    
+
     subject = f"You've been invited to join {org_name}"
-    
+
     # Plain text version
     text_content = f"""You've been invited{inviter_text} to join {org_name} on Storm Cloud.
 
@@ -84,7 +93,7 @@ If you did not expect this invitation, you can safely ignore this email.
 
 - Storm Cloud
 """
-    
+
     # HTML version
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -148,7 +157,7 @@ If you did not expect this invitation, you can safely ignore this email.
     </table>
 </body>
 </html>"""
-    
+
     msg = EmailMultiAlternatives(
         subject=subject,
         body=text_content,
@@ -159,7 +168,13 @@ If you did not expect this invitation, you can safely ignore this email.
     msg.send(fail_silently=False)
 
 
-def send_platform_invite_email(email: str, invite_name: str, token: str, inviter_name: str = None, server_url: str = None) -> None:
+def send_platform_invite_email(
+    email: str,
+    invite_name: str,
+    token: str,
+    inviter_name: str = None,
+    server_url: str = None,
+) -> None:
     """Send platform invitation email.
 
     Args:
@@ -173,12 +188,12 @@ def send_platform_invite_email(email: str, invite_name: str, token: str, inviter
     from django.core.mail import EmailMultiAlternatives
 
     # Get frontend URL from settings
-    frontend_url = getattr(settings, 'STORMCLOUD_FRONTEND_URL', None)
+    frontend_url = getattr(settings, "STORMCLOUD_FRONTEND_URL", None)
 
     if frontend_url:
-        params = {'token': token}
+        params = {"token": token}
         if server_url:
-            params['server'] = server_url
+            params["server"] = server_url
         invite_link = f"{frontend_url}/cloud/platform-enroll?{urlencode(params)}"
     else:
         invite_link = None

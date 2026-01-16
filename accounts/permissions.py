@@ -28,11 +28,11 @@ def get_permission_source(request) -> Union["Account", "APIKey"]:
     from accounts.models import APIKey
 
     # Check if authenticated via API key
-    if hasattr(request, 'auth') and isinstance(request.auth, APIKey):
+    if hasattr(request, "auth") and isinstance(request.auth, APIKey):
         return request.auth
 
     # Session auth - return user's account
-    if hasattr(request, 'user') and hasattr(request.user, 'account'):
+    if hasattr(request, "user") and hasattr(request.user, "account"):
         return request.user.account
 
     raise PermissionDenied(
@@ -204,10 +204,7 @@ def check_share_link_limit(user: "AbstractBaseUser") -> None:
     if max_links == 0:
         return
 
-    current_count = ShareLink.objects.filter(
-        owner=account,
-        is_active=True
-    ).count()
+    current_count = ShareLink.objects.filter(owner=account, is_active=True).count()
 
     if current_count >= max_links:
         raise PermissionDenied(
@@ -235,7 +232,7 @@ class IsAccountActive(BasePermission):
     def has_permission(self, request, view) -> bool:
         if not request.user.is_authenticated:
             return False
-        account = getattr(request.user, 'account', None)
+        account = getattr(request.user, "account", None)
         if not account:
             return False
         return account.is_active and account.organization.is_active

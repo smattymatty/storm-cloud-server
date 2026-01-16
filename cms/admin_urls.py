@@ -21,17 +21,34 @@ urlpatterns = [
     # Page operations
     path("pages/", AdminPageListView.as_view(), name="admin-cms-pages"),
     path("pages/flags/", AdminPageFlagsView.as_view(), name="admin-cms-pages-flags"),
-    path("pages/<path:page_path>/", AdminPageDetailView.as_view(), name="admin-cms-page-detail"),
-
+    path(
+        "pages/<path:page_path>/",
+        AdminPageDetailView.as_view(),
+        name="admin-cms-page-detail",
+    ),
     # Flag operations
     path("flags/", AdminFlagListView.as_view(), name="admin-cms-flags"),
-    path("flags/pending/", AdminPendingReviewView.as_view(), name="admin-cms-flags-pending"),
-
+    path(
+        "flags/pending/",
+        AdminPendingReviewView.as_view(),
+        name="admin-cms-flags-pending",
+    ),
     # File flag operations
-    path("files/<path:file_path>/flags/", AdminFileFlagsView.as_view(), name="admin-cms-file-flags"),
-    path("files/<path:file_path>/flags/<str:flag_type>/", AdminSetFlagView.as_view(), name="admin-cms-set-flag"),
-    path("files/<path:file_path>/flags/<str:flag_type>/history/", AdminFlagHistoryView.as_view(), name="admin-cms-flag-history"),
-
+    path(
+        "files/<path:file_path>/flags/",
+        AdminFileFlagsView.as_view(),
+        name="admin-cms-file-flags",
+    ),
+    path(
+        "files/<path:file_path>/flags/<str:flag_type>/",
+        AdminSetFlagView.as_view(),
+        name="admin-cms-set-flag",
+    ),
+    path(
+        "files/<path:file_path>/flags/<str:flag_type>/history/",
+        AdminFlagHistoryView.as_view(),
+        name="admin-cms-flag-history",
+    ),
     # Cleanup
     path("cleanup/", AdminStaleCleanupView.as_view(), name="admin-cms-cleanup"),
 ]

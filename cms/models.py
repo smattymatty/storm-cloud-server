@@ -16,9 +16,7 @@ class ManagedContent(AbstractBaseModel):
     """
 
     file = models.OneToOneField(
-        StoredFile,
-        on_delete=models.CASCADE,
-        related_name='cms_content'
+        StoredFile, on_delete=models.CASCADE, related_name="cms_content"
     )
 
     # Cache rendered output

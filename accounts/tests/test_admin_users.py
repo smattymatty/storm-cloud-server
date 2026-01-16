@@ -179,6 +179,59 @@ class AdminUserListTest(StormCloudAdminTestCase):
         response = self.client.get("/api/v1/admin/users/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_admin_list_users_includes_storage_fields(self):
+        """Admin user list includes storage quota and usage fields."""
+        # Create a user with some storage values
+        test_user = UserWithProfileFactory(username="storagetest")
+        test_user.account.storage_used_bytes = 1024 * 1024  # 1 MB
+        test_user.account.storage_quota_bytes = 10 * 1024 * 1024  # 10 MB
+        test_user.account.save()
+
+        response = self.client.get("/api/v1/admin/users/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Find our test user in the results
+        test_user_data = next(
+            (u for u in response.data["users"] if u["username"] == "storagetest"), None
+        )
+        self.assertIsNotNone(test_user_data)
+
+        # Verify storage fields are present
+        self.assertIn("storage_used_bytes", test_user_data)
+        self.assertIn("storage_quota_bytes", test_user_data)
+        self.assertIn("effective_quota_bytes", test_user_data)
+
+        # Verify values
+        self.assertEqual(test_user_data["storage_used_bytes"], 1024 * 1024)
+        self.assertEqual(test_user_data["storage_quota_bytes"], 10 * 1024 * 1024)
+        # Effective quota should be user's quota since it's set
+        self.assertEqual(test_user_data["effective_quota_bytes"], 10 * 1024 * 1024)
+
+    def test_admin_list_users_effective_quota_inherits_from_org(self):
+        """Effective quota uses org quota when user quota is not set."""
+        # Create a user with no personal quota but org has quota
+        test_user = UserWithProfileFactory(username="orgquotatest")
+        test_user.account.storage_quota_bytes = 0  # No personal quota
+        test_user.account.save()
+
+        # Set org quota
+        org = test_user.account.organization
+        org.storage_quota_bytes = 50 * 1024 * 1024  # 50 MB
+        org.save()
+
+        response = self.client.get("/api/v1/admin/users/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Find our test user in the results
+        test_user_data = next(
+            (u for u in response.data["users"] if u["username"] == "orgquotatest"), None
+        )
+        self.assertIsNotNone(test_user_data)
+
+        # User quota should be None (or 0), but effective should be org quota
+        self.assertEqual(test_user_data["storage_quota_bytes"], 0)
+        self.assertEqual(test_user_data["effective_quota_bytes"], 50 * 1024 * 1024)
+
 
 class AdminUserDetailTest(StormCloudAdminTestCase):
     """Tests for GET /api/v1/admin/users/{id}/"""
@@ -196,7 +249,9 @@ class AdminUserDetailTest(StormCloudAdminTestCase):
         response = self.client.get(f"/api/v1/admin/users/{user.id}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("user", response.data)
-        self.assertIn("profile", response.data)  # API returns 'profile', model is Account
+        self.assertIn(
+            "profile", response.data
+        )  # API returns 'profile', model is Account
         self.assertIn("api_keys", response.data)
 
     def test_admin_get_nonexistent_user_returns_404(self):
@@ -588,7 +643,12 @@ class AdminUserAPIKeyCreateTest(StormCloudAdminTestCase):
 
         # Verify key exists in database
         from accounts.models import APIKey
-        self.assertTrue(APIKey.objects.filter(organization=user.account.organization, name="Admin Created Key").exists())
+
+        self.assertTrue(
+            APIKey.objects.filter(
+                organization=user.account.organization, name="Admin Created Key"
+            ).exists()
+        )
 
     def test_admin_create_key_with_default_name(self):
         """Key gets default name if not provided."""

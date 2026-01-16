@@ -3,4 +3,4 @@
 from .base import AbstractStorageBackend, FileInfo
 from .local import LocalStorageBackend
 
-__all__ = ['AbstractStorageBackend', 'FileInfo', 'LocalStorageBackend']
+__all__ = ["AbstractStorageBackend", "FileInfo", "LocalStorageBackend"]

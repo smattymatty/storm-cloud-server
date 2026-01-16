@@ -21,7 +21,7 @@ class IndexSyncServiceTestCase(TestCase):
     def setUpClass(cls):
         """Set up test storage directory."""
         super().setUpClass()
-        cls.test_storage_root = settings.BASE_DIR / 'storage_root_test_index'
+        cls.test_storage_root = settings.BASE_DIR / "storage_root_test_index"
         cls.test_storage_root.mkdir(exist_ok=True)
 
     @classmethod
@@ -48,6 +48,7 @@ class IndexSyncServiceTestCase(TestCase):
 
         # Explicitly pass backend with correct storage root to avoid settings timing issues
         from core.storage.local import LocalStorageBackend
+
         backend = LocalStorageBackend(storage_root=self.test_storage_root)
         self.service = IndexSyncService(backend=backend)
 
@@ -55,7 +56,7 @@ class IndexSyncServiceTestCase(TestCase):
         """Clean up test-specific storage."""
         super().tearDown()
         self.settings_override.disable()
-        
+
         # Clean up user storage directory
         if self.user_storage.exists():
             shutil.rmtree(self.user_storage)
@@ -79,8 +80,8 @@ class IndexSyncServiceTestCase(TestCase):
 
     def test_audit_empty_filesystem_empty_db(self):
         """Test audit with no files on disk and no DB records."""
-        stats = self.service.sync(mode='audit')
-        
+        stats = self.service.sync(mode="audit")
+
         self.assertEqual(stats.users_scanned, 1)
         self.assertEqual(stats.files_on_disk, 0)
         self.assertEqual(stats.files_in_db, 0)
@@ -92,12 +93,12 @@ class IndexSyncServiceTestCase(TestCase):
     def test_audit_files_on_disk_no_db_records(self):
         """Test audit detects missing DB records for files on disk."""
         # Create files on disk
-        self._create_file('test1.txt')
-        self._create_file('test2.txt')
-        self._create_directory('folder1')
-        
-        stats = self.service.sync(mode='audit')
-        
+        self._create_file("test1.txt")
+        self._create_file("test2.txt")
+        self._create_directory("folder1")
+
+        stats = self.service.sync(mode="audit")
+
         self.assertEqual(stats.files_on_disk, 3)  # 2 files + 1 directory
         self.assertEqual(stats.files_in_db, 0)
         self.assertEqual(stats.missing_in_db, 3)
@@ -107,11 +108,15 @@ class IndexSyncServiceTestCase(TestCase):
     def test_audit_db_records_no_files_on_disk(self):
         """Test audit detects orphaned DB records with no files on disk."""
         # Create DB records without files
-        StoredFileFactory(owner=self.user.account, path='orphan1.txt', name='orphan1.txt')
-        StoredFileFactory(owner=self.user.account, path='orphan2.txt', name='orphan2.txt')
-        
-        stats = self.service.sync(mode='audit')
-        
+        StoredFileFactory(
+            owner=self.user.account, path="orphan1.txt", name="orphan1.txt"
+        )
+        StoredFileFactory(
+            owner=self.user.account, path="orphan2.txt", name="orphan2.txt"
+        )
+
+        stats = self.service.sync(mode="audit")
+
         self.assertEqual(stats.files_on_disk, 0)
         self.assertEqual(stats.files_in_db, 2)
         self.assertEqual(stats.missing_in_db, 0)
@@ -121,19 +126,19 @@ class IndexSyncServiceTestCase(TestCase):
     def test_audit_perfect_sync(self):
         """Test audit when filesystem and DB are perfectly synced."""
         # Create file on disk
-        self._create_file('synced.txt')
-        
+        self._create_file("synced.txt")
+
         # Create matching DB record
         StoredFileFactory(
             owner=self.user.account,
-            path='synced.txt',
-            name='synced.txt',
+            path="synced.txt",
+            name="synced.txt",
             size=12,  # len("test content")
-            encryption_method='none',
+            encryption_method="none",
         )
-        
-        stats = self.service.sync(mode='audit')
-        
+
+        stats = self.service.sync(mode="audit")
+
         self.assertEqual(stats.files_on_disk, 1)
         self.assertEqual(stats.files_in_db, 1)
         self.assertEqual(stats.missing_in_db, 0)
@@ -142,17 +147,21 @@ class IndexSyncServiceTestCase(TestCase):
     def test_audit_mixed_scenario(self):
         """Test audit with mix of synced, missing, and orphaned records."""
         # Synced file
-        self._create_file('synced.txt')
-        StoredFileFactory(owner=self.user.account, path='synced.txt', name='synced.txt', size=12)
-        
+        self._create_file("synced.txt")
+        StoredFileFactory(
+            owner=self.user.account, path="synced.txt", name="synced.txt", size=12
+        )
+
         # File on disk, no DB record
-        self._create_file('missing_in_db.txt')
-        
+        self._create_file("missing_in_db.txt")
+
         # DB record, no file on disk
-        StoredFileFactory(owner=self.user.account, path='orphaned.txt', name='orphaned.txt')
-        
-        stats = self.service.sync(mode='audit')
-        
+        StoredFileFactory(
+            owner=self.user.account, path="orphaned.txt", name="orphaned.txt"
+        )
+
+        stats = self.service.sync(mode="audit")
+
         self.assertEqual(stats.files_on_disk, 2)
         self.assertEqual(stats.files_in_db, 2)
         self.assertEqual(stats.missing_in_db, 1)
@@ -165,104 +174,110 @@ class IndexSyncServiceTestCase(TestCase):
     def test_sync_creates_missing_records(self):
         """Test sync mode creates DB records for files on disk."""
         # Create files on disk
-        self._create_file('new1.txt', 'content1')
-        self._create_file('new2.txt', 'content2')
-        
-        stats = self.service.sync(mode='sync')
-        
+        self._create_file("new1.txt", "content1")
+        self._create_file("new2.txt", "content2")
+
+        stats = self.service.sync(mode="sync")
+
         self.assertEqual(stats.records_created, 2)
-        
+
         # Verify DB records were created
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 2)
-        
-        file1: StoredFile = StoredFile.objects.get(owner=self.user.account, path='new1.txt')
-        self.assertEqual(file1.name, 'new1.txt')
+
+        file1: StoredFile = StoredFile.objects.get(
+            owner=self.user.account, path="new1.txt"
+        )
+        self.assertEqual(file1.name, "new1.txt")
         self.assertEqual(file1.size, 8)  # len("content1")
-        self.assertEqual(file1.encryption_method, 'none')
+        self.assertEqual(file1.encryption_method, "none")
         self.assertFalse(file1.is_directory)
 
     def test_sync_creates_directory_records(self):
         """Test sync mode creates DB records for directories."""
-        self._create_directory('folder1')
-        self._create_directory('folder1/subfolder')
+        self._create_directory("folder1")
+        self._create_directory("folder1/subfolder")
 
-        stats = self.service.sync(mode='sync')
+        stats = self.service.sync(mode="sync")
 
         self.assertEqual(stats.records_created, 2)
 
         # Verify directory records
-        folder = StoredFile.objects.get(owner=self.user.account, path='folder1')
+        folder = StoredFile.objects.get(owner=self.user.account, path="folder1")
         self.assertTrue(folder.is_directory)
         self.assertEqual(folder.size, 0)
 
-        subfolder = StoredFile.objects.get(owner=self.user.account, path='folder1/subfolder')
+        subfolder = StoredFile.objects.get(
+            owner=self.user.account, path="folder1/subfolder"
+        )
         self.assertTrue(subfolder.is_directory)
-        self.assertEqual(subfolder.parent_path, 'folder1')
+        self.assertEqual(subfolder.parent_path, "folder1")
 
     def test_sync_dry_run_doesnt_create_records(self):
         """Test sync dry-run mode doesn't actually create records."""
-        self._create_file('test.txt')
-        
-        stats = self.service.sync(mode='sync', dry_run=True)
-        
+        self._create_file("test.txt")
+
+        stats = self.service.sync(mode="sync", dry_run=True)
+
         # Stats should show what would be created
         self.assertEqual(stats.records_created, 1)
-        
+
         # But no actual DB records should exist
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
 
     def test_sync_idempotent(self):
         """Test sync is idempotent (running twice creates same result)."""
-        self._create_file('test.txt')
-        
+        self._create_file("test.txt")
+
         # First sync
-        stats1 = self.service.sync(mode='sync')
+        stats1 = self.service.sync(mode="sync")
         self.assertEqual(stats1.records_created, 1)
-        
+
         # Second sync (should not create duplicates)
-        stats2 = self.service.sync(mode='sync')
+        stats2 = self.service.sync(mode="sync")
         self.assertEqual(stats2.records_created, 0)
-        
+
         # Should still have exactly 1 record
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
 
     def test_sync_updates_existing_records(self):
         """Test sync updates size/metadata of existing records."""
         # Create file on disk
-        file_path = self._create_file('test.txt', 'initial content')
-        
+        file_path = self._create_file("test.txt", "initial content")
+
         # Create DB record with wrong size
         StoredFileFactory(
             owner=self.user.account,
-            path='test.txt',
-            name='test.txt',
+            path="test.txt",
+            name="test.txt",
             size=999,  # Wrong size
         )
-        
-        stats = self.service.sync(mode='sync')
-        
+
+        stats = self.service.sync(mode="sync")
+
         # Should update existing record, not create new one
         self.assertEqual(stats.records_created, 0)  # Updates don't count as creates
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
-        
+
         # Verify size was updated (filesystem wins!)
-        record = StoredFile.objects.get(owner=self.user.account, path='test.txt')
+        record = StoredFile.objects.get(owner=self.user.account, path="test.txt")
         self.assertEqual(record.size, 15)  # len("initial content")
 
     def test_sync_nested_directories(self):
         """Test sync handles deeply nested directory structures."""
-        self._create_directory('level1')
-        self._create_directory('level1/level2')
-        self._create_directory('level1/level2/level3')
-        self._create_file('level1/level2/level3/deep.txt')
-        
-        stats = self.service.sync(mode='sync')
-        
+        self._create_directory("level1")
+        self._create_directory("level1/level2")
+        self._create_directory("level1/level2/level3")
+        self._create_file("level1/level2/level3/deep.txt")
+
+        stats = self.service.sync(mode="sync")
+
         self.assertEqual(stats.records_created, 4)  # 3 dirs + 1 file
-        
+
         # Verify parent_path is set correctly
-        deep_file = StoredFile.objects.get(owner=self.user.account, path='level1/level2/level3/deep.txt')
-        self.assertEqual(deep_file.parent_path, 'level1/level2/level3')
+        deep_file = StoredFile.objects.get(
+            owner=self.user.account, path="level1/level2/level3/deep.txt"
+        )
+        self.assertEqual(deep_file.parent_path, "level1/level2/level3")
 
     # =========================================================================
     # Clean Mode Tests
@@ -271,24 +286,28 @@ class IndexSyncServiceTestCase(TestCase):
     def test_clean_deletes_orphaned_records(self):
         """Test clean mode deletes DB records with no files on disk."""
         # Create orphaned DB records
-        StoredFileFactory(owner=self.user.account, path='orphan1.txt', name='orphan1.txt')
-        StoredFileFactory(owner=self.user.account, path='orphan2.txt', name='orphan2.txt')
-        
-        stats = self.service.sync(mode='clean', force=True)
-        
+        StoredFileFactory(
+            owner=self.user.account, path="orphan1.txt", name="orphan1.txt"
+        )
+        StoredFileFactory(
+            owner=self.user.account, path="orphan2.txt", name="orphan2.txt"
+        )
+
+        stats = self.service.sync(mode="clean", force=True)
+
         self.assertEqual(stats.records_deleted, 2)
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 0)
 
     def test_clean_requires_force(self):
         """Test clean mode requires force flag."""
-        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
-        
+        StoredFileFactory(owner=self.user.account, path="orphan.txt", name="orphan.txt")
+
         # Should raise ValueError without force
         with self.assertRaises(ValueError) as cm:
-            self.service.sync(mode='clean', force=False)
-        
-        self.assertIn('force', str(cm.exception).lower())
-        
+            self.service.sync(mode="clean", force=False)
+
+        self.assertIn("force", str(cm.exception).lower())
+
         # Record should still exist
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
 
@@ -300,48 +319,64 @@ class IndexSyncServiceTestCase(TestCase):
         ShareLinks to non-existent files are invalid.
         """
         # Create orphaned file with ShareLink (no actual file on disk)
-        stored_file = StoredFileFactory(owner=self.user.account, path='shared.txt', name='shared.txt')
+        stored_file = StoredFileFactory(
+            owner=self.user.account, path="shared.txt", name="shared.txt"
+        )
         share_link = ShareLinkFactory(owner=self.user.account, stored_file=stored_file)
 
-        stats = self.service.sync(mode='clean', force=True)
+        stats = self.service.sync(mode="clean", force=True)
 
         # Should delete the orphaned record (filesystem wins)
         self.assertEqual(stats.records_deleted, 1)
 
         # StoredFile should be gone
-        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='shared.txt').exists())
+        self.assertFalse(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="shared.txt"
+            ).exists()
+        )
 
         # ShareLink should also be gone (CASCADE)
         self.assertFalse(ShareLink.objects.filter(pk=share_link.pk).exists())
 
     def test_clean_dry_run_doesnt_delete(self):
         """Test clean dry-run shows what would be deleted without deleting."""
-        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
-        
-        stats = self.service.sync(mode='clean', force=True, dry_run=True)
-        
+        StoredFileFactory(owner=self.user.account, path="orphan.txt", name="orphan.txt")
+
+        stats = self.service.sync(mode="clean", force=True, dry_run=True)
+
         # Stats should show what would be deleted
         self.assertEqual(stats.records_deleted, 1)
-        
+
         # But record should still exist
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 1)
 
     def test_clean_preserves_valid_records(self):
         """Test clean mode only deletes orphaned records, keeps valid ones."""
         # Valid record (file exists)
-        self._create_file('valid.txt')
-        StoredFileFactory(owner=self.user.account, path='valid.txt', name='valid.txt', size=12)
-        
+        self._create_file("valid.txt")
+        StoredFileFactory(
+            owner=self.user.account, path="valid.txt", name="valid.txt", size=12
+        )
+
         # Orphaned record (no file)
-        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
-        
-        stats = self.service.sync(mode='clean', force=True)
-        
+        StoredFileFactory(owner=self.user.account, path="orphan.txt", name="orphan.txt")
+
+        stats = self.service.sync(mode="clean", force=True)
+
         self.assertEqual(stats.records_deleted, 1)
-        
+
         # Valid record should remain
-        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='valid.txt').exists())
-        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='orphan.txt').exists())
+        self.assertTrue(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="valid.txt"
+            ).exists()
+        )
+        self.assertFalse(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="orphan.txt"
+            ).exists()
+        )
 
     # =========================================================================
     # Full Mode Tests
@@ -350,33 +385,45 @@ class IndexSyncServiceTestCase(TestCase):
     def test_full_mode_sync_and_clean(self):
         """Test full mode performs both sync and clean operations."""
         # File on disk, no DB record (should sync)
-        self._create_file('new.txt')
-        
+        self._create_file("new.txt")
+
         # DB record, no file on disk (should clean)
-        StoredFileFactory(owner=self.user.account, path='orphan.txt', name='orphan.txt')
-        
+        StoredFileFactory(owner=self.user.account, path="orphan.txt", name="orphan.txt")
+
         # Valid synced file (should remain)
-        self._create_file('valid.txt')
-        StoredFileFactory(owner=self.user.account, path='valid.txt', name='valid.txt', size=12)
-        
-        stats = self.service.sync(mode='full', force=True)
-        
+        self._create_file("valid.txt")
+        StoredFileFactory(
+            owner=self.user.account, path="valid.txt", name="valid.txt", size=12
+        )
+
+        stats = self.service.sync(mode="full", force=True)
+
         self.assertEqual(stats.records_created, 1)  # new.txt
         self.assertEqual(stats.records_deleted, 1)  # orphan.txt
-        
+
         # Verify final state
         self.assertEqual(StoredFile.objects.filter(owner=self.user.account).count(), 2)
-        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='new.txt').exists())
-        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='valid.txt').exists())
-        self.assertFalse(StoredFile.objects.filter(owner=self.user.account, path='orphan.txt').exists())
+        self.assertTrue(
+            StoredFile.objects.filter(owner=self.user.account, path="new.txt").exists()
+        )
+        self.assertTrue(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="valid.txt"
+            ).exists()
+        )
+        self.assertFalse(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="orphan.txt"
+            ).exists()
+        )
 
     def test_full_mode_requires_force(self):
         """Test full mode requires force flag due to clean operation."""
         # Should raise ValueError without force
         with self.assertRaises(ValueError) as cm:
-            self.service.sync(mode='full', force=False)
-        
-        self.assertIn('force', str(cm.exception).lower())
+            self.service.sync(mode="full", force=False)
+
+        self.assertIn("force", str(cm.exception).lower())
 
     # =========================================================================
     # User Filtering Tests
@@ -388,22 +435,28 @@ class IndexSyncServiceTestCase(TestCase):
         user2 = UserWithProfileFactory(verified=True)
         user2_storage = self.test_storage_root / str(user2.account.id)
         user2_storage.mkdir(exist_ok=True)
-        
+
         # Create files for both users
-        self._create_file('user1.txt')
-        (user2_storage / 'user2.txt').write_text('content')
-        
+        self._create_file("user1.txt")
+        (user2_storage / "user2.txt").write_text("content")
+
         # Sync only user1 - create service with specific user_id
         service = IndexSyncService(user_id=self.user.id)
-        stats = service.sync(mode='sync')
-        
+        stats = service.sync(mode="sync")
+
         self.assertEqual(stats.users_scanned, 1)
         self.assertEqual(stats.records_created, 1)
-        
+
         # Only user1's file should have DB record
-        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='user1.txt').exists())
-        self.assertFalse(StoredFile.objects.filter(owner=user2.account, path='user2.txt').exists())
-        
+        self.assertTrue(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="user1.txt"
+            ).exists()
+        )
+        self.assertFalse(
+            StoredFile.objects.filter(owner=user2.account, path="user2.txt").exists()
+        )
+
         # Cleanup
         shutil.rmtree(user2_storage)
 
@@ -413,21 +466,27 @@ class IndexSyncServiceTestCase(TestCase):
         user2 = UserWithProfileFactory(verified=True)
         user2_storage = self.test_storage_root / str(user2.account.id)
         user2_storage.mkdir(exist_ok=True)
-        
+
         # Create files for both users
-        self._create_file('user1.txt')
-        (user2_storage / 'user2.txt').write_text('content')
-        
+        self._create_file("user1.txt")
+        (user2_storage / "user2.txt").write_text("content")
+
         # Sync all users
-        stats = self.service.sync(mode='sync')
-        
+        stats = self.service.sync(mode="sync")
+
         self.assertEqual(stats.users_scanned, 2)
         self.assertEqual(stats.records_created, 2)
-        
+
         # Both files should have DB records
-        self.assertTrue(StoredFile.objects.filter(owner=self.user.account, path='user1.txt').exists())
-        self.assertTrue(StoredFile.objects.filter(owner=user2.account, path='user2.txt').exists())
-        
+        self.assertTrue(
+            StoredFile.objects.filter(
+                owner=self.user.account, path="user1.txt"
+            ).exists()
+        )
+        self.assertTrue(
+            StoredFile.objects.filter(owner=user2.account, path="user2.txt").exists()
+        )
+
         # Cleanup
         shutil.rmtree(user2_storage)
 
@@ -439,16 +498,16 @@ class IndexSyncServiceTestCase(TestCase):
         """Test error handling for invalid mode."""
         # Should raise ValueError for invalid mode
         with self.assertRaises(ValueError) as cm:
-            self.service.sync(mode='invalid_mode')
-        
-        self.assertIn('invalid', str(cm.exception).lower())
+            self.service.sync(mode="invalid_mode")
+
+        self.assertIn("invalid", str(cm.exception).lower())
 
     def test_nonexistent_user_id(self):
         """Test handling of non-existent user ID."""
         # Create service with non-existent user_id
         service = IndexSyncService(user_id=99999)
-        stats = service.sync(mode='audit')
-        
+        stats = service.sync(mode="audit")
+
         # Should handle gracefully (no users scanned)
         self.assertEqual(stats.users_scanned, 0)
         self.assertEqual(stats.files_on_disk, 0)
@@ -456,21 +515,23 @@ class IndexSyncServiceTestCase(TestCase):
     def test_filesystem_wins_policy(self):
         """Test that filesystem is always treated as source of truth."""
         # Create file on disk
-        self._create_file('truth.txt', 'filesystem content')
-        
+        self._create_file("truth.txt", "filesystem content")
+
         # Create DB record with different size
         StoredFileFactory(
             owner=self.user.account,
-            path='truth.txt',
-            name='truth.txt',
+            path="truth.txt",
+            name="truth.txt",
             size=1,  # Wrong
         )
-        
+
         # Sync should update to match filesystem
-        stats = self.service.sync(mode='sync')
-        
-        record = StoredFile.objects.get(owner=self.user.account, path='truth.txt')
-        self.assertEqual(record.size, 18)  # len("filesystem content") - filesystem wins!
+        stats = self.service.sync(mode="sync")
+
+        record = StoredFile.objects.get(owner=self.user.account, path="truth.txt")
+        self.assertEqual(
+            record.size, 18
+        )  # len("filesystem content") - filesystem wins!
 
     def test_stats_dataclass(self):
         """Test IndexSyncStats dataclass structure."""
@@ -485,7 +546,7 @@ class IndexSyncServiceTestCase(TestCase):
             records_skipped=0,
             errors=[],
         )
-        
+
         self.assertEqual(stats.users_scanned, 1)
         self.assertEqual(stats.files_on_disk, 5)
         self.assertEqual(stats.missing_in_db, 2)

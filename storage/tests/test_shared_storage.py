@@ -25,8 +25,8 @@ class SharedStorageAPITestCase(APITestCase):
     def setUpClass(cls):
         """Set up test storage directories."""
         super().setUpClass()
-        cls.test_storage_root = settings.BASE_DIR / 'storage_root_test'
-        cls.test_shared_root = settings.BASE_DIR / 'shared_storage_test'
+        cls.test_storage_root = settings.BASE_DIR / "storage_root_test"
+        cls.test_shared_root = settings.BASE_DIR / "shared_storage_test"
         cls.test_storage_root.mkdir(exist_ok=True)
         cls.test_shared_root.mkdir(exist_ok=True)
 
@@ -55,10 +55,10 @@ class SharedStorageAPITestCase(APITestCase):
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
             STORMCLOUD_SHARED_STORAGE_ROOT=self.test_shared_root,
             CACHES={
-                'default': {
-                    'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+                "default": {
+                    "BACKEND": "django.core.cache.backends.dummy.DummyCache",
                 }
-            }
+            },
         )
         self.settings_override.enable()
 
@@ -78,7 +78,7 @@ class SharedStorageAPITestCase(APITestCase):
 
     def authenticate(self):
         """Authenticate requests with API key."""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.api_key.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
 
 
 class SharedDirectoryListTest(SharedStorageAPITestCase):
@@ -418,7 +418,7 @@ class SharedStorageIsolationTest(SharedStorageAPITestCase):
         key2 = APIKeyFactory(organization=org2, created_by=user2.account)
 
         # Try to access from second org
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {key2.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {key2.key}")
         response = self.client.get(f"/api/v1/shared/files/{unique_file}/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

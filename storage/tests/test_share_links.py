@@ -398,7 +398,9 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         from storage.tests.factories import StoredFileFactory
 
         # Create file record (needed for share to work)
-        stored_file = StoredFileFactory(owner=self.user.account, path="expired-file.txt")
+        stored_file = StoredFileFactory(
+            owner=self.user.account, path="expired-file.txt"
+        )
 
         # Create expired share
         share = ShareLinkFactory(

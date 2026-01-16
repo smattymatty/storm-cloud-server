@@ -18,7 +18,7 @@ class StormCloudAPITestCase(APITestCase):
     def setUpClass(cls):
         """Set up test storage directory."""
         super().setUpClass()
-        cls.test_storage_root = settings.BASE_DIR / 'storage_root_test'
+        cls.test_storage_root = settings.BASE_DIR / "storage_root_test"
         cls.test_storage_root.mkdir(exist_ok=True)
 
     @classmethod
@@ -44,10 +44,10 @@ class StormCloudAPITestCase(APITestCase):
         self.settings_override = override_settings(
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
             CACHES={
-                'default': {
-                    'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+                "default": {
+                    "BACKEND": "django.core.cache.backends.dummy.DummyCache",
                 }
-            }
+            },
         )
         self.settings_override.enable()
 
@@ -64,7 +64,7 @@ class StormCloudAPITestCase(APITestCase):
     def authenticate(self, user=None, api_key=None):
         """Authenticate requests with API key."""
         key = api_key or self.api_key
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {key.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {key.key}")
 
     def authenticate_session(self, user=None):
         """Authenticate requests with session."""

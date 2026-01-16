@@ -8,8 +8,8 @@ def main():
     """Run administrative tasks."""
     # Default to dev settings for local development
     # Docker sets DJANGO_SETTINGS_MODULE=_core.settings.production via ENV in Dockerfile
-    if 'DJANGO_SETTINGS_MODULE' not in os.environ:
-        os.environ['DJANGO_SETTINGS_MODULE'] = '_core.settings.dev'
+    if "DJANGO_SETTINGS_MODULE" not in os.environ:
+        os.environ["DJANGO_SETTINGS_MODULE"] = "_core.settings.dev"
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
@@ -21,5 +21,5 @@ def main():
     execute_from_command_line(sys.argv)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

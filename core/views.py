@@ -12,6 +12,7 @@ class StormCloudBaseAPIView(APIView):
     - Authentication required by default
     - Common serializer context
     """
+
     permission_classes = [IsAuthenticated]
 
     def get_serializer_context(self):

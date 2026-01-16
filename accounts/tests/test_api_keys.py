@@ -18,15 +18,21 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         # assert 'key' in response.data
         # assert response.data['name'] == 'test-key'
         # Verify key was saved to DB
-        self.authenticate_session(self.user)  # Session auth required for API key management
-        data = {'name': 'test-key'}
-        response = self.client.post('/api/v1/auth/tokens/', data)
+        self.authenticate_session(
+            self.user
+        )  # Session auth required for API key management
+        data = {"name": "test-key"}
+        response = self.client.post("/api/v1/auth/tokens/", data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('key', response.data)
-        self.assertEqual(response.data['name'], 'test-key')
+        self.assertIn("key", response.data)
+        self.assertEqual(response.data["name"], "test-key")
 
         # Verify key was saved
-        self.assertTrue(APIKey.objects.filter(organization=self.user.account.organization, name='test-key').exists())
+        self.assertTrue(
+            APIKey.objects.filter(
+                organization=self.user.account.organization, name="test-key"
+            ).exists()
+        )
 
     @override_settings(STORMCLOUD_REQUIRE_EMAIL_VERIFICATION=True)
     def test_create_api_key_with_unverified_email_returns_403(self):
@@ -38,10 +44,10 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         unverified_user = UserWithProfileFactory()  # email_verified=False by default
         self.authenticate_session(unverified_user)
 
-        data = {'name': 'test-key'}
-        response = self.client.post('/api/v1/auth/tokens/', data)
+        data = {"name": "test-key"}
+        response = self.client.post("/api/v1/auth/tokens/", data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error']['code'], 'EMAIL_NOT_VERIFIED')
+        self.assertEqual(response.data["error"]["code"], "EMAIL_NOT_VERIFIED")
 
     @override_settings(STORMCLOUD_MAX_API_KEYS_PER_USER=2)
     def test_create_api_key_when_max_exceeded_returns_403(self):
@@ -53,10 +59,10 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         APIKeyFactory(organization=self.user.account.organization)
         self.authenticate_session(self.user)  # Session auth required
 
-        data = {'name': 'third-key'}
-        response = self.client.post('/api/v1/auth/tokens/', data)
+        data = {"name": "third-key"}
+        response = self.client.post("/api/v1/auth/tokens/", data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error']['code'], 'MAX_KEYS_EXCEEDED')
+        self.assertEqual(response.data["error"]["code"], "MAX_KEYS_EXCEEDED")
 
     def test_create_api_key_fires_signal(self):
         """Creating API key fires api_key_created signal."""
@@ -70,8 +76,8 @@ class APIKeyCreateTest(StormCloudAPITestCase):
         api_key_created.connect(signal_handler)
 
         self.authenticate_session(self.user)  # Session auth required
-        data = {'name': 'test-key'}
-        response = self.client.post('/api/v1/auth/tokens/', data)
+        data = {"name": "test-key"}
+        response = self.client.post("/api/v1/auth/tokens/", data)
 
         api_key_created.disconnect(signal_handler)
 
@@ -97,10 +103,10 @@ class APIKeyListTest(StormCloudAPITestCase):
         other_user = UserWithProfileFactory()
         APIKeyFactory(organization=other_user.account.organization)
 
-        response = self.client.get('/api/v1/auth/tokens/')
+        response = self.client.get("/api/v1/auth/tokens/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total'], 2)
-        self.assertEqual(len(response.data['keys']), 2)
+        self.assertEqual(response.data["total"], 2)
+        self.assertEqual(len(response.data["keys"]), 2)
 
     def test_list_api_keys_does_not_include_key_value(self):
         """Listing keys doesn't expose actual key values."""
@@ -108,24 +114,26 @@ class APIKeyListTest(StormCloudAPITestCase):
         # Verify 'key' field is not in response data
         self.authenticate()
 
-        response = self.client.get('/api/v1/auth/tokens/')
+        response = self.client.get("/api/v1/auth/tokens/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Check that key field is not in any token
-        for key_data in response.data['keys']:
-            self.assertNotIn('key', key_data)
+        for key_data in response.data["keys"]:
+            self.assertNotIn("key", key_data)
 
     def test_list_api_keys_includes_revoked_keys(self):
         """Listing keys includes revoked keys."""
         # GET list
         # Verify both appear in response
         self.authenticate()
-        revoked_key = APIKeyFactory(organization=self.user.account.organization, revoked=True)
+        revoked_key = APIKeyFactory(
+            organization=self.user.account.organization, revoked=True
+        )
 
-        response = self.client.get('/api/v1/auth/tokens/')
+        response = self.client.get("/api/v1/auth/tokens/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should have 2 keys: one active from setUp, one revoked
-        self.assertEqual(response.data['total'], 2)
+        self.assertEqual(response.data["total"], 2)
 
 
 class APIKeyRevokeTest(StormCloudAPITestCase):
@@ -140,7 +148,7 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
         self.authenticate_session(self.user)  # Session auth required for key management
         key_to_revoke = APIKeyFactory(organization=self.user.account.organization)
 
-        response = self.client.post(f'/api/v1/auth/tokens/{key_to_revoke.id}/revoke/')
+        response = self.client.post(f"/api/v1/auth/tokens/{key_to_revoke.id}/revoke/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         key_to_revoke.refresh_from_db()
@@ -156,9 +164,9 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
         self.authenticate_session(self.user)  # Session auth required
         fake_id = uuid.uuid4()
 
-        response = self.client.post(f'/api/v1/auth/tokens/{fake_id}/revoke/')
+        response = self.client.post(f"/api/v1/auth/tokens/{fake_id}/revoke/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data['error']['code'], 'KEY_NOT_FOUND')
+        self.assertEqual(response.data["error"]["code"], "KEY_NOT_FOUND")
 
     def test_revoke_another_orgs_key_returns_404(self):
         """Revoking another org's key returns 404."""
@@ -170,7 +178,7 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
 
         self.authenticate_session(self.user)  # Session auth required
 
-        response = self.client.post(f'/api/v1/auth/tokens/{other_key.id}/revoke/')
+        response = self.client.post(f"/api/v1/auth/tokens/{other_key.id}/revoke/")
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_revoke_already_revoked_key_returns_400(self):
@@ -179,11 +187,13 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
         # assert response.status_code == 400
         # assert response.data['error']['code'] == 'ALREADY_REVOKED'
         self.authenticate_session(self.user)  # Session auth required
-        revoked_key = APIKeyFactory(organization=self.user.account.organization, revoked=True)
+        revoked_key = APIKeyFactory(
+            organization=self.user.account.organization, revoked=True
+        )
 
-        response = self.client.post(f'/api/v1/auth/tokens/{revoked_key.id}/revoke/')
+        response = self.client.post(f"/api/v1/auth/tokens/{revoked_key.id}/revoke/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'ALREADY_REVOKED')
+        self.assertEqual(response.data["error"]["code"], "ALREADY_REVOKED")
 
     def test_revoke_fires_signal(self):
         """Revoking key fires api_key_revoked signal."""
@@ -198,7 +208,7 @@ class APIKeyRevokeTest(StormCloudAPITestCase):
 
         self.authenticate_session(self.user)  # Session auth required
         key_to_revoke = APIKeyFactory(organization=self.user.account.organization)
-        response = self.client.post(f'/api/v1/auth/tokens/{key_to_revoke.id}/revoke/')
+        response = self.client.post(f"/api/v1/auth/tokens/{key_to_revoke.id}/revoke/")
 
         api_key_revoked.disconnect(signal_handler)
 
@@ -213,30 +223,36 @@ class APIKeyAuthenticationTest(StormCloudAPITestCase):
         # Create and use key successfully
         key = APIKeyFactory(user=self.user)
         self.authenticate(api_key=key)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Revoke the key
         key.revoke()
 
         # Try to use it again - should fail (401 or 403 depending on DRF config)
-        response = self.client.get('/api/v1/auth/me/')
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        response = self.client.get("/api/v1/auth/me/")
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
     def test_inactive_api_key_cannot_authenticate(self):
         """An API key with is_active=False should fail authentication."""
         key = APIKeyFactory(user=self.user, is_active=False)
         self.authenticate(api_key=key)
 
-        response = self.client.get('/api/v1/auth/me/')
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        response = self.client.get("/api/v1/auth/me/")
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
     def test_org_deactivation_stops_api_key(self):
         """If organization is deactivated, API keys should fail."""
         # Create key and verify it works
         key = APIKeyFactory(organization=self.user.account.organization)
         self.authenticate(api_key=key)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Deactivate organization
@@ -244,8 +260,11 @@ class APIKeyAuthenticationTest(StormCloudAPITestCase):
         self.user.account.organization.save()
 
         # Key should no longer work (401 or 403 depending on DRF config)
-        response = self.client.get('/api/v1/auth/me/')
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        response = self.client.get("/api/v1/auth/me/")
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
 
 class APIKeyEmailVerificationTest(StormCloudAPITestCase):
@@ -260,7 +279,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
 
         # Use key successfully (keys work regardless of email status)
         self.authenticate(api_key=key)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify the email
@@ -268,7 +287,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         unverified_user.account.save()
 
         # Same key should still work
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @override_settings(STORMCLOUD_REQUIRE_EMAIL_VERIFICATION=True)
@@ -280,7 +299,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
 
         # Use key successfully
         self.authenticate(api_key=key)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Admin unverifies user's email (edge case)
@@ -288,7 +307,7 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
         verified_user.account.save()
 
         # Key should STILL work (only revocation stops keys)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @override_settings(STORMCLOUD_REQUIRE_EMAIL_VERIFICATION=True)
@@ -303,15 +322,15 @@ class APIKeyEmailVerificationTest(StormCloudAPITestCase):
 
         # Existing key works for API calls
         self.authenticate(api_key=existing_key)
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Clear API key credentials before using session auth
         self.client.credentials()  # Clear Bearer header
         self.authenticate_session(unverified_user)
-        response = self.client.post('/api/v1/auth/tokens/', {'name': 'new-key'})
+        response = self.client.post("/api/v1/auth/tokens/", {"name": "new-key"})
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data['error']['code'], 'EMAIL_NOT_VERIFIED')
+        self.assertEqual(response.data["error"]["code"], "EMAIL_NOT_VERIFIED")
 
 
 class APIKeyRevocationBehaviorTest(StormCloudAPITestCase):
@@ -326,15 +345,15 @@ class APIKeyRevocationBehaviorTest(StormCloudAPITestCase):
         self.authenticate(api_key=key)
 
         # Verify key works
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Change password
-        self.user.set_password('new-password-123')
+        self.user.set_password("new-password-123")
         self.user.save()
 
         # Key should still work
-        response = self.client.get('/api/v1/auth/me/')
+        response = self.client.get("/api/v1/auth/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_revoked_key_cannot_be_unrevoked_via_model(self):

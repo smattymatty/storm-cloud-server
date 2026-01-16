@@ -16,14 +16,16 @@ class CreateTestUserCommandTest(TestCase):
     def test_creates_basic_user(self):
         """Create test user should work."""
         out = StringIO()
-        call_command('create_test_user', '--username', 'testuser', stdout=out)
-        self.assertTrue(User.objects.filter(username='testuser').exists())
+        call_command("create_test_user", "--username", "testuser", stdout=out)
+        self.assertTrue(User.objects.filter(username="testuser").exists())
 
     def test_creates_verified_user(self):
         """Create test user with --verified should work."""
         out = StringIO()
-        call_command('create_test_user', '--username', 'testuser', '--verified', stdout=out)
-        user = User.objects.get(username='testuser')
+        call_command(
+            "create_test_user", "--username", "testuser", "--verified", stdout=out
+        )
+        user = User.objects.get(username="testuser")
         self.assertTrue(user.account.email_verified)
 
 
@@ -31,25 +33,29 @@ class GenerateAPIKeyCommandTest(TestCase):
     """Tests for generate_api_key management command."""
 
     def setUp(self):
-        self.user = UserWithProfileFactory(username='testuser')
+        self.user = UserWithProfileFactory(username="testuser")
 
     def test_generates_key_for_user(self):
         """Generate API key should work."""
         out = StringIO()
-        call_command('generate_api_key', 'testuser', '--name', 'test-key', stdout=out)
-        self.assertTrue(APIKey.objects.filter(organization=self.user.account.organization, name='test-key').exists())
+        call_command("generate_api_key", "testuser", "--name", "test-key", stdout=out)
+        self.assertTrue(
+            APIKey.objects.filter(
+                organization=self.user.account.organization, name="test-key"
+            ).exists()
+        )
 
 
 class RevokeAPIKeyCommandTest(TestCase):
     """Tests for revoke_api_key management command."""
 
     def setUp(self):
-        self.user = UserWithProfileFactory(username='testuser')
-        self.key = APIKeyFactory(user=self.user, name='to-revoke')
+        self.user = UserWithProfileFactory(username="testuser")
+        self.key = APIKeyFactory(user=self.user, name="to-revoke")
 
     def test_revokes_key_by_id(self):
         """Revoke API key by ID should work."""
         out = StringIO()
-        call_command('revoke_api_key', str(self.key.id), stdout=out)
+        call_command("revoke_api_key", str(self.key.id), stdout=out)
         self.key.refresh_from_db()
         self.assertFalse(self.key.is_active)

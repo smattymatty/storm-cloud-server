@@ -257,12 +257,14 @@ class BulkOperationService:
                 normalized = normalize_path(path)
                 path_map[normalized] = path
             except PathValidationError as e:
-                results.append(BulkOperationResult(
-                    path=path,
-                    success=False,
-                    error_code="INVALID_PATH",
-                    error_message=str(e),
-                ))
+                results.append(
+                    BulkOperationResult(
+                        path=path,
+                        success=False,
+                        error_code="INVALID_PATH",
+                        error_message=str(e),
+                    )
+                )
 
         if not path_map:
             return results
@@ -271,8 +273,7 @@ class BulkOperationService:
         db_files: dict[str, StoredFile] = {
             f.path: f
             for f in StoredFile.objects.filter(
-                owner=self.account,
-                path__in=path_map.keys()
+                owner=self.account, path__in=path_map.keys()
             )
         }
 
@@ -285,12 +286,14 @@ class BulkOperationService:
 
             # Check existence - need either DB record or filesystem presence
             if not db_file and not self.backend.exists(full_path):
-                results.append(BulkOperationResult(
-                    path=original_path,
-                    success=False,
-                    error_code="NOT_FOUND",
-                    error_message=f"File not found: {original_path}",
-                ))
+                results.append(
+                    BulkOperationResult(
+                        path=original_path,
+                        success=False,
+                        error_code="NOT_FOUND",
+                        error_message=f"File not found: {original_path}",
+                    )
+                )
                 continue
 
             # Delete from filesystem
@@ -317,12 +320,14 @@ class BulkOperationService:
                 results.append(BulkOperationResult(path=original_path, success=True))
 
             except Exception as e:
-                results.append(BulkOperationResult(
-                    path=original_path,
-                    success=False,
-                    error_code="DELETE_FAILED",
-                    error_message=f"Filesystem error: {str(e)}",
-                ))
+                results.append(
+                    BulkOperationResult(
+                        path=original_path,
+                        success=False,
+                        error_code="DELETE_FAILED",
+                        error_message=f"Filesystem error: {str(e)}",
+                    )
+                )
 
         # 4. Bulk delete ALL successful DB records in ONE operation
         # Django handles CASCADE automatically (ShareLinks, ManagedContent)
@@ -354,7 +359,9 @@ class BulkOperationService:
 
             # Check if file exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
+                db_file = StoredFile.objects.get(
+                    owner=self.account, path=normalized_path
+                )
             except StoredFile.DoesNotExist:
                 # Check if it exists on filesystem
                 if not self.backend.exists(full_path):
@@ -435,7 +442,9 @@ class BulkOperationService:
 
             # Check if source exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
+                db_file = StoredFile.objects.get(
+                    owner=self.account, path=normalized_path
+                )
             except StoredFile.DoesNotExist:
                 return BulkOperationResult(
                     path=path,
@@ -480,7 +489,9 @@ class BulkOperationService:
 
             # Update database record
             # Calculate new path (relative to user root)
-            new_relative_path = new_file_info.path.replace(f"{self.account_prefix}/", "")
+            new_relative_path = new_file_info.path.replace(
+                f"{self.account_prefix}/", ""
+            )
             new_parent_path = (
                 str(Path(new_relative_path).parent) if "/" in new_relative_path else ""
             )
@@ -530,7 +541,9 @@ class BulkOperationService:
 
             # Check if source exists and user owns it
             try:
-                db_file = StoredFile.objects.get(owner=self.account, path=normalized_path)
+                db_file = StoredFile.objects.get(
+                    owner=self.account, path=normalized_path
+                )
             except StoredFile.DoesNotExist:
                 return BulkOperationResult(
                     path=path,
@@ -601,7 +614,9 @@ class BulkOperationService:
                 )
 
             # Create new database record for the copy
-            new_relative_path = new_file_info.path.replace(f"{self.account_prefix}/", "")
+            new_relative_path = new_file_info.path.replace(
+                f"{self.account_prefix}/", ""
+            )
             new_parent_path = (
                 str(Path(new_relative_path).parent) if "/" in new_relative_path else ""
             )

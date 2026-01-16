@@ -100,11 +100,13 @@ class IndexRebuildView(StormCloudBaseAPIView):
             {
                 "task_id": str(result.id),
                 "status": result.status,
-                "result": result.return_value
-                if result.status == "SUCCESSFUL"
-                else None,
-                "errors": [{"traceback": e.traceback} for e in result.errors]
-                if result.errors
-                else [],
+                "result": (
+                    result.return_value if result.status == "SUCCESSFUL" else None
+                ),
+                "errors": (
+                    [{"traceback": e.traceback} for e in result.errors]
+                    if result.errors
+                    else []
+                ),
             }
         )

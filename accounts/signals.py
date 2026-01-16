@@ -13,7 +13,9 @@ email_verified = Signal()  # sender=User, user=user_instance
 api_key_created = Signal()  # sender=APIKey, api_key=key_instance, user=user
 
 # Fired when API key is revoked
-api_key_revoked = Signal()  # sender=APIKey, api_key=key_instance, user=user, revoked_by=user
+api_key_revoked = (
+    Signal()
+)  # sender=APIKey, api_key=key_instance, user=user, revoked_by=user
 
 # Fired when account is deactivated
 account_deactivated = Signal()  # sender=User, user=user_instance

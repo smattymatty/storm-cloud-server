@@ -140,10 +140,18 @@ django_settings_module = "_core.settings.base"  # Use base settings for type inf
 strict_settings = false              # Don't require all settings to be typed
 
 # =============================================================================
-# Future Tool Configurations (Placeholder)
+# Black Code Formatter
 # =============================================================================
-# You can add configurations for other tools later:
-# [tool.black]      - Code formatter
-# [tool.pytest]     - Test runner
-# [tool.coverage]   - Coverage reporting
-# [tool.ruff]       - Linter
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | venv
+    | migrations
+    | __pycache__
+)/
+'''

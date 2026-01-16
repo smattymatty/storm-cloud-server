@@ -46,6 +46,8 @@ from accounts.api import (
     AdminUserKeyWebhookTestView,
     # Admin Organization Management
     AdminOrganizationListView,
+    AdminOrganizationDetailView,
+    AdminOrganizationMembersView,
     # User Per-Key Webhook
     UserKeyWebhookView,
 )
@@ -61,6 +63,7 @@ from accounts.admin_invite_api import (
     AdminInviteListView,
     AdminInviteRevokeView,
     AdminInviteResendView,
+    AdminInviteBulkRevokeView,
 )
 from accounts.platform_api import (
     PlatformEnrollView,
@@ -325,7 +328,21 @@ urlpatterns = [
         name="admin-keys-revoke",
     ),
     # Organization Management (Admin)
-    path("admin/organizations/", AdminOrganizationListView.as_view(), name="admin-organizations"),
+    path(
+        "admin/organizations/",
+        AdminOrganizationListView.as_view(),
+        name="admin-organizations",
+    ),
+    path(
+        "admin/organizations/<uuid:org_id>/",
+        AdminOrganizationDetailView.as_view(),
+        name="admin-organization-detail",
+    ),
+    path(
+        "admin/organizations/<uuid:org_id>/members/",
+        AdminOrganizationMembersView.as_view(),
+        name="admin-organization-members",
+    ),
     # Admin Webhook Management (per user's key)
     path(
         "admin/users/<int:user_id>/keys/<uuid:key_id>/webhook/",
@@ -430,6 +447,11 @@ urlpatterns = [
         "admin/invites/<uuid:invite_id>/resend/",
         AdminInviteResendView.as_view(),
         name="admin-invite-resend",
+    ),
+    path(
+        "admin/invites/bulk-revoke/",
+        AdminInviteBulkRevokeView.as_view(),
+        name="admin-invites-bulk-revoke",
     ),
     # =========================================================================
     # Storage

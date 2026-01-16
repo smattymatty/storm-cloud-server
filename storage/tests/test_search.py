@@ -121,7 +121,10 @@ class SearchFilesViewTest(StormCloudAPITestCase):
         self.client.credentials()  # Clear auth
         response = self.client.get("/api/v1/search/files/?q=readme")
         # 401 or 403 both indicate auth required
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
 
 class AdminSearchFilesViewTest(StormCloudAdminTestCase):
@@ -173,9 +176,7 @@ class AdminSearchFilesViewTest(StormCloudAdminTestCase):
 
     def test_admin_search_requires_query(self):
         """Admin search without query returns 400."""
-        response = self.client.get(
-            f"/api/v1/admin/users/{self.user.id}/search/files/"
-        )
+        response = self.client.get(f"/api/v1/admin/users/{self.user.id}/search/files/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "MISSING_QUERY")
 

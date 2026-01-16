@@ -16,8 +16,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'is_staff', 'is_superuser', 'is_active']
-        read_only_fields = ['id', 'date_joined']
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "date_joined",
+            "is_staff",
+            "is_superuser",
+            "is_active",
+        ]
+        read_only_fields = ["id", "date_joined"]
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -26,26 +36,26 @@ class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
         fields = [
-            'id',
-            'email_verified',
+            "id",
+            "email_verified",
             # Action permissions
-            'can_upload',
-            'can_delete',
-            'can_move',
-            'can_overwrite',
-            'can_create_shares',
-            'max_share_links',
-            'max_upload_bytes',
+            "can_upload",
+            "can_delete",
+            "can_move",
+            "can_overwrite",
+            "can_create_shares",
+            "max_share_links",
+            "max_upload_bytes",
             # Org admin permissions
-            'can_invite',
-            'can_manage_members',
-            'can_manage_api_keys',
-            'is_owner',
+            "can_invite",
+            "can_manage_members",
+            "can_manage_api_keys",
+            "is_owner",
             # Storage
-            'storage_quota_bytes',
-            'storage_used_bytes',
+            "storage_quota_bytes",
+            "storage_used_bytes",
         ]
-        read_only_fields = ['id', 'storage_used_bytes']
+        read_only_fields = ["id", "storage_used_bytes"]
 
 
 # Backward compatibility alias
@@ -57,7 +67,7 @@ class RegistrationSerializer(serializers.Serializer):
 
     username = serializers.CharField(max_length=150)
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
     def validate_password(self, value):
         """Validate password using Django's validators."""
@@ -81,7 +91,7 @@ class LoginSerializer(serializers.Serializer):
     """Serializer for session login."""
 
     username = serializers.CharField()
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
 
 class EmailVerificationSerializer(serializers.Serializer):
@@ -101,8 +111,8 @@ class APIKeySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = APIKey
-        fields = ['id', 'name', 'key', 'created_at', 'last_used_at', 'is_active']
-        read_only_fields = ['id', 'key', 'created_at', 'last_used_at']
+        fields = ["id", "name", "key", "created_at", "last_used_at", "is_active"]
+        read_only_fields = ["id", "key", "created_at", "last_used_at"]
 
 
 class APIKeyListSerializer(serializers.ModelSerializer):
@@ -110,7 +120,7 @@ class APIKeyListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = APIKey
-        fields = ['id', 'name', 'created_at', 'last_used_at', 'is_active', 'revoked_at']
+        fields = ["id", "name", "created_at", "last_used_at", "is_active", "revoked_at"]
         read_only_fields = fields
 
 
@@ -121,19 +131,19 @@ class APIKeyCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = APIKey
-        fields = ['name']
+        fields = ["name"]
 
 
 class DeactivateAccountSerializer(serializers.Serializer):
     """Serializer for account deactivation."""
 
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
 
 class DeleteAccountSerializer(serializers.Serializer):
     """Serializer for account deletion."""
 
-    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    password = serializers.CharField(write_only=True, style={"input_type": "password"})
 
 
 class AuthMeResponseSerializer(serializers.Serializer):
@@ -143,23 +153,29 @@ class AuthMeResponseSerializer(serializers.Serializer):
     account = AccountSerializer()
     api_key = serializers.SerializerMethodField()
 
-    @extend_schema_field({
-        'type': 'object',
-        'properties': {
-            'id': {'type': 'string', 'format': 'uuid'},
-            'name': {'type': 'string'},
-            'last_used_at': {'type': 'string', 'format': 'date-time', 'nullable': True},
-        },
-        'nullable': True,
-    })
+    @extend_schema_field(
+        {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "format": "uuid"},
+                "name": {"type": "string"},
+                "last_used_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": True,
+                },
+            },
+            "nullable": True,
+        }
+    )
     def get_api_key(self, obj):
         """Return only the ID and name of the current API key."""
-        api_key = self.context.get('api_key')
+        api_key = self.context.get("api_key")
         if api_key:
             return {
-                'id': str(api_key.id),
-                'name': api_key.name,
-                'last_used_at': api_key.last_used_at,
+                "id": str(api_key.id),
+                "name": api_key.name,
+                "last_used_at": api_key.last_used_at,
             }
         return None
 
@@ -182,7 +198,7 @@ class AdminUserCreateSerializer(serializers.Serializer):
     organization_slug = serializers.SlugField(
         required=False,
         allow_null=True,
-        help_text="Organization slug. If not provided, uses admin's organization."
+        help_text="Organization slug. If not provided, uses admin's organization.",
     )
 
     def validate_password(self, value):
@@ -209,7 +225,7 @@ class AdminUserUpdateSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         """Check if email already exists (excluding current user)."""
-        user = self.context.get('user')
+        user = self.context.get("user")
         if user and User.objects.filter(email=value).exclude(id=user.id).exists():
             raise serializers.ValidationError("Email already exists.")
         return value
@@ -233,7 +249,7 @@ class AdminUserDetailSerializer(serializers.Serializer):
 
     user = UserSerializer()
     account = AccountSerializer()
-    api_keys = APIKeyListSerializer(many=True, source='user.api_keys')
+    api_keys = APIKeyListSerializer(many=True, source="user.api_keys")
     storage_used_bytes = serializers.IntegerField(default=0)
 
 
@@ -243,7 +259,7 @@ class AdminUserQuotaUpdateSerializer(serializers.Serializer):
     storage_quota_mb = serializers.IntegerField(
         min_value=0,
         allow_null=True,
-        help_text="Storage quota in MB, or null for unlimited"
+        help_text="Storage quota in MB, or null for unlimited",
     )
 
 
@@ -251,34 +267,29 @@ class AdminUserPermissionsUpdateSerializer(serializers.Serializer):
     """Serializer for updating user permission flags."""
 
     can_upload = serializers.BooleanField(
-        required=False,
-        help_text="User can upload new files"
+        required=False, help_text="User can upload new files"
     )
     can_delete = serializers.BooleanField(
-        required=False,
-        help_text="User can delete files and folders"
+        required=False, help_text="User can delete files and folders"
     )
     can_move = serializers.BooleanField(
-        required=False,
-        help_text="User can move/rename files and folders"
+        required=False, help_text="User can move/rename files and folders"
     )
     can_overwrite = serializers.BooleanField(
-        required=False,
-        help_text="User can overwrite/edit existing files"
+        required=False, help_text="User can overwrite/edit existing files"
     )
     can_create_shares = serializers.BooleanField(
-        required=False,
-        help_text="User can create share links"
+        required=False, help_text="User can create share links"
     )
     max_share_links = serializers.IntegerField(
         required=False,
         min_value=0,
-        help_text="Maximum active share links allowed. 0 = unlimited"
+        help_text="Maximum active share links allowed. 0 = unlimited",
     )
     max_upload_bytes = serializers.IntegerField(
         required=False,
         min_value=0,
-        help_text="Per-file upload size limit in bytes. 0 = use server default"
+        help_text="Per-file upload size limit in bytes. 0 = use server default",
     )
 
 

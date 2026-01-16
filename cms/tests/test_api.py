@@ -27,9 +27,7 @@ class MappingReportTests(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["created"], 2)
         self.assertEqual(response.data["updated"], 0)
-        self.assertEqual(
-            PageFileMapping.objects.filter(owner=self.user).count(), 2
-        )
+        self.assertEqual(PageFileMapping.objects.filter(owner=self.user).count(), 2)
 
     def test_report_updates_existing_mappings(self):
         """Report updates last_seen on existing mappings."""
@@ -191,9 +189,7 @@ class PageListTests(StormCloudAPITestCase):
         self.assertEqual(response.data["total"], 2)
 
         # Find home page
-        home = next(
-            p for p in response.data["pages"] if p["page_path"] == "/"
-        )
+        home = next(p for p in response.data["pages"] if p["page_path"] == "/")
         self.assertEqual(home["file_count"], 2)
 
     def test_list_pages_filter_stale(self):
@@ -278,9 +274,7 @@ class PageDetailTests(StormCloudAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["deleted"], 2)
-        self.assertEqual(
-            PageFileMapping.objects.filter(owner=self.user).count(), 0
-        )
+        self.assertEqual(PageFileMapping.objects.filter(owner=self.user).count(), 0)
 
     def test_delete_page_404(self):
         """Delete returns 404 for unknown page."""
@@ -440,7 +434,7 @@ class MarkdownPreviewTests(StormCloudAPITestCase):
         self.authenticate()
         response = self.client.post(
             "/api/v1/cms/preview/",
-            {"content": "{~ alert type=\"info\" ~}\nTest alert\n{~~}"},
+            {"content": '{~ alert type="info" ~}\nTest alert\n{~~}'},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -7,7 +7,14 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
 
-from accounts.models import APIKey, Account, Organization, EmailVerificationToken, EnrollmentKey, PlatformInvite
+from accounts.models import (
+    APIKey,
+    Account,
+    Organization,
+    EmailVerificationToken,
+    EnrollmentKey,
+    PlatformInvite,
+)
 
 User = get_user_model()
 
@@ -113,13 +120,13 @@ class APIKeyFactory(factory.django.DjangoModelFactory):
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
         """Handle backward-compat user= parameter."""
-        user = kwargs.pop('user', None)
-        if user and hasattr(user, 'account') and user.account:
+        user = kwargs.pop("user", None)
+        if user and hasattr(user, "account") and user.account:
             # If user has an account, use their organization and set created_by
-            if 'organization' not in kwargs:
-                kwargs['organization'] = user.account.organization
-            if 'created_by' not in kwargs:
-                kwargs['created_by'] = user.account
+            if "organization" not in kwargs:
+                kwargs["organization"] = user.account.organization
+            if "created_by" not in kwargs:
+                kwargs["created_by"] = user.account
         return super()._create(model_class, *args, **kwargs)
 
 
@@ -165,7 +172,9 @@ class EnrollmentKeyFactory(factory.django.DjangoModelFactory):
             single_use=False,
         )
         with_email = factory.Trait(
-            required_email=factory.LazyAttribute(lambda o: f"invite{secrets.token_hex(4)}@example.com"),
+            required_email=factory.LazyAttribute(
+                lambda o: f"invite{secrets.token_hex(4)}@example.com"
+            ),
         )
 
 

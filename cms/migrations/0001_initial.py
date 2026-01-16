@@ -11,133 +11,331 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('storage', '0001_initial'),
+        ("storage", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ContentFlag',
+            name="ContentFlag",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('flag_type', models.CharField(choices=[('ai_generated', 'AI Generated'), ('user_approved', 'User Approved')], help_text='Type of flag (ai_generated, user_approved, etc.)', max_length=50)),
-                ('is_active', models.BooleanField(default=False, help_text='Whether this flag is currently active')),
-                ('metadata', models.JSONField(blank=True, default=dict, help_text='Type-specific metadata (schema varies by flag_type)')),
-                ('changed_at', models.DateTimeField(auto_now=True, help_text='When this flag was last changed')),
-                ('changed_by', models.ForeignKey(blank=True, help_text='User who last changed this flag', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='flag_changes', to=settings.AUTH_USER_MODEL)),
-                ('stored_file', models.ForeignKey(help_text='The file being flagged', on_delete=django.db.models.deletion.CASCADE, related_name='content_flags', to='storage.storedfile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "flag_type",
+                    models.CharField(
+                        choices=[
+                            ("ai_generated", "AI Generated"),
+                            ("user_approved", "User Approved"),
+                        ],
+                        help_text="Type of flag (ai_generated, user_approved, etc.)",
+                        max_length=50,
+                    ),
+                ),
+                (
+                    "is_active",
+                    models.BooleanField(
+                        default=False, help_text="Whether this flag is currently active"
+                    ),
+                ),
+                (
+                    "metadata",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                        help_text="Type-specific metadata (schema varies by flag_type)",
+                    ),
+                ),
+                (
+                    "changed_at",
+                    models.DateTimeField(
+                        auto_now=True, help_text="When this flag was last changed"
+                    ),
+                ),
+                (
+                    "changed_by",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="User who last changed this flag",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="flag_changes",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "stored_file",
+                    models.ForeignKey(
+                        help_text="The file being flagged",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="content_flags",
+                        to="storage.storedfile",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Content Flag',
-                'verbose_name_plural': 'Content Flags',
+                "verbose_name": "Content Flag",
+                "verbose_name_plural": "Content Flags",
             },
         ),
         migrations.CreateModel(
-            name='ContentFlagHistory',
+            name="ContentFlagHistory",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('was_active', models.BooleanField(help_text='Previous is_active state')),
-                ('is_active', models.BooleanField(help_text='New is_active state')),
-                ('metadata', models.JSONField(default=dict, help_text='Metadata snapshot at time of change')),
-                ('changed_at', models.DateTimeField(auto_now_add=True, help_text='When this change occurred')),
-                ('changed_by', models.ForeignKey(blank=True, help_text='User who made this change', null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('flag', models.ForeignKey(help_text='The flag that was changed', on_delete=django.db.models.deletion.CASCADE, related_name='history', to='cms.contentflag')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "was_active",
+                    models.BooleanField(help_text="Previous is_active state"),
+                ),
+                ("is_active", models.BooleanField(help_text="New is_active state")),
+                (
+                    "metadata",
+                    models.JSONField(
+                        default=dict, help_text="Metadata snapshot at time of change"
+                    ),
+                ),
+                (
+                    "changed_at",
+                    models.DateTimeField(
+                        auto_now_add=True, help_text="When this change occurred"
+                    ),
+                ),
+                (
+                    "changed_by",
+                    models.ForeignKey(
+                        blank=True,
+                        help_text="User who made this change",
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "flag",
+                    models.ForeignKey(
+                        help_text="The flag that was changed",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="history",
+                        to="cms.contentflag",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Content Flag History',
-                'verbose_name_plural': 'Content Flag History',
-                'ordering': ['-changed_at'],
+                "verbose_name": "Content Flag History",
+                "verbose_name_plural": "Content Flag History",
+                "ordering": ["-changed_at"],
             },
         ),
         migrations.CreateModel(
-            name='ManagedContent',
+            name="ManagedContent",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('rendered_html', models.TextField(blank=True)),
-                ('rendered_at', models.DateTimeField(blank=True, null=True)),
-                ('file', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='cms_content', to='storage.storedfile')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("rendered_html", models.TextField(blank=True)),
+                ("rendered_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "file",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="cms_content",
+                        to="storage.storedfile",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Managed Content',
-                'verbose_name_plural': 'Managed Content',
+                "verbose_name": "Managed Content",
+                "verbose_name_plural": "Managed Content",
             },
         ),
         migrations.CreateModel(
-            name='PageFileMapping',
+            name="PageFileMapping",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('page_path', models.CharField(db_index=True, help_text="URL path of the page (e.g., '/about/')", max_length=500)),
-                ('file_path', models.CharField(db_index=True, help_text="Path to content file (e.g., 'pages/about.md')", max_length=500)),
-                ('first_seen', models.DateTimeField(auto_now_add=True, help_text='When this mapping was first reported')),
-                ('last_seen', models.DateTimeField(auto_now=True, help_text='When this mapping was last reported')),
-                ('owner', models.ForeignKey(help_text='User who owns this content (identified by API key)', on_delete=django.db.models.deletion.CASCADE, related_name='page_file_mappings', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "page_path",
+                    models.CharField(
+                        db_index=True,
+                        help_text="URL path of the page (e.g., '/about/')",
+                        max_length=500,
+                    ),
+                ),
+                (
+                    "file_path",
+                    models.CharField(
+                        db_index=True,
+                        help_text="Path to content file (e.g., 'pages/about.md')",
+                        max_length=500,
+                    ),
+                ),
+                (
+                    "first_seen",
+                    models.DateTimeField(
+                        auto_now_add=True,
+                        help_text="When this mapping was first reported",
+                    ),
+                ),
+                (
+                    "last_seen",
+                    models.DateTimeField(
+                        auto_now=True, help_text="When this mapping was last reported"
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        help_text="User who owns this content (identified by API key)",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="page_file_mappings",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Page File Mapping',
-                'verbose_name_plural': 'Page File Mappings',
-                'ordering': ['-last_seen'],
+                "verbose_name": "Page File Mapping",
+                "verbose_name_plural": "Page File Mappings",
+                "ordering": ["-last_seen"],
             },
         ),
         migrations.CreateModel(
-            name='PageStats',
+            name="PageStats",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('page_path', models.CharField(db_index=True, help_text="URL path of the page (e.g., '/about/')", max_length=500)),
-                ('view_count', models.PositiveIntegerField(default=0, help_text='Number of times this page has been viewed')),
-                ('first_viewed', models.DateTimeField(auto_now_add=True, help_text='When this page was first viewed')),
-                ('last_viewed', models.DateTimeField(auto_now=True, help_text='When this page was last viewed')),
-                ('owner', models.ForeignKey(help_text='User who owns this page (identified by API key)', on_delete=django.db.models.deletion.CASCADE, related_name='page_stats', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "page_path",
+                    models.CharField(
+                        db_index=True,
+                        help_text="URL path of the page (e.g., '/about/')",
+                        max_length=500,
+                    ),
+                ),
+                (
+                    "view_count",
+                    models.PositiveIntegerField(
+                        default=0, help_text="Number of times this page has been viewed"
+                    ),
+                ),
+                (
+                    "first_viewed",
+                    models.DateTimeField(
+                        auto_now_add=True, help_text="When this page was first viewed"
+                    ),
+                ),
+                (
+                    "last_viewed",
+                    models.DateTimeField(
+                        auto_now=True, help_text="When this page was last viewed"
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        help_text="User who owns this page (identified by API key)",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="page_stats",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Page Stats',
-                'verbose_name_plural': 'Page Stats',
-                'ordering': ['-view_count'],
+                "verbose_name": "Page Stats",
+                "verbose_name_plural": "Page Stats",
+                "ordering": ["-view_count"],
             },
         ),
         migrations.AddIndex(
-            model_name='contentflag',
-            index=models.Index(fields=['stored_file', 'flag_type'], name='cms_content_stored__2dc5fb_idx'),
+            model_name="contentflag",
+            index=models.Index(
+                fields=["stored_file", "flag_type"],
+                name="cms_content_stored__2dc5fb_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='contentflag',
-            index=models.Index(fields=['flag_type', 'is_active'], name='cms_content_flag_ty_aa38bc_idx'),
+            model_name="contentflag",
+            index=models.Index(
+                fields=["flag_type", "is_active"], name="cms_content_flag_ty_aa38bc_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='contentflag',
-            unique_together={('stored_file', 'flag_type')},
+            name="contentflag",
+            unique_together={("stored_file", "flag_type")},
         ),
         migrations.AddIndex(
-            model_name='pagefilemapping',
-            index=models.Index(fields=['owner', 'page_path'], name='cms_pagefil_owner_i_304048_idx'),
+            model_name="pagefilemapping",
+            index=models.Index(
+                fields=["owner", "page_path"], name="cms_pagefil_owner_i_304048_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='pagefilemapping',
-            index=models.Index(fields=['owner', 'file_path'], name='cms_pagefil_owner_i_08df90_idx'),
+            model_name="pagefilemapping",
+            index=models.Index(
+                fields=["owner", "file_path"], name="cms_pagefil_owner_i_08df90_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='pagefilemapping',
-            index=models.Index(fields=['last_seen'], name='cms_pagefil_last_se_8464de_idx'),
+            model_name="pagefilemapping",
+            index=models.Index(
+                fields=["last_seen"], name="cms_pagefil_last_se_8464de_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='pagefilemapping',
-            unique_together={('owner', 'page_path', 'file_path')},
+            name="pagefilemapping",
+            unique_together={("owner", "page_path", "file_path")},
         ),
         migrations.AddIndex(
-            model_name='pagestats',
-            index=models.Index(fields=['owner', 'page_path'], name='cms_pagesta_owner_i_5e9d94_idx'),
+            model_name="pagestats",
+            index=models.Index(
+                fields=["owner", "page_path"], name="cms_pagesta_owner_i_5e9d94_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='pagestats',
-            unique_together={('owner', 'page_path')},
+            name="pagestats",
+            unique_together={("owner", "page_path")},
         ),
     ]

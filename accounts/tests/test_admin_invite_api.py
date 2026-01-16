@@ -26,50 +26,49 @@ class InviteStatusDerivationTest(TestCase):
     def test_status_pending(self):
         """Fresh invite returns 'pending'."""
         ek = EnrollmentKeyFactory()
-        self.assertEqual(get_invite_status(ek), 'pending')
+        self.assertEqual(get_invite_status(ek), "pending")
 
     def test_status_accepted_enrollment_key(self):
         """EnrollmentKey with used_by set returns 'accepted'."""
         account = AccountFactory()
         ek = EnrollmentKeyFactory(used_by=account)
-        self.assertEqual(get_invite_status(ek), 'accepted')
+        self.assertEqual(get_invite_status(ek), "accepted")
 
     def test_status_accepted_platform_invite(self):
         """PlatformInvite with is_used=True returns 'accepted'."""
         pi = PlatformInviteFactory(used=True)
-        self.assertEqual(get_invite_status(pi), 'accepted')
+        self.assertEqual(get_invite_status(pi), "accepted")
 
     def test_status_revoked_by_flag(self):
         """is_active=False returns 'revoked'."""
         ek = EnrollmentKeyFactory(is_active=False)
-        self.assertEqual(get_invite_status(ek), 'revoked')
+        self.assertEqual(get_invite_status(ek), "revoked")
 
     def test_status_revoked_by_timestamp(self):
         """revoked_at set returns 'revoked'."""
         ek = EnrollmentKeyFactory()
         ek.revoked_at = timezone.now()
         ek.save()
-        self.assertEqual(get_invite_status(ek), 'revoked')
+        self.assertEqual(get_invite_status(ek), "revoked")
 
     def test_status_expired(self):
         """expires_at in past returns 'expired'."""
         ek = EnrollmentKeyFactory(expired=True)
-        self.assertEqual(get_invite_status(ek), 'expired')
+        self.assertEqual(get_invite_status(ek), "expired")
 
     def test_status_priority_accepted_over_revoked(self):
         """Accepted takes precedence over revoked."""
         account = AccountFactory()
         ek = EnrollmentKeyFactory(used_by=account, is_active=False)
-        self.assertEqual(get_invite_status(ek), 'accepted')
+        self.assertEqual(get_invite_status(ek), "accepted")
 
     def test_status_priority_accepted_over_expired(self):
         """Accepted takes precedence over expired."""
         account = AccountFactory()
         ek = EnrollmentKeyFactory(
-            used_by=account,
-            expires_at=timezone.now() - timedelta(days=1)
+            used_by=account, expires_at=timezone.now() - timedelta(days=1)
         )
-        self.assertEqual(get_invite_status(ek), 'accepted')
+        self.assertEqual(get_invite_status(ek), "accepted")
 
 
 class AdminInviteListTest(TestCase):
@@ -77,7 +76,7 @@ class AdminInviteListTest(TestCase):
 
     def setUp(self):
         self.client = APIClient()
-        self.url = '/api/v1/admin/invites/'
+        self.url = "/api/v1/admin/invites/"
 
     def test_list_invites_as_platform_admin(self):
         """Platform admin sees all invites (org + platform)."""
@@ -94,12 +93,12 @@ class AdminInviteListTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 3)
+        self.assertEqual(response.data["count"], 3)
 
         # Verify both types are included
-        types = [r['type'] for r in response.data['results']]
-        self.assertIn('org', types)
-        self.assertIn('platform', types)
+        types = [r["type"] for r in response.data["results"]]
+        self.assertIn("org", types)
+        self.assertIn("platform", types)
 
     def test_list_invites_as_org_admin(self):
         """Org admin only sees their org's invites."""
@@ -120,8 +119,8 @@ class AdminInviteListTest(TestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(str(response.data['results'][0]['id']), str(ek_own.id))
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(str(response.data["results"][0]["id"]), str(ek_own.id))
 
     def test_list_invites_filter_by_status(self):
         """Filter by pending/accepted/expired/revoked."""
@@ -137,24 +136,24 @@ class AdminInviteListTest(TestCase):
         self.client.force_login(admin)
 
         # Filter pending
-        response = self.client.get(f'{self.url}?status=pending')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['status'], 'pending')
+        response = self.client.get(f"{self.url}?status=pending")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["status"], "pending")
 
         # Filter accepted
-        response = self.client.get(f'{self.url}?status=accepted')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['status'], 'accepted')
+        response = self.client.get(f"{self.url}?status=accepted")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["status"], "accepted")
 
         # Filter expired
-        response = self.client.get(f'{self.url}?status=expired')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['status'], 'expired')
+        response = self.client.get(f"{self.url}?status=expired")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["status"], "expired")
 
         # Filter revoked
-        response = self.client.get(f'{self.url}?status=revoked')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['status'], 'revoked')
+        response = self.client.get(f"{self.url}?status=revoked")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["status"], "revoked")
 
     def test_list_invites_filter_by_type(self):
         """Filter by org/platform."""
@@ -166,14 +165,14 @@ class AdminInviteListTest(TestCase):
         self.client.force_login(admin)
 
         # Filter org
-        response = self.client.get(f'{self.url}?type=org')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['type'], 'org')
+        response = self.client.get(f"{self.url}?type=org")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["type"], "org")
 
         # Filter platform
-        response = self.client.get(f'{self.url}?type=platform')
-        self.assertEqual(response.data['count'], 1)
-        self.assertEqual(response.data['results'][0]['type'], 'platform')
+        response = self.client.get(f"{self.url}?type=platform")
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["type"], "platform")
 
     def test_list_invites_pagination(self):
         """Pagination with page/page_size params."""
@@ -186,21 +185,24 @@ class AdminInviteListTest(TestCase):
         self.client.force_login(admin)
 
         # Page 1 with page_size=2
-        response = self.client.get(f'{self.url}?page=1&page_size=2')
-        self.assertEqual(response.data['count'], 5)
-        self.assertEqual(len(response.data['results']), 2)
-        self.assertIsNotNone(response.data['next'])
-        self.assertIsNone(response.data['previous'])
+        response = self.client.get(f"{self.url}?page=1&page_size=2")
+        self.assertEqual(response.data["count"], 5)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
 
         # Page 2
-        response = self.client.get(f'{self.url}?page=2&page_size=2')
-        self.assertEqual(len(response.data['results']), 2)
-        self.assertIsNotNone(response.data['previous'])
+        response = self.client.get(f"{self.url}?page=2&page_size=2")
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertIsNotNone(response.data["previous"])
 
     def test_list_invites_requires_auth(self):
         """Unauthenticated returns 401/403."""
         response = self.client.get(self.url)
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
 
     def test_list_invites_permission_denied(self):
         """User without can_invite gets 403."""
@@ -222,7 +224,7 @@ class AdminInviteRevokeTest(TestCase):
         self.admin = UserWithAccountFactory(admin=True)
 
     def get_url(self, invite_id):
-        return f'/api/v1/admin/invites/{invite_id}/revoke/'
+        return f"/api/v1/admin/invites/{invite_id}/revoke/"
 
     def test_revoke_pending_invite_success(self):
         """Revoke a pending EnrollmentKey."""
@@ -232,8 +234,8 @@ class AdminInviteRevokeTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'revoked')
-        self.assertIn('revoked_at', response.data)
+        self.assertEqual(response.data["status"], "revoked")
+        self.assertIn("revoked_at", response.data)
 
         # Verify DB state
         ek.refresh_from_db()
@@ -248,7 +250,7 @@ class AdminInviteRevokeTest(TestCase):
         response = self.client.post(self.get_url(pi.id))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'revoked')
+        self.assertEqual(response.data["status"], "revoked")
 
         # Verify DB state
         pi.refresh_from_db()
@@ -264,7 +266,7 @@ class AdminInviteRevokeTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'ALREADY_ACCEPTED')
+        self.assertEqual(response.data["error"]["code"], "ALREADY_ACCEPTED")
 
     def test_revoke_already_revoked_error(self):
         """Error when trying to revoke again."""
@@ -274,7 +276,7 @@ class AdminInviteRevokeTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'ALREADY_REVOKED')
+        self.assertEqual(response.data["error"]["code"], "ALREADY_REVOKED")
 
     def test_revoke_expired_invite_error(self):
         """Cannot revoke expired invite."""
@@ -284,11 +286,12 @@ class AdminInviteRevokeTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'EXPIRED')
+        self.assertEqual(response.data["error"]["code"], "EXPIRED")
 
     def test_revoke_not_found(self):
         """404 for non-existent invite."""
         import uuid
+
         fake_id = uuid.uuid4()
 
         self.client.force_login(self.admin)
@@ -337,12 +340,12 @@ class AdminInviteResendTest(TestCase):
         self.admin = UserWithAccountFactory(admin=True)
 
     def get_url(self, invite_id):
-        return f'/api/v1/admin/invites/{invite_id}/resend/'
+        return f"/api/v1/admin/invites/{invite_id}/resend/"
 
     @override_settings(
-        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-        EMAIL_HOST='smtp.test.com',
-        STORMCLOUD_FRONTEND_URL='https://example.com',
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST="smtp.test.com",
+        STORMCLOUD_FRONTEND_URL="https://example.com",
     )
     def test_resend_enrollment_invite_success(self):
         """Resend email for pending EnrollmentKey."""
@@ -354,16 +357,16 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['email'], ek.required_email)
-        self.assertIn('resent', response.data['message'].lower())
+        self.assertEqual(response.data["email"], ek.required_email)
+        self.assertIn("resent", response.data["message"].lower())
 
         # Verify email sent
         self.assertEqual(len(mail.outbox), 1)
 
     @override_settings(
-        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-        EMAIL_HOST='smtp.test.com',
-        STORMCLOUD_FRONTEND_URL='https://example.com',
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST="smtp.test.com",
+        STORMCLOUD_FRONTEND_URL="https://example.com",
     )
     def test_resend_platform_invite_success(self):
         """Resend email for pending PlatformInvite."""
@@ -375,7 +378,7 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(pi.id))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['email'], pi.email)
+        self.assertEqual(response.data["email"], pi.email)
 
         # Verify email sent
         self.assertEqual(len(mail.outbox), 1)
@@ -389,7 +392,7 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'ALREADY_ACCEPTED')
+        self.assertEqual(response.data["error"]["code"], "ALREADY_ACCEPTED")
 
     def test_resend_revoked_invite_error(self):
         """Cannot resend for revoked invite."""
@@ -399,11 +402,11 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'ALREADY_REVOKED')
+        self.assertEqual(response.data["error"]["code"], "ALREADY_REVOKED")
 
     @override_settings(
-        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
-        EMAIL_HOST='smtp.test.com',
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST="smtp.test.com",
     )
     def test_resend_no_email_error(self):
         """Error if invite has no email."""
@@ -413,11 +416,11 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'NO_EMAIL')
+        self.assertEqual(response.data["error"]["code"], "NO_EMAIL")
 
     @override_settings(
-        EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend',
-        EMAIL_HOST='',
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+        EMAIL_HOST="",
     )
     def test_resend_email_not_configured_error(self):
         """Error if EMAIL_BACKEND is console."""
@@ -427,14 +430,260 @@ class AdminInviteResendTest(TestCase):
         response = self.client.post(self.get_url(ek.id))
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error']['code'], 'EMAIL_NOT_CONFIGURED')
+        self.assertEqual(response.data["error"]["code"], "EMAIL_NOT_CONFIGURED")
 
     def test_resend_not_found(self):
         """404 for non-existent invite."""
         import uuid
+
         fake_id = uuid.uuid4()
 
         self.client.force_login(self.admin)
         response = self.client.post(self.get_url(fake_id))
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AdminInviteBulkRevokeTest(TestCase):
+    """Tests for POST /api/v1/admin/invites/bulk-revoke/"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.admin = UserWithAccountFactory(admin=True)
+        self.url = "/api/v1/admin/invites/bulk-revoke/"
+
+    def test_bulk_revoke_all_success(self):
+        """Revoke 3 pending invites successfully."""
+        ek1 = EnrollmentKeyFactory()
+        ek2 = EnrollmentKeyFactory()
+        ek3 = EnrollmentKeyFactory()
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(ek1.id), str(ek2.id), str(ek3.id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 3)
+        self.assertEqual(response.data["failed"], 0)
+        self.assertEqual(len(response.data["results"]), 3)
+
+        # Verify all are revoked
+        for result in response.data["results"]:
+            self.assertEqual(result["status"], "revoked")
+            self.assertIn("revoked_at", result)
+
+        # Verify DB state
+        ek1.refresh_from_db()
+        ek2.refresh_from_db()
+        ek3.refresh_from_db()
+        self.assertFalse(ek1.is_active)
+        self.assertFalse(ek2.is_active)
+        self.assertFalse(ek3.is_active)
+
+    def test_bulk_revoke_partial_failure(self):
+        """Mix of pending, accepted, revoked - partial success."""
+        account = AccountFactory()
+        pending_ek = EnrollmentKeyFactory()
+        accepted_ek = EnrollmentKeyFactory(used_by=account)
+        revoked_ek = EnrollmentKeyFactory(is_active=False)
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(pending_ek.id), str(accepted_ek.id), str(revoked_ek.id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 1)
+        self.assertEqual(response.data["failed"], 2)
+
+        # Find results by ID
+        results_by_id = {str(r["id"]): r for r in response.data["results"]}
+
+        # Pending should be revoked
+        self.assertEqual(results_by_id[str(pending_ek.id)]["status"], "revoked")
+
+        # Accepted should have error
+        self.assertEqual(
+            results_by_id[str(accepted_ek.id)]["error"], "ALREADY_ACCEPTED"
+        )
+
+        # Revoked should have error
+        self.assertEqual(results_by_id[str(revoked_ek.id)]["error"], "ALREADY_REVOKED")
+
+    def test_bulk_revoke_all_fail(self):
+        """All IDs non-pending or not found."""
+        import uuid
+
+        account = AccountFactory()
+        accepted_ek = EnrollmentKeyFactory(used_by=account)
+        fake_id = uuid.uuid4()
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(accepted_ek.id), str(fake_id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 0)
+        self.assertEqual(response.data["failed"], 2)
+
+    def test_bulk_revoke_mixed_types(self):
+        """Mix of EnrollmentKey and PlatformInvite."""
+        ek = EnrollmentKeyFactory()
+        pi = PlatformInviteFactory()
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(ek.id), str(pi.id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 2)
+        self.assertEqual(response.data["failed"], 0)
+
+        # Verify DB state
+        ek.refresh_from_db()
+        pi.refresh_from_db()
+        self.assertFalse(ek.is_active)
+        self.assertFalse(pi.is_active)
+
+    def test_bulk_revoke_org_admin_own_org(self):
+        """Org admin can bulk revoke their org's invites."""
+        org = OrganizationFactory()
+        user = UserWithAccountFactory(verified=True)
+        user.account.organization = org
+        user.account.can_invite = True
+        user.account.save()
+
+        ek1 = EnrollmentKeyFactory(organization=org)
+        ek2 = EnrollmentKeyFactory(organization=org)
+
+        self.client.force_login(user)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(ek1.id), str(ek2.id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 2)
+        self.assertEqual(response.data["failed"], 0)
+
+    def test_bulk_revoke_org_admin_mixed_orgs(self):
+        """Org admin: own org succeeds, other org fails."""
+        org1 = OrganizationFactory()
+        org2 = OrganizationFactory()
+
+        user = UserWithAccountFactory(verified=True)
+        user.account.organization = org1
+        user.account.can_invite = True
+        user.account.save()
+
+        own_ek = EnrollmentKeyFactory(organization=org1)
+        other_ek = EnrollmentKeyFactory(organization=org2)
+
+        self.client.force_login(user)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(own_ek.id), str(other_ek.id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 1)
+        self.assertEqual(response.data["failed"], 1)
+
+        # Verify own org was revoked
+        results_by_id = {str(r["id"]): r for r in response.data["results"]}
+        self.assertEqual(results_by_id[str(own_ek.id)]["status"], "revoked")
+        self.assertEqual(results_by_id[str(other_ek.id)]["error"], "NOT_FOUND")
+
+    def test_bulk_revoke_empty_ids(self):
+        """Empty array returns 400."""
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": []},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_revoke_too_many_ids(self):
+        """>100 IDs returns 400."""
+        ids = [str(i) for i in range(101)]
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": ids},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_revoke_invalid_uuid(self):
+        """Invalid UUID format returns 400."""
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": ["not-a-uuid"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_revoke_not_found(self):
+        """Non-existent IDs reported as failed."""
+        import uuid
+
+        fake_id = uuid.uuid4()
+
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            self.url,
+            {"ids": [str(fake_id)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["revoked"], 0)
+        self.assertEqual(response.data["failed"], 1)
+        self.assertEqual(response.data["results"][0]["error"], "NOT_FOUND")
+
+    def test_bulk_revoke_requires_auth(self):
+        """Unauthenticated returns 401/403."""
+        response = self.client.post(
+            self.url,
+            {"ids": ["00000000-0000-0000-0000-000000000001"]},
+            format="json",
+        )
+
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_bulk_revoke_permission_denied(self):
+        """User without can_invite gets 403."""
+        user = UserWithAccountFactory(verified=True)
+        user.account.can_invite = False
+        user.account.save()
+
+        self.client.force_login(user)
+        response = self.client.post(
+            self.url,
+            {"ids": ["00000000-0000-0000-0000-000000000001"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

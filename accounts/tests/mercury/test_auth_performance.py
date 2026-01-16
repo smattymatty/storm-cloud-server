@@ -11,7 +11,7 @@ class AuthEndpointPerformance(APITestCase):
     def setUp(self):
         super().setUp()
         self.user = UserWithProfileFactory(verified=True)
-        self.user.set_password('testpass123')
+        self.user.set_password("testpass123")
         self.user.save()
         self.api_key = APIKeyFactory(
             organization=self.user.account.organization,
@@ -21,19 +21,19 @@ class AuthEndpointPerformance(APITestCase):
     def test_login_under_800ms(self):
         """Login should complete under 800ms."""
         with monitor(response_time_ms=1200, query_count=11) as result:
-            response = self.client.post('/api/v1/auth/login/', {
-                'username': self.user.username,
-                'password': 'testpass123'
-            })
+            response = self.client.post(
+                "/api/v1/auth/login/",
+                {"username": self.user.username, "password": "testpass123"},
+            )
 
         self.assertEqual(response.status_code, 200)
 
     def test_auth_me_under_50ms(self):
         """Auth me should complete under 50ms."""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.api_key.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
 
         with monitor(response_time_ms=50) as result:
-            response = self.client.get('/api/v1/auth/me/')
+            response = self.client.get("/api/v1/auth/me/")
         result.explain()
 
         self.assertEqual(response.status_code, 200)
@@ -44,9 +44,9 @@ class AuthEndpointPerformance(APITestCase):
         self.client.force_login(self.user)
 
         with monitor(response_time_ms=100) as result:
-            response = self.client.post('/api/v1/auth/tokens/', {
-                'name': 'perf-test-key'
-            })
+            response = self.client.post(
+                "/api/v1/auth/tokens/", {"name": "perf-test-key"}
+            )
 
         self.assertEqual(response.status_code, 201)
 
@@ -62,22 +62,22 @@ class TokenListPerformance(APITestCase):
             APIKeyFactory(
                 organization=self.user.account.organization,
                 created_by=self.user.account,
-                name=f'key-{i}',
+                name=f"key-{i}",
             )
         self.auth_key = APIKeyFactory(
             organization=self.user.account.organization,
             created_by=self.user.account,
-            name='auth-key',
+            name="auth-key",
         )
 
     def test_list_50_tokens_under_50ms_no_n1(self):
         """Listing 50 tokens should be fast with no N+1."""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.auth_key.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.auth_key.key}")
 
         with monitor(response_time_ms=50, query_count=5) as result:
-            response = self.client.get('/api/v1/auth/tokens/')
+            response = self.client.get("/api/v1/auth/tokens/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['total'], 51)  # 50 + auth_key
+        self.assertEqual(response.data["total"], 51)  # 50 + auth_key
 
 
 class AdminUserEndpointPerformance(APITestCase):
@@ -85,17 +85,20 @@ class AdminUserEndpointPerformance(APITestCase):
 
     def setUp(self):
         super().setUp()
-        self.admin = UserWithProfileFactory(admin=True)  # admin trait sets is_staff, is_superuser
+        self.admin = UserWithProfileFactory(
+            admin=True
+        )  # admin trait sets is_staff, is_superuser
         self.admin_key = APIKeyFactory(
             organization=self.admin.account.organization,
-            created_by=self.admin.account  # Links admin status to the API key
+            created_by=self.admin.account,  # Links admin status to the API key
         )
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.admin_key.key}')
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.admin_key.key}")
 
     def test_admin_user_list_under_200ms(self):
         """Admin user list should complete under 200ms with 50 users."""
         # Create 50 users to test at scale
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         existing_count = User.objects.count()
 
@@ -103,24 +106,24 @@ class AdminUserEndpointPerformance(APITestCase):
             UserWithProfileFactory()
 
         with monitor(response_time_ms=200) as result:
-            response = self.client.get('/api/v1/admin/users/')
+            response = self.client.get("/api/v1/admin/users/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertGreaterEqual(response.data['total'], existing_count + 50)
+        self.assertGreaterEqual(response.data["total"], existing_count + 50)
 
     def test_admin_user_detail_under_100ms(self):
         """Admin user detail should complete under 100ms."""
         user = UserWithProfileFactory()
         # Create some API keys for the user
         for i in range(5):
-            APIKeyFactory(user=user, name=f'key-{i}')
+            APIKeyFactory(user=user, name=f"key-{i}")
 
         with monitor(response_time_ms=100) as result:
-            response = self.client.get(f'/api/v1/admin/users/{user.id}/')
+            response = self.client.get(f"/api/v1/admin/users/{user.id}/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('user', response.data)
-        self.assertIn('api_keys', response.data)
+        self.assertIn("user", response.data)
+        self.assertIn("api_keys", response.data)
 
     def test_admin_user_update_under_100ms(self):
         """Admin user update should complete under 100ms."""
@@ -128,9 +131,9 @@ class AdminUserEndpointPerformance(APITestCase):
 
         with monitor(response_time_ms=100) as result:
             response = self.client.patch(
-                f'/api/v1/admin/users/{user.id}/',
-                {'email': 'updated@example.com'},
-                format='json'
+                f"/api/v1/admin/users/{user.id}/",
+                {"email": "updated@example.com"},
+                format="json",
             )
 
         self.assertEqual(response.status_code, 200)
@@ -140,11 +143,11 @@ class AdminUserEndpointPerformance(APITestCase):
         user = UserWithProfileFactory()
         # Create related objects to test cascade deletion
         for i in range(10):
-            APIKeyFactory(user=user, name=f'key-{i}')
+            APIKeyFactory(user=user, name=f"key-{i}")
 
         # Allow up to 25 queries for deletion (cascades to account, API keys, etc.)
         with monitor(response_time_ms=100, query_count=25) as result:
-            response = self.client.delete(f'/api/v1/admin/users/{user.id}/')
+            response = self.client.delete(f"/api/v1/admin/users/{user.id}/")
 
         self.assertEqual(response.status_code, 200)
 
@@ -155,9 +158,9 @@ class AdminUserEndpointPerformance(APITestCase):
         # Password reset is blocked until email is configured (security fix)
         with monitor(response_time_ms=1000) as result:
             response = self.client.post(
-                f'/api/v1/admin/users/{user.id}/reset-password/',
-                {'new_password': 'newpass123'},
-                format='json'
+                f"/api/v1/admin/users/{user.id}/reset-password/",
+                {"new_password": "newpass123"},
+                format="json",
             )
 
         # Returns 501 Not Implemented until email backend is configured

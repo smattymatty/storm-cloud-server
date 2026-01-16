@@ -25,6 +25,7 @@ class APIKeyUser:
     It provides the necessary attributes for DRF's IsAuthenticated check
     and gives views access to the organization context.
     """
+
     is_authenticated = True
     is_active = True
     is_anonymous = False
@@ -46,7 +47,6 @@ class APIKeyUser:
 
     def __str__(self) -> str:
         return f"APIKey({self.api_key.name})"
-
 
     @property
     def pk(self) -> str:
@@ -98,16 +98,12 @@ class APIKeyAuthentication(BaseAuthentication):
         if not auth_header.startswith(f"{self.keyword} "):
             return None
 
-        key = auth_header[len(self.keyword) + 1:]
+        key = auth_header[len(self.keyword) + 1 :]
 
         try:
             api_key = APIKey.objects.select_related(
                 "organization", "created_by", "created_by__user"
-            ).get(
-                key=key,
-                is_active=True,
-                revoked_at__isnull=True
-            )
+            ).get(key=key, is_active=True, revoked_at__isnull=True)
         except APIKey.DoesNotExist:
             raise AuthenticationFailed("Invalid API key")
 

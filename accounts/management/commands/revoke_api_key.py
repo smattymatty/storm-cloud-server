@@ -5,26 +5,24 @@ from accounts.models import APIKey
 
 
 class Command(BaseCommand):
-    help = 'Revoke an API key by ID'
+    help = "Revoke an API key by ID"
 
     def add_arguments(self, parser):
-        parser.add_argument(
-            'key_id',
-            type=str,
-            help='UUID of the API key to revoke'
-        )
+        parser.add_argument("key_id", type=str, help="UUID of the API key to revoke")
 
     def handle(self, *args, **options):
-        key_id = options['key_id']
+        key_id = options["key_id"]
 
         # Get API key
         try:
-            api_key = APIKey.objects.select_related('organization').get(id=key_id)
+            api_key = APIKey.objects.select_related("organization").get(id=key_id)
         except APIKey.DoesNotExist:
             raise CommandError(f'API key with ID "{key_id}" does not exist')
 
         if not api_key.is_active:
-            self.stdout.write(self.style.WARNING(f'API key "{api_key.name}" is already revoked'))
+            self.stdout.write(
+                self.style.WARNING(f'API key "{api_key.name}" is already revoked')
+            )
             return
 
         # Revoke the key
@@ -36,5 +34,5 @@ class Command(BaseCommand):
                 f'for organization "{api_key.organization.name}"'
             )
         )
-        self.stdout.write(f'Key ID: {api_key.id}')
-        self.stdout.write(f'Revoked at: {api_key.revoked_at}')
+        self.stdout.write(f"Key ID: {api_key.id}")
+        self.stdout.write(f"Revoked at: {api_key.revoked_at}")

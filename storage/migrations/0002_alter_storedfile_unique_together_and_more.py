@@ -7,43 +7,77 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0003_platforminvite_enrolled_user'),
-        ('storage', '0001_initial'),
+        ("accounts", "0003_platforminvite_enrolled_user"),
+        ("storage", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='storedfile',
+            name="storedfile",
             unique_together=set(),
         ),
         migrations.AddField(
-            model_name='storedfile',
-            name='organization',
-            field=models.ForeignKey(blank=True, help_text='Organization for shared files. NULL for private files.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='shared_files', to='accounts.organization'),
+            model_name="storedfile",
+            name="organization",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Organization for shared files. NULL for private files.",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="shared_files",
+                to="accounts.organization",
+            ),
         ),
         migrations.AlterField(
-            model_name='storedfile',
-            name='owner',
-            field=models.ForeignKey(blank=True, help_text='Owner account for private files. NULL for shared files.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='files', to='accounts.account'),
+            model_name="storedfile",
+            name="owner",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Owner account for private files. NULL for shared files.",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="files",
+                to="accounts.account",
+            ),
         ),
         migrations.AddIndex(
-            model_name='storedfile',
-            index=models.Index(fields=['organization', 'parent_path'], name='storage_sto_organiz_c88bcd_idx'),
+            model_name="storedfile",
+            index=models.Index(
+                fields=["organization", "parent_path"],
+                name="storage_sto_organiz_c88bcd_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='storedfile',
-            index=models.Index(fields=['organization', 'path'], name='storage_sto_organiz_bf98c7_idx'),
+            model_name="storedfile",
+            index=models.Index(
+                fields=["organization", "path"], name="storage_sto_organiz_bf98c7_idx"
+            ),
         ),
         migrations.AddConstraint(
-            model_name='storedfile',
-            constraint=models.UniqueConstraint(condition=models.Q(('organization__isnull', True)), fields=('owner', 'path'), name='unique_private_file'),
+            model_name="storedfile",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("organization__isnull", True)),
+                fields=("owner", "path"),
+                name="unique_private_file",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='storedfile',
-            constraint=models.UniqueConstraint(condition=models.Q(('organization__isnull', False)), fields=('organization', 'path'), name='unique_shared_file'),
+            model_name="storedfile",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("organization__isnull", False)),
+                fields=("organization", "path"),
+                name="unique_shared_file",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='storedfile',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('organization__isnull', True), ('owner__isnull', False)), models.Q(('organization__isnull', False), ('owner__isnull', True)), _connector='OR'), name='file_ownership_xor'),
+            model_name="storedfile",
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(("organization__isnull", True), ("owner__isnull", False)),
+                    models.Q(("organization__isnull", False), ("owner__isnull", True)),
+                    _connector="OR",
+                ),
+                name="file_ownership_xor",
+            ),
         ),
     ]

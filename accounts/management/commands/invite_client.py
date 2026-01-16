@@ -22,26 +22,26 @@ class Command(BaseCommand):
         parser.add_argument(
             "email",
             type=str,
-            help="Email address that must be used to claim this invite."
+            help="Email address that must be used to claim this invite.",
         )
         parser.add_argument(
             "--name",
             "-n",
             type=str,
             required=True,
-            help="Descriptive name for this invite (e.g., 'Acme Corp Onboarding')."
+            help="Descriptive name for this invite (e.g., 'Acme Corp Onboarding').",
         )
         parser.add_argument(
             "--quota-gb",
             type=int,
             default=0,
-            help="Storage quota for the new org in GB. 0 = unlimited. Default: 0"
+            help="Storage quota for the new org in GB. 0 = unlimited. Default: 0",
         )
         parser.add_argument(
             "--expires-days",
             type=int,
             default=7,
-            help="Days until invite expires. Default: 7"
+            help="Days until invite expires. Default: 7",
         )
 
     def handle(self, *args, **options):
@@ -52,17 +52,13 @@ class Command(BaseCommand):
 
         # Check for existing active invite for this email
         existing = PlatformInvite.objects.filter(
-            email=email,
-            is_active=True,
-            is_used=False
+            email=email, is_active=True, is_used=False
         ).first()
 
         if existing:
             if existing.is_valid():
                 self.stdout.write(
-                    self.style.WARNING(
-                        f"Active invite already exists for {email}"
-                    )
+                    self.style.WARNING(f"Active invite already exists for {email}")
                 )
                 self.stdout.write(f"Token: {existing.key}")
                 self.stdout.write(f"Expires: {existing.expires_at}")
@@ -70,7 +66,7 @@ class Command(BaseCommand):
             else:
                 # Deactivate expired invite
                 existing.is_active = False
-                existing.save(update_fields=['is_active', 'updated_at'])
+                existing.save(update_fields=["is_active", "updated_at"])
 
         # Calculate expiration
         expires_at = timezone.now() + timedelta(days=expires_days)
@@ -96,7 +92,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"  Org Quota: Unlimited")
 
-        self.stdout.write(self.style.SUCCESS(
-            f"\nShare this enrollment URL with the client:"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f"\nShare this enrollment URL with the client:")
+        )
         self.stdout.write(f"  /enroll?token={invite.key}")

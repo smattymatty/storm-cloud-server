@@ -83,66 +83,125 @@ class FileContentResult(ServiceResult):
 
 
 # Text MIME types allowed for content preview
-TEXT_PREVIEW_MIME_TYPES: frozenset[str] = frozenset([
-    # Plain text
-    "text/plain",
-    # Markup/Markdown
-    "text/markdown",
-    "text/x-markdown",
-    "text/html",
-    "text/xml",
-    "text/css",
-    # Code files
-    "text/x-python",
-    "text/x-python-script",
-    "application/x-python-code",
-    "text/javascript",
-    "application/javascript",
-    "application/json",
-    "text/x-java-source",
-    "text/x-c",
-    "text/x-c++",
-    "text/x-go",
-    "text/x-rust",
-    "text/x-ruby",
-    "text/x-php",
-    "text/x-sh",
-    "text/x-shellscript",
-    "application/x-sh",
-    "text/x-yaml",
-    "application/x-yaml",
-    "text/x-toml",
-    "application/xml",
-    "application/toml",
-    "text/csv",
-    "text/tab-separated-values",
-])
+TEXT_PREVIEW_MIME_TYPES: frozenset[str] = frozenset(
+    [
+        # Plain text
+        "text/plain",
+        # Markup/Markdown
+        "text/markdown",
+        "text/x-markdown",
+        "text/html",
+        "text/xml",
+        "text/css",
+        # Code files
+        "text/x-python",
+        "text/x-python-script",
+        "application/x-python-code",
+        "text/javascript",
+        "application/javascript",
+        "application/json",
+        "text/x-java-source",
+        "text/x-c",
+        "text/x-c++",
+        "text/x-go",
+        "text/x-rust",
+        "text/x-ruby",
+        "text/x-php",
+        "text/x-sh",
+        "text/x-shellscript",
+        "application/x-sh",
+        "text/x-yaml",
+        "application/x-yaml",
+        "text/x-toml",
+        "application/xml",
+        "application/toml",
+        "text/csv",
+        "text/tab-separated-values",
+    ]
+)
 
 # File extensions treated as text for preview
-TEXT_EXTENSIONS: frozenset[str] = frozenset([
-    ".txt", ".md", ".markdown", ".rst", ".asciidoc",
-    ".py", ".pyw", ".pyi",
-    ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx",
-    ".json", ".jsonl", ".json5",
-    ".html", ".htm", ".xml", ".xhtml", ".svg",
-    ".css", ".scss", ".sass", ".less",
-    ".java", ".kt", ".kts", ".scala",
-    ".c", ".h", ".cpp", ".hpp", ".cc", ".hh", ".cxx",
-    ".go", ".rs", ".rb", ".php",
-    ".sh", ".bash", ".zsh", ".fish",
-    ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
-    ".csv", ".tsv",
-    ".sql", ".graphql", ".gql",
-    ".env",
-])
+TEXT_EXTENSIONS: frozenset[str] = frozenset(
+    [
+        ".txt",
+        ".md",
+        ".markdown",
+        ".rst",
+        ".asciidoc",
+        ".py",
+        ".pyw",
+        ".pyi",
+        ".js",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".json",
+        ".jsonl",
+        ".json5",
+        ".html",
+        ".htm",
+        ".xml",
+        ".xhtml",
+        ".svg",
+        ".css",
+        ".scss",
+        ".sass",
+        ".less",
+        ".java",
+        ".kt",
+        ".kts",
+        ".scala",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".cc",
+        ".hh",
+        ".cxx",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".fish",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".csv",
+        ".tsv",
+        ".sql",
+        ".graphql",
+        ".gql",
+        ".env",
+    ]
+)
 
 # Known filenames without extensions that are text
-TEXT_FILENAMES: frozenset[str] = frozenset([
-    "makefile", "dockerfile", "gemfile", "rakefile",
-    "readme", "license", "changelog", "contributing",
-    ".gitignore", ".dockerignore", ".editorconfig",
-    ".env", ".env.example", ".env.local",
-])
+TEXT_FILENAMES: frozenset[str] = frozenset(
+    [
+        "makefile",
+        "dockerfile",
+        "gemfile",
+        "rakefile",
+        "readme",
+        "license",
+        "changelog",
+        "contributing",
+        ".gitignore",
+        ".dockerignore",
+        ".editorconfig",
+        ".env",
+        ".env.example",
+        ".env.local",
+    ]
+)
 
 
 def is_text_file(file_path: str, content_type: Optional[str]) -> bool:
@@ -179,7 +238,12 @@ def is_text_file(file_path: str, content_type: Optional[str]) -> bool:
 def generate_etag(path: str, size: int, modified_at: Any) -> str:
     """Generate ETag from file metadata."""
     import hashlib
-    ts = modified_at.isoformat() if hasattr(modified_at, "isoformat") else str(modified_at)
+
+    ts = (
+        modified_at.isoformat()
+        if hasattr(modified_at, "isoformat")
+        else str(modified_at)
+    )
     data = f"{path}:{size}:{ts}"
     return hashlib.md5(data.encode()).hexdigest()[:12]
 
@@ -204,10 +268,10 @@ def get_user_storage_path(user_or_account) -> str:
     """
     # If it's an Account (has both 'user' and 'organization' attrs)
     # Note: APIKeyUser also has 'organization' but not 'user'
-    if hasattr(user_or_account, 'user') and hasattr(user_or_account, 'organization'):
+    if hasattr(user_or_account, "user") and hasattr(user_or_account, "organization"):
         return f"{user_or_account.id}"
     # Otherwise it's a User or APIKeyUser - get account.id (UUID)
-    account = getattr(user_or_account, 'account', None)
+    account = getattr(user_or_account, "account", None)
     if account is None:
         raise ValueError(
             f"Cannot determine storage path: {type(user_or_account).__name__} "
@@ -224,7 +288,9 @@ def get_user_storage_path(user_or_account) -> str:
 class DirectoryService:
     """Service for directory operations."""
 
-    def __init__(self, account: "Account", backend: Optional[LocalStorageBackend] = None):
+    def __init__(
+        self, account: "Account", backend: Optional[LocalStorageBackend] = None
+    ):
         self.account = account
         self.backend = backend or LocalStorageBackend()
         self.user_prefix = get_account_storage_path(account)
@@ -273,7 +339,9 @@ class DirectoryService:
             )
 
         # Fetch metadata from database for entries
-        entry_paths = [entry.path.replace(f"{self.user_prefix}/", "") for entry in entries]
+        entry_paths = [
+            entry.path.replace(f"{self.user_prefix}/", "") for entry in entries
+        ]
         db_files = {
             f.path: {
                 "encryption_method": f.encryption_method,
@@ -287,16 +355,20 @@ class DirectoryService:
         for entry in entries:
             rel_path = entry.path.replace(f"{self.user_prefix}/", "")
             db_info = db_files.get(rel_path, {})
-            entry_data.append({
-                "name": entry.name,
-                "path": rel_path,
-                "size": entry.size,
-                "is_directory": entry.is_directory,
-                "content_type": entry.content_type,
-                "modified_at": entry.modified_at,
-                "encryption_method": db_info.get("encryption_method", StoredFile.ENCRYPTION_NONE),
-                "sort_position": db_info.get("sort_position"),
-            })
+            entry_data.append(
+                {
+                    "name": entry.name,
+                    "path": rel_path,
+                    "size": entry.size,
+                    "is_directory": entry.is_directory,
+                    "content_type": entry.content_type,
+                    "modified_at": entry.modified_at,
+                    "encryption_method": db_info.get(
+                        "encryption_method", StoredFile.ENCRYPTION_NONE
+                    ),
+                    "sort_position": db_info.get("sort_position"),
+                }
+            )
 
         # Sort: directories first, then by sort_position (nulls last), then alphabetically
         entry_data = sorted(
@@ -312,8 +384,7 @@ class DirectoryService:
         if search:
             search_lower = search.lower()
             entry_data = [
-                e for e in entry_data
-                if search_lower in str(e["name"]).lower()
+                e for e in entry_data if search_lower in str(e["name"]).lower()
             ]
 
         # Pagination
@@ -411,7 +482,9 @@ class DirectoryService:
 class FileService:
     """Service for file operations."""
 
-    def __init__(self, account: "Account", backend: Optional[LocalStorageBackend] = None):
+    def __init__(
+        self, account: "Account", backend: Optional[LocalStorageBackend] = None
+    ):
         self.account = account
         self.backend = backend or LocalStorageBackend()
         self.user_prefix = get_account_storage_path(account)
@@ -499,7 +572,9 @@ class FileService:
 
         # Check quota if requested
         if check_quota:
-            quota_result = self._check_quota(file_size, file_path if is_overwrite else None)
+            quota_result = self._check_quota(
+                file_size, file_path if is_overwrite else None
+            )
             if not quota_result.success:
                 return quota_result
 
@@ -554,7 +629,9 @@ class FileService:
             },
         )
 
-    def download(self, file_path: str, if_none_match: Optional[str] = None) -> ServiceResult:
+    def download(
+        self, file_path: str, if_none_match: Optional[str] = None
+    ) -> ServiceResult:
         """Get file for download.
 
         Returns file handle in data['file_handle'] if successful.
@@ -824,7 +901,9 @@ class FileService:
 
         # Calculate current usage
         current_usage = (
-            StoredFile.objects.filter(owner=self.account).aggregate(total=Sum("size"))["total"]
+            StoredFile.objects.filter(owner=self.account).aggregate(total=Sum("size"))[
+                "total"
+            ]
             or 0
         )
 
@@ -832,7 +911,9 @@ class FileService:
         size_delta = new_size
         if existing_file_path:
             try:
-                old_file = StoredFile.objects.get(owner=self.account, path=existing_file_path)
+                old_file = StoredFile.objects.get(
+                    owner=self.account, path=existing_file_path
+                )
                 size_delta = new_size - old_file.size
             except StoredFile.DoesNotExist:
                 pass

@@ -17,26 +17,26 @@ class GetClientIPTest(TestCase):
         """Test IP extraction from X-Forwarded-For header."""
         # request = self.factory.get('/', HTTP_X_FORWARDED_FOR='1.2.3.4, 5.6.7.8')
         # assert get_client_ip(request) == '1.2.3.4'
-        request = self.factory.get('/', HTTP_X_FORWARDED_FOR='1.2.3.4, 5.6.7.8')
-        self.assertEqual(get_client_ip(request), '1.2.3.4')
+        request = self.factory.get("/", HTTP_X_FORWARDED_FOR="1.2.3.4, 5.6.7.8")
+        self.assertEqual(get_client_ip(request), "1.2.3.4")
 
     def test_extracts_ip_from_remote_addr_when_no_forwarded_header(self):
         """Test IP extraction from REMOTE_ADDR."""
         # request = self.factory.get('/')
         # request.META['REMOTE_ADDR'] = '9.8.7.6'
         # assert get_client_ip(request) == '9.8.7.6'
-        request = self.factory.get('/')
-        request.META['REMOTE_ADDR'] = '9.8.7.6'
-        self.assertEqual(get_client_ip(request), '9.8.7.6')
+        request = self.factory.get("/")
+        request.META["REMOTE_ADDR"] = "9.8.7.6"
+        self.assertEqual(get_client_ip(request), "9.8.7.6")
 
     def test_returns_unknown_when_no_ip_available(self):
         """Test returns 'unknown' when no IP is found."""
         # request = self.factory.get('/')
         # request.META.pop('REMOTE_ADDR', None)
         # assert get_client_ip(request) == 'unknown'
-        request = self.factory.get('/')
-        request.META.pop('REMOTE_ADDR', None)
-        self.assertEqual(get_client_ip(request), 'unknown')
+        request = self.factory.get("/")
+        request.META.pop("REMOTE_ADDR", None)
+        self.assertEqual(get_client_ip(request), "unknown")
 
 
 class SendVerificationEmailTest(TestCase):
@@ -44,11 +44,11 @@ class SendVerificationEmailTest(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.user = UserFactory(email='test@example.com')
+        self.user = UserFactory(email="test@example.com")
 
     def test_creates_verification_token(self):
         """Test that a verification token is created."""
-        request = self.factory.get('/')
+        request = self.factory.get("/")
         send_verification_email(self.user, request)
         self.assertTrue(EmailVerificationToken.objects.filter(user=self.user).exists())
 
@@ -61,8 +61,10 @@ class SendVerificationEmailTest(TestCase):
         from django.core import mail
         from django.test import override_settings
 
-        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
-            request = self.factory.get('/')
+        with override_settings(
+            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+        ):
+            request = self.factory.get("/")
             send_verification_email(self.user, request)
             self.assertEqual(len(mail.outbox), 1)
             self.assertIn(self.user.email, mail.outbox[0].to)
@@ -72,19 +74,23 @@ class SendVerificationEmailTest(TestCase):
         from django.core import mail
         from django.test import override_settings
 
-        with override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend'):
-            request = self.factory.get('/')
+        with override_settings(
+            EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+        ):
+            request = self.factory.get("/")
             send_verification_email(self.user, request)
-            self.assertIn('verify', mail.outbox[0].body.lower())
+            self.assertIn("verify", mail.outbox[0].body.lower())
 
     def test_token_expires_in_24_hours(self):
         """Test token expiry is set correctly."""
         from django.utils import timezone
         from datetime import timedelta
 
-        request = self.factory.get('/')
+        request = self.factory.get("/")
         send_verification_email(self.user, request)
         token = EmailVerificationToken.objects.get(user=self.user)
         expected_expiry = timezone.now() + timedelta(hours=24)
         # Allow 5 second tolerance for test execution time
-        self.assertAlmostEqual(token.expires_at.timestamp(), expected_expiry.timestamp(), delta=5)
+        self.assertAlmostEqual(
+            token.expires_at.timestamp(), expected_expiry.timestamp(), delta=5
+        )
