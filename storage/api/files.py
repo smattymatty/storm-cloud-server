@@ -76,6 +76,7 @@ class FileDetailView(StormCloudBaseAPIView):
 
         response_data = {
             "path": result.path,
+            "storage_type": "user",
             "name": result.name,
             "size": result.size,
             "content_type": result.content_type,
@@ -389,6 +390,14 @@ class FileUploadView(StormCloudBaseAPIView):
                 "sort_position": 0,  # New files go to top
             },
         )
+
+        # Update account storage usage
+        if is_overwrite:
+            # Delta = new size - old size (old_file was fetched earlier)
+            storage_delta = file_info.size - old_file.size
+        else:
+            storage_delta = file_info.size
+        request.user.account.update_storage_usage(storage_delta)
 
         response_data = {
             "path": file_path,
@@ -944,8 +953,22 @@ class FileDeleteView(StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Get file size before deletion for storage tracking
+        deleted_size = 0
+        try:
+            stored_file = StoredFile.objects.get(
+                owner=request.user.account, path=file_path
+            )
+            deleted_size = stored_file.size
+        except StoredFile.DoesNotExist:
+            pass
+
         # Delete from database
         StoredFile.objects.filter(owner=request.user.account, path=file_path).delete()
+
+        # Update account storage usage
+        if deleted_size > 0:
+            request.user.account.update_storage_usage(-deleted_size)
 
         # Log successful delete
         emit_user_file_action(

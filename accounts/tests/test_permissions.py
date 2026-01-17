@@ -17,7 +17,7 @@ class PermissionUploadTest(StormCloudAPITestCase):
 
         with open(__file__, "rb") as f:
             response = self.client.post(
-                "/api/v1/files/test.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/test.txt/upload/", {"file": f}, format="multipart"
             )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -33,7 +33,7 @@ class PermissionUploadTest(StormCloudAPITestCase):
 
         with open(__file__, "rb") as f:
             response = self.client.post(
-                "/api/v1/files/test.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/test.txt/upload/", {"file": f}, format="multipart"
             )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -49,14 +49,16 @@ class PermissionDeleteTest(StormCloudAPITestCase):
         # First upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/deleteme.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/deleteme.txt/upload/",
+                {"file": f},
+                format="multipart",
             )
 
         # Now disable delete permission
         self.user.account.can_delete = False
         self.user.account.save()
 
-        response = self.client.delete("/api/v1/files/deleteme.txt/delete/")
+        response = self.client.delete("/api/v1/user/files/deleteme.txt/delete/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data["error"]["code"], "PERMISSION_DENIED")
         self.assertEqual(response.data["error"]["permission"], "can_delete")
@@ -68,10 +70,12 @@ class PermissionDeleteTest(StormCloudAPITestCase):
         # First upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/deleteme.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/deleteme.txt/upload/",
+                {"file": f},
+                format="multipart",
             )
 
-        response = self.client.delete("/api/v1/files/deleteme.txt/delete/")
+        response = self.client.delete("/api/v1/user/files/deleteme.txt/delete/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
@@ -85,7 +89,9 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
         # First upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/overwrite.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/overwrite.txt/upload/",
+                {"file": f},
+                format="multipart",
             )
 
         # Now disable overwrite permission
@@ -95,7 +101,9 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
         # Try to overwrite
         with open(__file__, "rb") as f:
             response = self.client.post(
-                "/api/v1/files/overwrite.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/overwrite.txt/upload/",
+                {"file": f},
+                format="multipart",
             )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -109,7 +117,7 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
         # First upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/edit.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/edit.txt/upload/", {"file": f}, format="multipart"
             )
 
         # Now disable overwrite permission
@@ -118,7 +126,9 @@ class PermissionOverwriteTest(StormCloudAPITestCase):
 
         # Try to edit content
         response = self.client.put(
-            "/api/v1/files/edit.txt/content/", "new content", content_type="text/plain"
+            "/api/v1/user/files/edit.txt/content/",
+            "new content",
+            content_type="text/plain",
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -136,7 +146,7 @@ class PermissionShareTest(StormCloudAPITestCase):
         # First upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/share.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/share.txt/upload/", {"file": f}, format="multipart"
             )
 
         # Now disable share permission
@@ -156,7 +166,7 @@ class PermissionShareTest(StormCloudAPITestCase):
         for i in range(3):
             with open(__file__, "rb") as f:
                 self.client.post(
-                    f"/api/v1/files/share{i}.txt/upload/",
+                    f"/api/v1/user/files/share{i}.txt/upload/",
                     {"file": f},
                     format="multipart",
                 )
@@ -185,7 +195,7 @@ class PermissionBulkTest(StormCloudAPITestCase):
         # Upload a file
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/bulk1.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/bulk1.txt/upload/", {"file": f}, format="multipart"
             )
 
         # Disable delete permission
@@ -209,9 +219,9 @@ class PermissionBulkTest(StormCloudAPITestCase):
         # Upload a file and create destination folder
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/moveme.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/moveme.txt/upload/", {"file": f}, format="multipart"
             )
-        self.client.post("/api/v1/dirs/", {"path": "dest"}, format="json")
+        self.client.post("/api/v1/user/dirs/", {"path": "dest"}, format="json")
 
         # Disable move permission
         self.user.account.can_move = False
@@ -238,9 +248,9 @@ class PermissionBulkTest(StormCloudAPITestCase):
         # Upload a file and create destination folder
         with open(__file__, "rb") as f:
             self.client.post(
-                "/api/v1/files/copyme.txt/upload/", {"file": f}, format="multipart"
+                "/api/v1/user/files/copyme.txt/upload/", {"file": f}, format="multipart"
             )
-        self.client.post("/api/v1/dirs/", {"path": "dest"}, format="json")
+        self.client.post("/api/v1/user/dirs/", {"path": "dest"}, format="json")
 
         # Disable upload permission
         self.user.account.can_upload = False

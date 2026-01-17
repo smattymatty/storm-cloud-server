@@ -151,6 +151,13 @@ class InviteCreateSerializer(serializers.Serializer):
         default=dict,
         help_text="Permission settings for the new user (can_upload, can_delete, etc.)",
     )
+    # Storage quota for the new user
+    storage_quota_bytes = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        default=0,
+        help_text="Storage quota in bytes for the new user (0 = use org default)",
+    )
 
 
 class InviteCreateResponseSerializer(serializers.Serializer):

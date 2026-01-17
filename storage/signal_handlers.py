@@ -1,7 +1,7 @@
 """Signal handlers for file audit logging."""
 
 import logging
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from django.contrib.auth import get_user_model
 from django.dispatch import receiver
@@ -11,7 +11,10 @@ from accounts.utils import get_client_ip
 from .models import FileAuditLog
 from .signals import file_action_performed
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.typing import UserProtocol as User
+else:
+    User = get_user_model()
 
 # Separate audit logger for file operations
 audit_logger = logging.getLogger("stormcloud.audit")
@@ -61,6 +64,7 @@ def log_file_action(
         paths_affected=kwargs.get("paths_affected"),
         error_code=kwargs.get("error_code"),
         error_message=kwargs.get("error_message"),
+        justification=kwargs.get("justification"),
         ip_address=ip_address,
         user_agent=user_agent,
         file_size=kwargs.get("file_size"),
@@ -72,6 +76,8 @@ def log_file_action(
     status = "SUCCESS" if success else f"FAILED ({kwargs.get('error_code', 'UNKNOWN')})"
     performer_id = performed_by_account.id if performed_by_account else "N/A"
     target_id = target_user_account.id if target_user_account else "N/A"
+    justification = kwargs.get("justification")
+    justification_log = f' justification="{justification}"' if justification else ""
 
     audit_logger.info(
         f"{admin_marker}FILE_{action.upper()} "
@@ -80,4 +86,5 @@ def log_file_action(
         f"path={path} "
         f"status={status} "
         f"ip={ip_address}"
+        f"{justification_log}"
     )

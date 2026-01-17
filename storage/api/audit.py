@@ -75,7 +75,7 @@ class UserAuditLogView(StormCloudBaseAPIView):
         # Return logs where user is either the actor OR the target
         # This allows users to see admin actions on their files
         queryset = FileAuditLog.objects.filter(
-            Q(performed_by=request.user) | Q(target_user=request.user)
+            Q(performed_by=request.user.account) | Q(target_user=request.user.account)
         ).distinct()
 
         # Apply filters

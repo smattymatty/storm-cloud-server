@@ -34,9 +34,9 @@ class UserFactory(factory.django.DjangoModelFactory):
     def password(self, create, extracted, **kwargs):
         """Set password after user creation."""
         password = extracted or "testpass123"
-        self.set_password(password)  # type: ignore[attr-defined]
+        self.set_password(password)
         if create:
-            self.save()  # type: ignore[attr-defined]
+            self.save()
 
     class Params:
         admin = factory.Trait(

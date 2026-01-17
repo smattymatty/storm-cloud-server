@@ -3,6 +3,7 @@
 from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 from django.contrib.auth import get_user_model
@@ -15,7 +16,10 @@ from core.tests.base import StormCloudAdminTestCase
 from storage.models import FileAuditLog, StoredFile
 from storage.signals import file_action_performed
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.typing import UserProtocol as User
+else:
+    User = get_user_model()
 
 
 # =============================================================================

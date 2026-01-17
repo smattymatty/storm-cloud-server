@@ -194,7 +194,7 @@ class BulkOperationService:
 
     def _execute_async(self, operation: str, paths: List[str], options: Dict) -> Dict:
         """Queue operation for async execution."""
-        from storage.tasks import bulk_operation_task, TASKS_AVAILABLE  # type: ignore[attr-defined]
+        from storage.tasks import bulk_operation_task, TASKS_AVAILABLE
 
         # If async tasks not available, fall back to sync execution
         if not TASKS_AVAILABLE:
@@ -220,7 +220,7 @@ class BulkOperationService:
             }
 
         # Enqueue task
-        result = bulk_operation_task.enqueue(  # type: ignore[attr-defined]
+        result = bulk_operation_task.enqueue(
             operation=operation,
             paths=paths,
             options=options,
@@ -229,7 +229,7 @@ class BulkOperationService:
 
         return {
             "async": True,
-            "task_id": str(result.id),  # type: ignore[attr-defined]
+            "task_id": str(result.id),
             "total": len(paths),
             "status_url": f"/api/v1/bulk/status/{result.id}/",
         }

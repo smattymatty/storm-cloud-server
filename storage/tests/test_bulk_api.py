@@ -33,7 +33,7 @@ class BulkOperationAPITestCase(TestCase):
     def setUp(self):
         """Set up test environment."""
         super().setUp()
-        self.user = UserWithProfileFactory(verified=True)  # type: ignore[assignment]
+        self.user = UserWithProfileFactory(verified=True)
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)  # type: ignore[arg-type]
 

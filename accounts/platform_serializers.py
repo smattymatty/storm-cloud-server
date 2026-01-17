@@ -144,6 +144,16 @@ class PlatformSetupOrgSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Optional URL slug for organization. Auto-generated if not provided.",
     )
+    default_show_email_to_org = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Default visibility setting: show member emails to org members.",
+    )
+    default_show_name_to_org = serializers.BooleanField(
+        required=False,
+        default=True,
+        help_text="Default visibility setting: show member names to org members.",
+    )
 
     def validate_organization_slug(self, value):
         """Check slug is unique if provided."""

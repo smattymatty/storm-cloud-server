@@ -54,8 +54,8 @@ def send_enrollment_invite_email(
     email: str,
     org_name: str,
     token: str,
-    inviter_name: str = None,
-    server_url: str = None,
+    inviter_name: str | None = None,
+    server_url: str | None = None,
 ) -> None:
     """Send enrollment invitation email.
 
@@ -172,8 +172,8 @@ def send_platform_invite_email(
     email: str,
     invite_name: str,
     token: str,
-    inviter_name: str = None,
-    server_url: str = None,
+    inviter_name: str | None = None,
+    server_url: str | None = None,
 ) -> None:
     """Send platform invitation email.
 

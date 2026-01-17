@@ -48,6 +48,8 @@ from accounts.api import (
     AdminOrganizationListView,
     AdminOrganizationDetailView,
     AdminOrganizationMembersView,
+    # Organization
+    OrgMembersView,
     # User Per-Key Webhook
     UserKeyWebhookView,
 )
@@ -92,6 +94,7 @@ from storage.api import (
     PublicShareInfoView,
     ShareLinkDetailView,
     ShareLinkListCreateView,
+    StorageTransferView,
     UserAuditLogView,
 )
 from storage.admin_api import (
@@ -106,6 +109,7 @@ from storage.admin_api import (
     AdminFileDetailView,
     AdminFileDownloadView,
     AdminFileUploadView,
+    AdminOverrideAccessView,
 )
 from storage.search_api import AdminSearchFilesView, SearchFilesView
 from storage.shared_api import (
@@ -113,6 +117,7 @@ from storage.shared_api import (
     SharedDirectoryListRootView,
     SharedDirectoryListView,
     SharedFileContentView,
+    SharedFileCreateView,
     SharedFileDeleteView,
     SharedFileDetailView,
     SharedFileDownloadView,
@@ -411,6 +416,17 @@ urlpatterns = [
         name="admin-user-file-content",
     ),
     path(
+        "admin/users/<int:user_id>/files/<path:file_path>/access/",
+        AdminOverrideAccessView.as_view(),
+        name="admin-user-file-access",
+    ),
+    # Also allow access request for all files (no path)
+    path(
+        "admin/users/<int:user_id>/access/",
+        AdminOverrideAccessView.as_view(),
+        name="admin-user-access",
+    ),
+    path(
         "admin/users/<int:user_id>/files/<path:file_path>/",
         AdminFileDetailView.as_view(),
         name="admin-user-file-detail",
@@ -458,58 +474,11 @@ urlpatterns = [
     # =========================================================================
     # Recursive file search
     path("search/files/", SearchFilesView.as_view(), name="search-files"),
-    # Directories (ls operations)
-    path("dirs/", DirectoryListRootView.as_view(), name="dir-list-root"),
-    # Root directory reorder/reset (must come before <path:> routes)
-    path("dirs/reorder/", DirectoryReorderView.as_view(), name="dir-reorder-root"),
-    path(
-        "dirs/reset-order/",
-        DirectoryResetOrderView.as_view(),
-        name="dir-reset-order-root",
-    ),
-    # Path-based directory operations
-    path(
-        "dirs/<path:dir_path>/create/", DirectoryCreateView.as_view(), name="dir-create"
-    ),
-    path(
-        "dirs/<path:dir_path>/reorder/",
-        DirectoryReorderView.as_view(),
-        name="dir-reorder",
-    ),
-    path(
-        "dirs/<path:dir_path>/reset-order/",
-        DirectoryResetOrderView.as_view(),
-        name="dir-reset-order",
-    ),
-    path(
-        "dirs/<path:dir_path>/",
-        DirectoryListView.as_view(),
-        name="dir-list",
-    ),
-    # Files (file operations)
-    path(
-        "files/<path:file_path>/create/", FileCreateView.as_view(), name="file-create"
-    ),
-    path(
-        "files/<path:file_path>/upload/", FileUploadView.as_view(), name="file-upload"
-    ),
-    path(
-        "files/<path:file_path>/download/",
-        FileDownloadView.as_view(),
-        name="file-download",
-    ),
-    path(
-        "files/<path:file_path>/delete/", FileDeleteView.as_view(), name="file-delete"
-    ),
-    path(
-        "files/<path:file_path>/content/",
-        FileContentView.as_view(),
-        name="file-content",
-    ),
-    path("files/<path:file_path>/", FileDetailView.as_view(), name="file-detail"),
     # Bulk operations
     path("bulk/", BulkOperationView.as_view(), name="bulk-operation"),
     path("bulk/status/<uuid:task_id>/", BulkStatusView.as_view(), name="bulk-status"),
+    # Cross-storage transfer (user <-> org)
+    path("storage/transfer/", StorageTransferView.as_view(), name="storage-transfer"),
     # Index management (admin)
     path("index/rebuild/", IndexRebuildView.as_view(), name="index-rebuild"),
     # User audit log
@@ -517,46 +486,112 @@ urlpatterns = [
     # CMS (page-file mappings)
     path("cms/", include("cms.urls")),
     # =========================================================================
-    # Shared Storage (Organization)
+    # User Storage (/user/ prefix)
     # =========================================================================
-    # Shared directories
-    path("shared/", SharedDirectoryListRootView.as_view(), name="shared-dir-list-root"),
+    path("user/dirs/", DirectoryListRootView.as_view(), name="user-dir-list-root"),
     path(
-        "shared/dirs/<path:dir_path>/create/",
+        "user/dirs/reorder/",
+        DirectoryReorderView.as_view(),
+        name="user-dir-reorder-root",
+    ),
+    path(
+        "user/dirs/reset-order/",
+        DirectoryResetOrderView.as_view(),
+        name="user-dir-reset-order-root",
+    ),
+    path(
+        "user/dirs/<path:dir_path>/create/",
+        DirectoryCreateView.as_view(),
+        name="user-dir-create",
+    ),
+    path(
+        "user/dirs/<path:dir_path>/reorder/",
+        DirectoryReorderView.as_view(),
+        name="user-dir-reorder",
+    ),
+    path(
+        "user/dirs/<path:dir_path>/reset-order/",
+        DirectoryResetOrderView.as_view(),
+        name="user-dir-reset-order",
+    ),
+    path(
+        "user/dirs/<path:dir_path>/", DirectoryListView.as_view(), name="user-dir-list"
+    ),
+    path(
+        "user/files/<path:file_path>/create/",
+        FileCreateView.as_view(),
+        name="user-file-create",
+    ),
+    path(
+        "user/files/<path:file_path>/upload/",
+        FileUploadView.as_view(),
+        name="user-file-upload",
+    ),
+    path(
+        "user/files/<path:file_path>/download/",
+        FileDownloadView.as_view(),
+        name="user-file-download",
+    ),
+    path(
+        "user/files/<path:file_path>/delete/",
+        FileDeleteView.as_view(),
+        name="user-file-delete",
+    ),
+    path(
+        "user/files/<path:file_path>/content/",
+        FileContentView.as_view(),
+        name="user-file-content",
+    ),
+    path(
+        "user/files/<path:file_path>/",
+        FileDetailView.as_view(),
+        name="user-file-detail",
+    ),
+    # =========================================================================
+    # Organization Storage (/org/ prefix)
+    # =========================================================================
+    path("org/", SharedDirectoryListRootView.as_view(), name="org-dir-list-root"),
+    path(
+        "org/dirs/<path:dir_path>/create/",
         SharedDirectoryCreateView.as_view(),
-        name="shared-dir-create",
+        name="org-dir-create",
     ),
     path(
-        "shared/dirs/<path:dir_path>/",
+        "org/dirs/<path:dir_path>/",
         SharedDirectoryListView.as_view(),
-        name="shared-dir-list",
+        name="org-dir-list",
     ),
-    # Shared files
     path(
-        "shared/files/<path:file_path>/upload/",
+        "org/files/<path:file_path>/create/",
+        SharedFileCreateView.as_view(),
+        name="org-file-create",
+    ),
+    path(
+        "org/files/<path:file_path>/upload/",
         SharedFileUploadView.as_view(),
-        name="shared-file-upload",
+        name="org-file-upload",
     ),
     path(
-        "shared/files/<path:file_path>/download/",
+        "org/files/<path:file_path>/download/",
         SharedFileDownloadView.as_view(),
-        name="shared-file-download",
+        name="org-file-download",
     ),
     path(
-        "shared/files/<path:file_path>/delete/",
+        "org/files/<path:file_path>/delete/",
         SharedFileDeleteView.as_view(),
-        name="shared-file-delete",
+        name="org-file-delete",
     ),
     path(
-        "shared/files/<path:file_path>/content/",
+        "org/files/<path:file_path>/content/",
         SharedFileContentView.as_view(),
-        name="shared-file-content",
+        name="org-file-content",
     ),
     path(
-        "shared/files/<path:file_path>/",
+        "org/files/<path:file_path>/",
         SharedFileDetailView.as_view(),
-        name="shared-file-detail",
+        name="org-file-detail",
     ),
+    path("org/members/", OrgMembersView.as_view(), name="org-members"),
     # =========================================================================
     # Share Links
     # =========================================================================

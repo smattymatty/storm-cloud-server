@@ -11,12 +11,12 @@ from storage.tests.factories import StoredFileFactory
 
 
 class DirectoryListTest(StormCloudAPITestCase):
-    """GET /api/v1/dirs/"""
+    """GET /api/v1/user/dirs/"""
 
     def test_list_root_returns_empty_for_new_user(self):
         """Empty directory should return 200 OK."""
         self.authenticate()
-        response = self.client.get("/api/v1/dirs/")
+        response = self.client.get("/api/v1/user/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # User directory may have structure files, just verify it works
         self.assertGreaterEqual(response.data["total"], 0)
@@ -28,7 +28,7 @@ class DirectoryListTest(StormCloudAPITestCase):
         for i in range(10):
             StoredFileFactory(owner=self.user.account, path=f"file{i}.txt")
 
-        response = self.client.get("/api/v1/dirs/?limit=5")
+        response = self.client.get("/api/v1/user/dirs/?limit=5")
         # Verify limit is respected (may include existing structure files)
         self.assertLessEqual(len(response.data["entries"]), 5)
         self.assertGreaterEqual(response.data["total"], 0)
@@ -36,13 +36,13 @@ class DirectoryListTest(StormCloudAPITestCase):
     def test_path_traversal_blocked(self):
         """Path traversal should be blocked."""
         self.authenticate()
-        response = self.client.get("/api/v1/dirs/../etc/")
+        response = self.client.get("/api/v1/user/dirs/../etc/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
 
 
 class DirectoryCreateTest(StormCloudAPITestCase):
-    """POST /api/v1/dirs/{path}/create/"""
+    """POST /api/v1/user/dirs/{path}/create/"""
 
     def test_create_directory_succeeds(self):
         """Creating directory should succeed."""
@@ -50,20 +50,20 @@ class DirectoryCreateTest(StormCloudAPITestCase):
         import uuid
 
         unique_dir = f"newdir-{uuid.uuid4().hex[:8]}"
-        response = self.client.post(f"/api/v1/dirs/{unique_dir}/create/")
+        response = self.client.post(f"/api/v1/user/dirs/{unique_dir}/create/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data["is_directory"])
 
     def test_create_existing_directory_returns_409(self):
         """Creating existing directory should return 409."""
         self.authenticate()
-        self.client.post("/api/v1/dirs/existing/create/")
-        response = self.client.post("/api/v1/dirs/existing/create/")
+        self.client.post("/api/v1/user/dirs/existing/create/")
+        response = self.client.post("/api/v1/user/dirs/existing/create/")
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
 
 
 class FileCreateTest(StormCloudAPITestCase):
-    """POST /api/v1/files/{path}/create/"""
+    """POST /api/v1/user/files/{path}/create/"""
 
     def test_create_file_succeeds(self):
         """Creating empty file should succeed."""
@@ -71,7 +71,7 @@ class FileCreateTest(StormCloudAPITestCase):
         import uuid
 
         unique_file = f"newfile-{uuid.uuid4().hex[:8]}.txt"
-        response = self.client.post(f"/api/v1/files/{unique_file}/create/")
+        response = self.client.post(f"/api/v1/user/files/{unique_file}/create/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertFalse(response.data["is_directory"])
         self.assertEqual(response.data["size"], 0)
@@ -83,7 +83,7 @@ class FileCreateTest(StormCloudAPITestCase):
         import uuid
 
         unique_file = f"doc-{uuid.uuid4().hex[:8]}.json"
-        response = self.client.post(f"/api/v1/files/{unique_file}/create/")
+        response = self.client.post(f"/api/v1/user/files/{unique_file}/create/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["content_type"], "application/json")
 
@@ -93,8 +93,8 @@ class FileCreateTest(StormCloudAPITestCase):
         import uuid
 
         unique_file = f"existing-{uuid.uuid4().hex[:8]}.txt"
-        self.client.post(f"/api/v1/files/{unique_file}/create/")
-        response = self.client.post(f"/api/v1/files/{unique_file}/create/")
+        self.client.post(f"/api/v1/user/files/{unique_file}/create/")
+        response = self.client.post(f"/api/v1/user/files/{unique_file}/create/")
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["error"]["code"], "ALREADY_EXISTS")
 
@@ -104,19 +104,19 @@ class FileCreateTest(StormCloudAPITestCase):
         import uuid
 
         unique_path = f"nested/{uuid.uuid4().hex[:8]}/deep/file.txt"
-        response = self.client.post(f"/api/v1/files/{unique_path}/create/")
+        response = self.client.post(f"/api/v1/user/files/{unique_path}/create/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_create_file_path_traversal_blocked(self):
         """Path traversal should be blocked."""
         self.authenticate()
-        response = self.client.post("/api/v1/files/../etc/passwd/create/")
+        response = self.client.post("/api/v1/user/files/../etc/passwd/create/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
 
 
 class DirectoryReorderTest(StormCloudAPITestCase):
-    """POST /api/v1/dirs/{path}/reorder/"""
+    """POST /api/v1/user/dirs/{path}/reorder/"""
 
     def test_reorder_files_succeeds(self):
         """Reordering files should update sort_position."""
@@ -127,13 +127,13 @@ class DirectoryReorderTest(StormCloudAPITestCase):
 
         # Create some files
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-c.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-c.txt/create/")
 
         # Reorder them
         response = self.client.post(
-            "/api/v1/dirs/reorder/",
+            "/api/v1/user/dirs/reorder/",
             {"order": [f"{prefix}-c.txt", f"{prefix}-a.txt", f"{prefix}-b.txt"]},
             format="json",
         )
@@ -156,12 +156,12 @@ class DirectoryReorderTest(StormCloudAPITestCase):
         from storage.models import StoredFile
 
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-b.txt/create/")
 
         # Only reorder one file
         response = self.client.post(
-            "/api/v1/dirs/reorder/",
+            "/api/v1/user/dirs/reorder/",
             {"order": [f"{prefix}-b.txt"]},
             format="json",
         )
@@ -178,12 +178,12 @@ class DirectoryReorderTest(StormCloudAPITestCase):
         import uuid
 
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/dirs/{prefix}/create/")
-        self.client.post(f"/api/v1/files/{prefix}/a.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}/b.txt/create/")
+        self.client.post(f"/api/v1/user/dirs/{prefix}/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}/a.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}/b.txt/create/")
 
         response = self.client.post(
-            f"/api/v1/dirs/{prefix}/reorder/",
+            f"/api/v1/user/dirs/{prefix}/reorder/",
             {"order": ["b.txt", "a.txt"]},
             format="json",
         )
@@ -192,7 +192,7 @@ class DirectoryReorderTest(StormCloudAPITestCase):
 
 
 class DirectoryResetOrderTest(StormCloudAPITestCase):
-    """POST /api/v1/dirs/{path}/reset-order/"""
+    """POST /api/v1/user/dirs/{path}/reset-order/"""
 
     def test_reset_order_clears_positions(self):
         """Reset order should set all sort_positions to null."""
@@ -202,15 +202,15 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
         from storage.models import StoredFile
 
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-b.txt/create/")
 
         # Files have sort_position=0 from creation, verify
         a_file = StoredFile.objects.get(owner=self.user.account, path=f"{prefix}-a.txt")
         self.assertIsNotNone(a_file.sort_position)
 
         # Reset order
-        response = self.client.post("/api/v1/dirs/reset-order/")
+        response = self.client.post("/api/v1/user/dirs/reset-order/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify positions are null
@@ -228,13 +228,13 @@ class DirectoryResetOrderTest(StormCloudAPITestCase):
 
         prefix = uuid.uuid4().hex[:8]
         # File in root
-        self.client.post(f"/api/v1/files/{prefix}-root.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-root.txt/create/")
         # File in subdir
-        self.client.post(f"/api/v1/dirs/{prefix}/create/")
-        self.client.post(f"/api/v1/files/{prefix}/sub.txt/create/")
+        self.client.post(f"/api/v1/user/dirs/{prefix}/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}/sub.txt/create/")
 
         # Reset only subdir
-        response = self.client.post(f"/api/v1/dirs/{prefix}/reset-order/")
+        response = self.client.post(f"/api/v1/user/dirs/{prefix}/reset-order/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Root file should still have position
@@ -261,8 +261,8 @@ class SortPositionTest(StormCloudAPITestCase):
         from storage.models import StoredFile
 
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/files/{prefix}-first.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-second.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-first.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-second.txt/create/")
 
         first = StoredFile.objects.get(
             owner=self.user.account, path=f"{prefix}-first.txt"
@@ -281,19 +281,19 @@ class SortPositionTest(StormCloudAPITestCase):
         import uuid
 
         prefix = uuid.uuid4().hex[:8]
-        self.client.post(f"/api/v1/files/{prefix}-a.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-b.txt/create/")
-        self.client.post(f"/api/v1/files/{prefix}-c.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-a.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-b.txt/create/")
+        self.client.post(f"/api/v1/user/files/{prefix}-c.txt/create/")
 
         # Reorder: c, a, b
         self.client.post(
-            "/api/v1/dirs/reorder/",
+            "/api/v1/user/dirs/reorder/",
             {"order": [f"{prefix}-c.txt", f"{prefix}-a.txt", f"{prefix}-b.txt"]},
             format="json",
         )
 
         # List directory
-        response = self.client.get("/api/v1/dirs/")
+        response = self.client.get("/api/v1/user/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Find our files in the response
@@ -311,12 +311,12 @@ class SortPositionTest(StormCloudAPITestCase):
 
 
 class FileUploadTest(StormCloudAPITestCase):
-    """POST /api/v1/files/{path}/upload/"""
+    """POST /api/v1/user/files/{path}/upload/"""
 
     def test_upload_without_file_returns_400(self):
         """Upload without file should return 400."""
         self.authenticate()
-        response = self.client.post("/api/v1/files/test.txt/upload/")
+        response = self.client.post("/api/v1/user/files/test.txt/upload/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_path_normalization_works(self):
@@ -326,7 +326,7 @@ class FileUploadTest(StormCloudAPITestCase):
         test_file = BytesIO(b"test content")
         test_file.name = "test.txt"
         response = self.client.post(
-            "/api/v1/files/../etc/passwd/upload/", {"file": test_file}
+            "/api/v1/user/files/../etc/passwd/upload/", {"file": test_file}
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
@@ -346,7 +346,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         test_file = BytesIO(b"test content")
         test_file.name = "test.txt"
         response = self.client.post(
-            "/api/v1/files/governance-test.txt/upload/", {"file": test_file}
+            "/api/v1/user/files/governance-test.txt/upload/", {"file": test_file}
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -394,7 +394,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         test_file = BytesIO(b"test content")
         test_file.name = "test.txt"
         response = self.client.post(
-            "/api/v1/files/default-encryption.txt/upload/", {"file": test_file}
+            "/api/v1/user/files/default-encryption.txt/upload/", {"file": test_file}
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["encryption_method"], "none")
@@ -408,10 +408,12 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         # Create file
         test_file = BytesIO(b"test content")
         test_file.name = "test.txt"
-        self.client.post("/api/v1/files/detail-test.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/detail-test.txt/upload/", {"file": test_file}
+        )
 
         # Get file details
-        response = self.client.get("/api/v1/files/detail-test.txt/")
+        response = self.client.get("/api/v1/user/files/detail-test.txt/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("encryption_method", response.data)
         self.assertEqual(response.data["encryption_method"], "none")
@@ -423,10 +425,12 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
         # Create a file
         test_file = BytesIO(b"test content")
         test_file.name = "test.txt"
-        self.client.post("/api/v1/files/list-test.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/list-test.txt/upload/", {"file": test_file}
+        )
 
         # List directory
-        response = self.client.get("/api/v1/dirs/")
+        response = self.client.get("/api/v1/user/dirs/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Check that entries have encryption_method
@@ -440,7 +444,7 @@ class EncryptionGovernanceTest(StormCloudAPITestCase):
 
         unique_dir = f"dir-{uuid.uuid4().hex[:8]}"
 
-        response = self.client.post(f"/api/v1/dirs/{unique_dir}/create/")
+        response = self.client.post(f"/api/v1/user/dirs/{unique_dir}/create/")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn("encryption_method", response.data)
         self.assertEqual(response.data["encryption_method"], "none")
@@ -479,13 +483,13 @@ class ETagSupportTest(StormCloudAPITestCase):
         test_file = BytesIO(b"test content for etag")
         test_file.name = "etag-test.txt"
         response = self.client.post(
-            "/api/v1/files/etag-test.txt/upload/", {"file": test_file}
+            "/api/v1/user/files/etag-test.txt/upload/", {"file": test_file}
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_info_endpoint_returns_etag(self):
         """GET /files/{path}/ includes ETag header."""
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("ETag", response)
         # ETag should be quoted
@@ -494,14 +498,14 @@ class ETagSupportTest(StormCloudAPITestCase):
 
     def test_info_endpoint_returns_cache_control(self):
         """GET /files/{path}/ includes Cache-Control header."""
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("Cache-Control", response)
         self.assertEqual(response["Cache-Control"], "private, must-revalidate")
 
     def test_download_endpoint_returns_etag(self):
         """GET /files/{path}/download/ includes ETag header."""
-        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/download/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("ETag", response)
         self.assertTrue(response["ETag"].startswith('"'))
@@ -509,39 +513,41 @@ class ETagSupportTest(StormCloudAPITestCase):
 
     def test_download_endpoint_returns_cache_control(self):
         """GET /files/{path}/download/ includes Cache-Control header."""
-        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/download/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("Cache-Control", response)
         self.assertEqual(response["Cache-Control"], "private, must-revalidate")
 
     def test_both_endpoints_return_same_etag(self):
         """Info and download endpoints return identical ETag for same file."""
-        info_response = self.client.get("/api/v1/files/etag-test.txt/")
-        download_response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        info_response = self.client.get("/api/v1/user/files/etag-test.txt/")
+        download_response = self.client.get(
+            "/api/v1/user/files/etag-test.txt/download/"
+        )
 
         self.assertEqual(info_response["ETag"], download_response["ETag"])
 
     def test_info_conditional_get_returns_304_on_match(self):
         """If-None-Match with matching ETag returns 304 on info endpoint."""
         # First request to get ETag
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         etag = response["ETag"]
 
         # Conditional request with matching ETag
         response = self.client.get(
-            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
+            "/api/v1/user/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
 
     def test_download_conditional_get_returns_304_on_match(self):
         """If-None-Match with matching ETag returns 304 on download endpoint."""
         # First request to get ETag
-        response = self.client.get("/api/v1/files/etag-test.txt/download/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/download/")
         etag = response["ETag"]
 
         # Conditional request with matching ETag
         response = self.client.get(
-            "/api/v1/files/etag-test.txt/download/", HTTP_IF_NONE_MATCH=etag
+            "/api/v1/user/files/etag-test.txt/download/", HTTP_IF_NONE_MATCH=etag
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
 
@@ -549,7 +555,7 @@ class ETagSupportTest(StormCloudAPITestCase):
         """If-None-Match with stale ETag returns 200 + new content."""
         # Request with a stale/wrong ETag
         response = self.client.get(
-            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH='"stale-etag"'
+            "/api/v1/user/files/etag-test.txt/", HTTP_IF_NONE_MATCH='"stale-etag"'
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # Should include the correct ETag
@@ -558,12 +564,12 @@ class ETagSupportTest(StormCloudAPITestCase):
     def test_304_response_includes_etag(self):
         """304 responses include the ETag header."""
         # First request to get ETag
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         etag = response["ETag"]
 
         # Conditional request
         response = self.client.get(
-            "/api/v1/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
+            "/api/v1/user/files/etag-test.txt/", HTTP_IF_NONE_MATCH=etag
         )
         self.assertEqual(response.status_code, status.HTTP_304_NOT_MODIFIED)
         self.assertIn("ETag", response)
@@ -572,16 +578,18 @@ class ETagSupportTest(StormCloudAPITestCase):
     def test_etag_changes_after_file_update(self):
         """Re-uploading file changes ETag."""
         # Get original ETag
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         original_etag = response["ETag"]
 
         # Re-upload with different content
         new_content = BytesIO(b"updated content for etag test")
         new_content.name = "etag-test.txt"
-        self.client.post("/api/v1/files/etag-test.txt/upload/", {"file": new_content})
+        self.client.post(
+            "/api/v1/user/files/etag-test.txt/upload/", {"file": new_content}
+        )
 
         # Get new ETag
-        response = self.client.get("/api/v1/files/etag-test.txt/")
+        response = self.client.get("/api/v1/user/files/etag-test.txt/")
         new_etag = response["ETag"]
 
         # ETags should be different

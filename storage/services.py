@@ -779,10 +779,13 @@ class FileService:
         # Read content (with decryption)
         try:
             file_handle = self.backend.open(full_path)
-            content = file_handle.read()
+            raw_content = file_handle.read()
             file_handle.close()
-            if isinstance(content, bytes):
-                content = content.decode("utf-8", errors="replace")
+            content: str = (
+                raw_content.decode("utf-8", errors="replace")
+                if isinstance(raw_content, bytes)
+                else raw_content
+            )
         except DecryptionError:
             return FileContentResult(
                 success=False,

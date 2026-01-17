@@ -48,7 +48,7 @@ class FileOperationPerformance(APITestCase):
         mock_backend.list.return_value = mock_files
 
         with monitor(response_time_ms=50, query_count=3) as result:
-            response = self.client.get("/api/v1/dirs/?limit=100")
+            response = self.client.get("/api/v1/user/dirs/?limit=100")
         result.explain()
 
         self.assertEqual(response.status_code, 200)
@@ -60,11 +60,11 @@ class FileOperationPerformance(APITestCase):
         content.name = "test.bin"
 
         # Create parent directory first
-        self.client.post("/api/v1/dirs/uploads/create/")
+        self.client.post("/api/v1/user/dirs/uploads/create/")
 
         with monitor(response_time_ms=50, query_count=12) as result:
             response = self.client.post(
-                "/api/v1/files/uploads/test.bin/upload/",
+                "/api/v1/user/files/uploads/test.bin/upload/",
                 {"file": content},
                 format="multipart",
             )
@@ -94,6 +94,6 @@ class DirectoryListingScaleTest(APITestCase):
     def test_list_100_files_under_500ms_no_n1(self):
         """Listing 100 files should be efficient."""
         with monitor(response_time_ms=500, query_count=20) as result:
-            response = self.client.get("/api/v1/dirs/")
+            response = self.client.get("/api/v1/user/dirs/")
 
         self.assertEqual(response.status_code, 200)

@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
@@ -11,7 +12,10 @@ from accounts.tests.factories import APIKeyFactory, UserWithProfileFactory
 from core.tests.base import StormCloudAdminTestCase
 from storage.models import FileAuditLog, StoredFile
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.typing import UserProtocol as User
+else:
+    User = get_user_model()
 
 
 # Disable encryption for admin file tests - they write/read files directly
@@ -84,7 +88,7 @@ class AdminFileTestMixin:
         action: str,
         path: str,
         target_user: User,
-        performed_by: User = None,
+        performed_by: User | None = None,
         is_admin_action: bool = True,
         success: bool = True,
     ) -> FileAuditLog:

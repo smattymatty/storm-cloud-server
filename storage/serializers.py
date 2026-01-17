@@ -38,7 +38,7 @@ class FileListItemSerializer(serializers.Serializer):
     size = serializers.IntegerField()
     is_directory = serializers.BooleanField()
     content_type = serializers.CharField(allow_null=True)
-    modified_at = serializers.DateTimeField()
+    modified_at = serializers.DateTimeField(source="updated_at")
     encryption_method = serializers.CharField(required=False, default="none")
     sort_position = serializers.IntegerField(allow_null=True, required=False)
 
@@ -66,7 +66,7 @@ class FileInfoResponseSerializer(serializers.Serializer):
     content_type = serializers.CharField(allow_null=True)
     is_directory = serializers.BooleanField()
     created_at = serializers.DateTimeField()
-    modified_at = serializers.DateTimeField()
+    modified_at = serializers.DateTimeField(source="updated_at")
     encryption_method = serializers.CharField(required=False, default="none")
 
 
@@ -290,6 +290,7 @@ class FileAuditLogSerializer(serializers.ModelSerializer):
             "success",
             "error_code",
             "error_message",
+            "justification",
             "ip_address",
             "file_size",
             "content_type",

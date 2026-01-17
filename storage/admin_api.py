@@ -7,7 +7,7 @@ while maintaining a complete audit trail.
 from base64 import b64decode, b64encode
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -34,7 +34,10 @@ from .models import FileAuditLog, StoredFile
 from .serializers import FileAuditLogSerializer
 from .signals import file_action_performed
 
-User = get_user_model()
+if TYPE_CHECKING:
+    from accounts.typing import UserProtocol as User
+else:
+    User = get_user_model()
 
 
 def get_target_user_storage_path(target_user: User) -> str:
@@ -596,7 +599,9 @@ class AdminFileUploadView(AdminFileBaseView):
                 "content_type": file_info.content_type or "",
                 "is_directory": False,
                 "parent_path": db_parent_path,
-                "encryption_method": StoredFile.ENCRYPTION_NONE,
+                "encryption_method": file_info.encryption_method,
+                "key_id": file_info.encryption_key_id,
+                "encrypted_size": file_info.encrypted_size,
             },
         )
 
@@ -705,11 +710,13 @@ class AdminFileCreateView(AdminFileBaseView):
             owner=target_user.account,
             path=file_path,
             name=Path(file_path).name,
-            size=0,
+            size=file_info.size,
             content_type=content_type,
             is_directory=False,
             parent_path=db_parent_path,
-            encryption_method=StoredFile.ENCRYPTION_NONE,
+            encryption_method=file_info.encryption_method,
+            key_id=file_info.encryption_key_id,
+            encrypted_size=file_info.encrypted_size,
         )
 
         emit_admin_file_action(
@@ -728,12 +735,12 @@ class AdminFileCreateView(AdminFileBaseView):
                 "detail": "File created",
                 "path": file_path,
                 "name": stored_file.name,
-                "size": 0,
+                "size": file_info.size,
                 "content_type": content_type,
                 "is_directory": False,
                 "created_at": stored_file.created_at,
                 "modified_at": file_info.modified_at,
-                "encryption_method": StoredFile.ENCRYPTION_NONE,
+                "encryption_method": stored_file.encryption_method,
                 "target_user": {"id": target_user.id, "username": target_user.username},
             },
             status=status.HTTP_201_CREATED,
@@ -1034,9 +1041,12 @@ class AdminFileContentView(AdminFileBaseView):
 
         try:
             with backend.open(full_path) as f:
-                content = f.read()
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8", errors="replace")
+                raw_content = f.read()
+                content: str = (
+                    raw_content.decode("utf-8", errors="replace")
+                    if isinstance(raw_content, bytes)
+                    else raw_content
+                )
         except DecryptionError:
             emit_admin_file_action(
                 self.__class__,
@@ -1126,9 +1136,10 @@ class AdminFileContentView(AdminFileBaseView):
             )
 
         # Get content from request body
-        content = request.body
-        if isinstance(content, bytes):
-            content = content.decode("utf-8")
+        raw_body = request.body
+        content: str = (
+            raw_body.decode("utf-8") if isinstance(raw_body, bytes) else raw_body
+        )
 
         # Write content
         from io import BytesIO
@@ -1390,3 +1401,144 @@ class AdminFileAuditLogListView(AdminFileBaseView):
 
         serializer = FileAuditLogSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+
+# =============================================================================
+# Admin Override Access
+# =============================================================================
+
+
+class AdminOverrideAccessView(AdminFileBaseView):
+    """Request temporary override access to user's files with justification.
+
+    This endpoint creates an audit trail for admin access to user files,
+    requiring a justification that is logged. Returns a temporary access
+    token valid for 1 hour.
+    """
+
+    @extend_schema(
+        summary="Request admin override access (Admin)",
+        description=(
+            "Request temporary access to a user's files with required justification. "
+            "Creates an audit log entry and returns a temporary access token."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                description="Target user ID",
+            ),
+            OpenApiParameter(
+                name="file_path",
+                type=str,
+                location=OpenApiParameter.PATH,
+                description="File/directory path to access (use * for all files)",
+            ),
+        ],
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "justification": {
+                        "type": "string",
+                        "description": "Required justification for accessing user's files",
+                    },
+                },
+                "required": ["justification"],
+            }
+        },
+        responses={
+            200: OpenApiResponse(
+                description="Access granted with temporary token",
+                response={
+                    "type": "object",
+                    "properties": {
+                        "access_granted": {"type": "boolean"},
+                        "access_token": {"type": "string"},
+                        "expires_at": {"type": "string", "format": "date-time"},
+                        "target_user": {"type": "object"},
+                        "path_prefix": {"type": "string"},
+                    },
+                },
+            ),
+            400: OpenApiResponse(description="Missing justification"),
+        },
+        tags=["Admin - Files"],
+    )
+    def post(self, request: Request, user_id: int, file_path: str = "") -> Response:
+        """Request override access with justification."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from .models import AdminAccessToken
+
+        target_user = self.get_target_user(user_id)
+
+        # Validate justification
+        justification = request.data.get("justification", "").strip()
+        if not justification:
+            return Response(
+                {
+                    "error": {
+                        "code": "JUSTIFICATION_REQUIRED",
+                        "message": "A justification is required for admin override access.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(justification) < 10:
+            return Response(
+                {
+                    "error": {
+                        "code": "JUSTIFICATION_TOO_SHORT",
+                        "message": "Justification must be at least 10 characters.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Normalize path (use empty string for root/all access)
+        try:
+            path_prefix = (
+                normalize_path(file_path) if file_path and file_path != "*" else ""
+            )
+        except PathValidationError as e:
+            return Response(
+                {"error": {"code": "INVALID_PATH", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create access token valid for 1 hour
+        expires_at = timezone.now() + timedelta(hours=1)
+        access_token = AdminAccessToken.objects.create(
+            admin=request.user.account,
+            target_user=target_user.account,
+            path_prefix=path_prefix,
+            justification=justification,
+            expires_at=expires_at,
+        )
+
+        # Log the admin override action
+        emit_admin_file_action(
+            self.__class__,
+            request,
+            target_user,
+            FileAuditLog.ACTION_ADMIN_OVERRIDE,
+            path_prefix or "*",
+            success=True,
+            justification=justification,
+        )
+
+        return Response(
+            {
+                "access_granted": True,
+                "access_token": str(access_token.token),
+                "expires_at": expires_at.isoformat(),
+                "target_user": {
+                    "id": target_user.id,
+                    "username": target_user.username,
+                },
+                "path_prefix": path_prefix or "*",
+            }
+        )

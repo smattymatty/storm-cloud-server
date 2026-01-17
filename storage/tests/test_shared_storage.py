@@ -82,28 +82,43 @@ class SharedStorageAPITestCase(APITestCase):
 
 
 class SharedDirectoryListTest(SharedStorageAPITestCase):
-    """GET /api/v1/shared/"""
+    """GET /api/v1/org/"""
 
     def test_list_shared_root_returns_empty_for_new_org(self):
         """Empty shared directory should return 200 OK."""
         self.authenticate()
-        response = self.client.get("/api/v1/shared/")
+        response = self.client.get("/api/v1/org/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["path"], "")
+
+    def test_list_org_root_includes_modified_at(self):
+        """Listing org root should include modified_at in file items."""
+        self.authenticate()
+        unique_file = f"test-{uuid.uuid4().hex[:8]}.txt"
+
+        # Create a file first
+        self.client.post(f"/api/v1/org/files/{unique_file}/create/")
+
+        response = self.client.get("/api/v1/org/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("items", response.data)
+        self.assertTrue(len(response.data["items"]) > 0)
+        self.assertIn("modified_at", response.data["items"][0])
 
     # NOTE: test_list_shared_requires_organization removed - Account.organization_id
     # is now NOT NULL at database level, so accounts without orgs cannot exist.
 
 
 class SharedDirectoryCreateTest(SharedStorageAPITestCase):
-    """POST /api/v1/shared/dirs/{path}/create/"""
+    """POST /api/v1/org/dirs/{path}/create/"""
 
     def test_create_shared_directory_succeeds(self):
         """Creating shared directory should succeed."""
         self.authenticate()
         unique_dir = f"shared-dir-{uuid.uuid4().hex[:8]}"
 
-        response = self.client.post(f"/api/v1/shared/dirs/{unique_dir}/create/")
+        response = self.client.post(f"/api/v1/org/dirs/{unique_dir}/create/")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(response.data["is_directory"])
@@ -119,8 +134,8 @@ class SharedDirectoryCreateTest(SharedStorageAPITestCase):
         self.authenticate()
         unique_dir = f"existing-{uuid.uuid4().hex[:8]}"
 
-        self.client.post(f"/api/v1/shared/dirs/{unique_dir}/create/")
-        response = self.client.post(f"/api/v1/shared/dirs/{unique_dir}/create/")
+        self.client.post(f"/api/v1/org/dirs/{unique_dir}/create/")
+        response = self.client.post(f"/api/v1/org/dirs/{unique_dir}/create/")
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["error"]["code"], "ALREADY_EXISTS")
@@ -130,13 +145,13 @@ class SharedDirectoryCreateTest(SharedStorageAPITestCase):
         self.authenticate()
         unique_path = f"nested/{uuid.uuid4().hex[:8]}/deep"
 
-        response = self.client.post(f"/api/v1/shared/dirs/{unique_path}/create/")
+        response = self.client.post(f"/api/v1/org/dirs/{unique_path}/create/")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 
 class SharedFileUploadTest(SharedStorageAPITestCase):
-    """POST /api/v1/shared/files/{path}/upload/"""
+    """POST /api/v1/org/files/{path}/upload/"""
 
     def test_upload_shared_file_succeeds(self):
         """Uploading to shared storage should succeed."""
@@ -145,7 +160,7 @@ class SharedFileUploadTest(SharedStorageAPITestCase):
 
         content = b"Hello shared world!"
         response = self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
@@ -166,7 +181,7 @@ class SharedFileUploadTest(SharedStorageAPITestCase):
 
         content = b"Report content"
         response = self.client.post(
-            f"/api/v1/shared/files/{unique_path}/upload/",
+            f"/api/v1/org/files/{unique_path}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
@@ -177,14 +192,77 @@ class SharedFileUploadTest(SharedStorageAPITestCase):
         """Upload without file should return 400."""
         self.authenticate()
 
-        response = self.client.post("/api/v1/shared/files/test.txt/upload/")
+        response = self.client.post("/api/v1/org/files/test.txt/upload/")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "VALIDATION_ERROR")
 
 
+class SharedFileCreateTest(SharedStorageAPITestCase):
+    """POST /api/v1/org/files/{path}/create/"""
+
+    def test_create_empty_file_succeeds(self):
+        """Creating an empty file in shared storage should succeed."""
+        self.authenticate()
+        unique_file = f"new-file-{uuid.uuid4().hex[:8]}.txt"
+
+        response = self.client.post(f"/api/v1/org/files/{unique_file}/create/")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["name"], unique_file)
+        self.assertEqual(response.data["size"], 0)
+        self.assertEqual(response.data["storage_type"], "org")
+
+        # Verify DB record
+        stored = StoredFile.objects.get(organization=self.org, path=unique_file)
+        self.assertEqual(stored.size, 0)
+        self.assertIsNone(stored.owner)
+
+    def test_create_file_in_nested_directory(self):
+        """Creating file in nested directory should auto-create parents."""
+        self.authenticate()
+        unique_path = f"projects/{uuid.uuid4().hex[:8]}/notes.md"
+
+        response = self.client.post(f"/api/v1/org/files/{unique_path}/create/")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["path"], unique_path)
+
+    def test_create_existing_file_returns_409(self):
+        """Creating a file that already exists should return 409."""
+        self.authenticate()
+        unique_file = f"existing-{uuid.uuid4().hex[:8]}.txt"
+
+        # Create file first
+        self.client.post(f"/api/v1/org/files/{unique_file}/create/")
+
+        # Try to create again
+        response = self.client.post(f"/api/v1/org/files/{unique_file}/create/")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["error"]["code"], "ALREADY_EXISTS")
+
+    def test_create_file_requires_authentication(self):
+        """Creating file without authentication should fail."""
+        response = self.client.post("/api/v1/org/files/test.txt/create/")
+
+        self.assertIn(
+            response.status_code,
+            [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
+        )
+
+    def test_create_file_path_traversal_blocked(self):
+        """Path traversal attempts should be blocked."""
+        self.authenticate()
+
+        response = self.client.post("/api/v1/org/files/../etc/passwd/create/")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
+
+
 class SharedFileDetailTest(SharedStorageAPITestCase):
-    """GET /api/v1/shared/files/{path}/"""
+    """GET /api/v1/org/files/{path}/"""
 
     def test_get_shared_file_info(self):
         """Getting shared file info should succeed."""
@@ -194,13 +272,13 @@ class SharedFileDetailTest(SharedStorageAPITestCase):
         # Upload file first
         content = b"Test content"
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
 
         # Get info
-        response = self.client.get(f"/api/v1/shared/files/{unique_file}/")
+        response = self.client.get(f"/api/v1/org/files/{unique_file}/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["name"], unique_file)
@@ -211,14 +289,14 @@ class SharedFileDetailTest(SharedStorageAPITestCase):
         """Getting nonexistent shared file should return 404."""
         self.authenticate()
 
-        response = self.client.get("/api/v1/shared/files/nonexistent.txt/")
+        response = self.client.get("/api/v1/org/files/nonexistent.txt/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data["error"]["code"], "NOT_FOUND")
 
 
 class SharedFileDownloadTest(SharedStorageAPITestCase):
-    """GET /api/v1/shared/files/{path}/download/"""
+    """GET /api/v1/org/files/{path}/download/"""
 
     def test_download_shared_file_succeeds(self):
         """Downloading shared file should succeed."""
@@ -228,13 +306,13 @@ class SharedFileDownloadTest(SharedStorageAPITestCase):
 
         # Upload file first
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
 
         # Download
-        response = self.client.get(f"/api/v1/shared/files/{unique_file}/download/")
+        response = self.client.get(f"/api/v1/org/files/{unique_file}/download/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(b"".join(response.streaming_content), content)
@@ -248,18 +326,18 @@ class SharedFileDownloadTest(SharedStorageAPITestCase):
 
         # Upload file first
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
 
         # First download to get ETag
-        response1 = self.client.get(f"/api/v1/shared/files/{unique_file}/download/")
+        response1 = self.client.get(f"/api/v1/org/files/{unique_file}/download/")
         etag = response1["ETag"].strip('"')
 
         # Second download with ETag
         response2 = self.client.get(
-            f"/api/v1/shared/files/{unique_file}/download/",
+            f"/api/v1/org/files/{unique_file}/download/",
             HTTP_IF_NONE_MATCH=etag,
         )
 
@@ -267,7 +345,7 @@ class SharedFileDownloadTest(SharedStorageAPITestCase):
 
 
 class SharedFileDeleteTest(SharedStorageAPITestCase):
-    """DELETE /api/v1/shared/files/{path}/delete/"""
+    """DELETE /api/v1/org/files/{path}/delete/"""
 
     def test_delete_shared_file_succeeds(self):
         """Deleting shared file should succeed."""
@@ -276,13 +354,13 @@ class SharedFileDeleteTest(SharedStorageAPITestCase):
 
         # Upload file first
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(b"Delete me")},
             format="multipart",
         )
 
         # Delete
-        response = self.client.delete(f"/api/v1/shared/files/{unique_file}/delete/")
+        response = self.client.delete(f"/api/v1/org/files/{unique_file}/delete/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -297,20 +375,20 @@ class SharedFileDeleteTest(SharedStorageAPITestCase):
         dir_name = f"delete-dir-{uuid.uuid4().hex[:8]}"
 
         # Create directory with files
-        self.client.post(f"/api/v1/shared/dirs/{dir_name}/create/")
+        self.client.post(f"/api/v1/org/dirs/{dir_name}/create/")
         self.client.post(
-            f"/api/v1/shared/files/{dir_name}/file1.txt/upload/",
+            f"/api/v1/org/files/{dir_name}/file1.txt/upload/",
             {"file": BytesIO(b"File 1")},
             format="multipart",
         )
         self.client.post(
-            f"/api/v1/shared/files/{dir_name}/file2.txt/upload/",
+            f"/api/v1/org/files/{dir_name}/file2.txt/upload/",
             {"file": BytesIO(b"File 2")},
             format="multipart",
         )
 
         # Delete directory
-        response = self.client.delete(f"/api/v1/shared/files/{dir_name}/delete/")
+        response = self.client.delete(f"/api/v1/org/files/{dir_name}/delete/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -323,7 +401,7 @@ class SharedFileDeleteTest(SharedStorageAPITestCase):
 
 
 class SharedFileContentTest(SharedStorageAPITestCase):
-    """GET/PUT /api/v1/shared/files/{path}/content/"""
+    """GET/PUT /api/v1/org/files/{path}/content/"""
 
     def test_preview_shared_text_file(self):
         """Previewing shared text file should return content."""
@@ -333,13 +411,13 @@ class SharedFileContentTest(SharedStorageAPITestCase):
 
         # Upload file
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
 
         # Preview
-        response = self.client.get(f"/api/v1/shared/files/{unique_file}/content/")
+        response = self.client.get(f"/api/v1/org/files/{unique_file}/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, content)
@@ -352,7 +430,7 @@ class SharedFileContentTest(SharedStorageAPITestCase):
 
         # Upload file
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(b"Original content")},
             format="multipart",
         )
@@ -360,7 +438,7 @@ class SharedFileContentTest(SharedStorageAPITestCase):
         # Edit
         new_content = "Updated shared content"
         response = self.client.put(
-            f"/api/v1/shared/files/{unique_file}/content/",
+            f"/api/v1/org/files/{unique_file}/content/",
             new_content,
             content_type="text/plain",
         )
@@ -369,7 +447,7 @@ class SharedFileContentTest(SharedStorageAPITestCase):
         self.assertEqual(response.data["size"], len(new_content))
 
         # Verify content changed
-        response2 = self.client.get(f"/api/v1/shared/files/{unique_file}/content/")
+        response2 = self.client.get(f"/api/v1/org/files/{unique_file}/content/")
         self.assertEqual(response2.content.decode(), new_content)
 
 
@@ -387,7 +465,7 @@ class SharedStorageQuotaTest(SharedStorageAPITestCase):
         # Try to upload larger file
         content = b"This content is definitely more than 10 bytes"
         response = self.client.post(
-            "/api/v1/shared/files/large.txt/upload/",
+            "/api/v1/org/files/large.txt/upload/",
             {"file": BytesIO(content)},
             format="multipart",
         )
@@ -405,7 +483,7 @@ class SharedStorageIsolationTest(SharedStorageAPITestCase):
         self.authenticate()
         unique_file = f"org1-file-{uuid.uuid4().hex[:8]}.txt"
         self.client.post(
-            f"/api/v1/shared/files/{unique_file}/upload/",
+            f"/api/v1/org/files/{unique_file}/upload/",
             {"file": BytesIO(b"Org 1 content")},
             format="multipart",
         )
@@ -419,6 +497,6 @@ class SharedStorageIsolationTest(SharedStorageAPITestCase):
 
         # Try to access from second org
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {key2.key}")
-        response = self.client.get(f"/api/v1/shared/files/{unique_file}/")
+        response = self.client.get(f"/api/v1/org/files/{unique_file}/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

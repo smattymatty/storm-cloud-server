@@ -10,7 +10,7 @@ from storage.models import StoredFile
 
 
 class FileContentPreviewTest(StormCloudAPITestCase):
-    """GET /api/v1/files/{path}/content/ - Preview file content"""
+    """GET /api/v1/user/files/{path}/content/ - Preview file content"""
 
     def test_preview_text_file_succeeds(self):
         """Preview should return raw content for text files."""
@@ -20,10 +20,10 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         content = b"# Hello World\n\nThis is a test."
         test_file = BytesIO(content)
         test_file.name = "readme.md"
-        self.client.post("/api/v1/files/readme.md/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/readme.md/upload/", {"file": test_file})
 
         # Preview it
-        response = self.client.get("/api/v1/files/readme.md/content/")
+        response = self.client.get("/api/v1/user/files/readme.md/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, content)
@@ -37,9 +37,9 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         content = b'def hello():\n    print("Hello")\n'
         test_file = BytesIO(content)
         test_file.name = "script.py"
-        self.client.post("/api/v1/files/script.py/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/script.py/upload/", {"file": test_file})
 
-        response = self.client.get("/api/v1/files/script.py/content/")
+        response = self.client.get("/api/v1/user/files/script.py/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, content)
@@ -51,9 +51,9 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         content = b'{"key": "value", "number": 42}'
         test_file = BytesIO(content)
         test_file.name = "config.json"
-        self.client.post("/api/v1/files/config.json/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/config.json/upload/", {"file": test_file})
 
-        response = self.client.get("/api/v1/files/config.json/content/")
+        response = self.client.get("/api/v1/user/files/config.json/content/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, content)
@@ -66,9 +66,9 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         content = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
         test_file = BytesIO(content)
         test_file.name = "image.png"
-        self.client.post("/api/v1/files/image.png/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/image.png/upload/", {"file": test_file})
 
-        response = self.client.get("/api/v1/files/image.png/content/")
+        response = self.client.get("/api/v1/user/files/image.png/content/")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "NOT_TEXT_FILE")
@@ -78,7 +78,7 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         """Previewing non-existent file should return 404."""
         self.authenticate()
 
-        response = self.client.get("/api/v1/files/nonexistent.txt/content/")
+        response = self.client.get("/api/v1/user/files/nonexistent.txt/content/")
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data["error"]["code"], "FILE_NOT_FOUND")
@@ -88,9 +88,9 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         self.authenticate()
 
         # Create a directory
-        self.client.post("/api/v1/dirs/mydir/create/")
+        self.client.post("/api/v1/user/dirs/mydir/create/")
 
-        response = self.client.get("/api/v1/files/mydir/content/")
+        response = self.client.get("/api/v1/user/files/mydir/content/")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "PATH_IS_DIRECTORY")
@@ -104,9 +104,9 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         content = b"any content"
         test_file = BytesIO(content)
         test_file.name = "large.txt"
-        self.client.post("/api/v1/files/large.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/large.txt/upload/", {"file": test_file})
 
-        response = self.client.get("/api/v1/files/large.txt/content/")
+        response = self.client.get("/api/v1/user/files/large.txt/content/")
 
         self.assertEqual(response.status_code, status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
         self.assertEqual(response.data["error"]["code"], "FILE_TOO_LARGE")
@@ -115,7 +115,7 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         """Path traversal should be blocked."""
         self.authenticate()
 
-        response = self.client.get("/api/v1/files/../etc/passwd/content/")
+        response = self.client.get("/api/v1/user/files/../etc/passwd/content/")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"]["code"], "INVALID_PATH")
@@ -124,7 +124,7 @@ class FileContentPreviewTest(StormCloudAPITestCase):
         """Preview should require authentication."""
         # Don't authenticate
 
-        response = self.client.get("/api/v1/files/test.txt/content/")
+        response = self.client.get("/api/v1/user/files/test.txt/content/")
 
         # DRF returns 403 when no credentials provided
         self.assertIn(
@@ -134,7 +134,7 @@ class FileContentPreviewTest(StormCloudAPITestCase):
 
 
 class FileContentEditTest(StormCloudAPITestCase):
-    """PUT /api/v1/files/{path}/content/ - Edit file content"""
+    """PUT /api/v1/user/files/{path}/content/ - Edit file content"""
 
     def setUp(self):
         super().setUp()
@@ -143,14 +143,14 @@ class FileContentEditTest(StormCloudAPITestCase):
         # Create a file to edit
         test_file = BytesIO(b"original content")
         test_file.name = "editable.txt"
-        self.client.post("/api/v1/files/editable.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/editable.txt/upload/", {"file": test_file})
 
     def test_edit_file_succeeds(self):
         """Editing should update file content."""
         new_content = b"updated content"
 
         response = self.client.put(
-            "/api/v1/files/editable.txt/content/",
+            "/api/v1/user/files/editable.txt/content/",
             data=new_content,
             content_type="text/plain",
         )
@@ -160,7 +160,7 @@ class FileContentEditTest(StormCloudAPITestCase):
         self.assertEqual(response.data["path"], "editable.txt")
 
         # Verify content changed
-        preview = self.client.get("/api/v1/files/editable.txt/content/")
+        preview = self.client.get("/api/v1/user/files/editable.txt/content/")
         self.assertEqual(preview.content, new_content)
 
     def test_edit_updates_database_size(self):
@@ -168,7 +168,7 @@ class FileContentEditTest(StormCloudAPITestCase):
         new_content = b"x" * 100
 
         self.client.put(
-            "/api/v1/files/editable.txt/content/",
+            "/api/v1/user/files/editable.txt/content/",
             data=new_content,
             content_type="text/plain",
         )
@@ -179,7 +179,7 @@ class FileContentEditTest(StormCloudAPITestCase):
     def test_edit_nonexistent_file_returns_404(self):
         """Editing non-existent file should return 404."""
         response = self.client.put(
-            "/api/v1/files/nonexistent.txt/content/",
+            "/api/v1/user/files/nonexistent.txt/content/",
             data=b"content",
             content_type="text/plain",
         )
@@ -191,10 +191,10 @@ class FileContentEditTest(StormCloudAPITestCase):
     def test_edit_directory_returns_400(self):
         """Editing a directory should return 400."""
         # Create a directory
-        self.client.post("/api/v1/dirs/mydir/create/")
+        self.client.post("/api/v1/user/dirs/mydir/create/")
 
         response = self.client.put(
-            "/api/v1/files/mydir/content/",
+            "/api/v1/user/files/mydir/content/",
             data=b"content",
             content_type="text/plain",
         )
@@ -209,7 +209,7 @@ class FileContentEditTest(StormCloudAPITestCase):
         self.user.account.save()
 
         response = self.client.put(
-            "/api/v1/files/editable.txt/content/",
+            "/api/v1/user/files/editable.txt/content/",
             data=b"x" * 100,
             content_type="text/plain",
         )
@@ -220,7 +220,7 @@ class FileContentEditTest(StormCloudAPITestCase):
     def test_edit_path_traversal_blocked(self):
         """Path traversal should be blocked."""
         response = self.client.put(
-            "/api/v1/files/../etc/passwd/content/",
+            "/api/v1/user/files/../etc/passwd/content/",
             data=b"hacked",
             content_type="text/plain",
         )
@@ -234,7 +234,7 @@ class FileContentEditTest(StormCloudAPITestCase):
         self.client.credentials()
 
         response = self.client.put(
-            "/api/v1/files/editable.txt/content/",
+            "/api/v1/user/files/editable.txt/content/",
             data=b"new content",
             content_type="text/plain",
         )
@@ -248,7 +248,7 @@ class FileContentEditTest(StormCloudAPITestCase):
     def test_edit_with_empty_content(self):
         """Editing with empty content should create empty file."""
         response = self.client.put(
-            "/api/v1/files/editable.txt/content/",
+            "/api/v1/user/files/editable.txt/content/",
             data=b"",
             content_type="text/plain",
         )
@@ -257,21 +257,23 @@ class FileContentEditTest(StormCloudAPITestCase):
         self.assertEqual(response.data["size"], 0)
 
         # Verify content is empty
-        preview = self.client.get("/api/v1/files/editable.txt/content/")
+        preview = self.client.get("/api/v1/user/files/editable.txt/content/")
         self.assertEqual(preview.content, b"")
 
     def test_edit_nested_file(self):
         """Editing a file in a nested directory should work."""
         # Create nested file
-        self.client.post("/api/v1/dirs/folder/create/")
+        self.client.post("/api/v1/user/dirs/folder/create/")
         test_file = BytesIO(b"nested content")
         test_file.name = "nested.txt"
-        self.client.post("/api/v1/files/folder/nested.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/folder/nested.txt/upload/", {"file": test_file}
+        )
 
         # Edit it
         new_content = b"updated nested content"
         response = self.client.put(
-            "/api/v1/files/folder/nested.txt/content/",
+            "/api/v1/user/files/folder/nested.txt/content/",
             data=new_content,
             content_type="text/plain",
         )
@@ -279,5 +281,5 @@ class FileContentEditTest(StormCloudAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         # Verify
-        preview = self.client.get("/api/v1/files/folder/nested.txt/content/")
+        preview = self.client.get("/api/v1/user/files/folder/nested.txt/content/")
         self.assertEqual(preview.content, new_content)

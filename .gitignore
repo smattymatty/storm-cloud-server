@@ -25,6 +25,7 @@ db.sqlite3-journal
 # Local Storage
 /storage_root/
 /storage_root_test/
+/shared_storage/
 /user_storage/
 /uploads/
 /backups/

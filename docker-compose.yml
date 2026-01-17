@@ -26,7 +26,8 @@ services:
     ports:
       - "${WEB_PORT:-8000}:8000"
     volumes:
-      - ${UPLOADS_PATH:-./uploads}:/app/uploads
+      - ${UPLOADS_PATH:-./storage_root}:/app/storage_root
+      - ${SHARED_STORAGE_PATH:-./shared_storage}:/app/shared_storage
     env_file:
       - .env
     depends_on:

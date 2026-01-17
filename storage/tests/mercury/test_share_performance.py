@@ -26,7 +26,7 @@ class PublicShareAccessPerformance(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.api_key.key}")
         test_file = BytesIO(b"performance test content")
         test_file.name = "perf.txt"
-        self.client.post("/api/v1/files/perf.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/perf.txt/upload/", {"file": test_file})
 
         # Create share link via API
         response = self.client.post("/api/v1/shares/", {"file_path": "perf.txt"})

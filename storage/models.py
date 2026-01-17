@@ -339,6 +339,7 @@ class FileAuditLog(AbstractBaseModel):
     ACTION_BULK_DELETE = "bulk_delete"
     ACTION_BULK_MOVE = "bulk_move"
     ACTION_BULK_COPY = "bulk_copy"
+    ACTION_ADMIN_OVERRIDE = "admin_override"
 
     ACTION_CHOICES: List[Tuple[str, str]] = [
         (ACTION_LIST, "List directory"),
@@ -353,6 +354,7 @@ class FileAuditLog(AbstractBaseModel):
         (ACTION_BULK_DELETE, "Bulk delete"),
         (ACTION_BULK_MOVE, "Bulk move"),
         (ACTION_BULK_COPY, "Bulk copy"),
+        (ACTION_ADMIN_OVERRIDE, "Admin override access"),
     ]
 
     # Who performed the action (the admin for admin actions, or the account for regular actions)
@@ -411,6 +413,13 @@ class FileAuditLog(AbstractBaseModel):
     error_code = models.CharField(max_length=50, blank=True, null=True)
     error_message = models.TextField(blank=True, null=True)
 
+    # Admin override justification (required for admin_override actions)
+    justification = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Required justification for admin override access",
+    )
+
     # Request metadata
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=500, blank=True, null=True)
@@ -434,3 +443,78 @@ class FileAuditLog(AbstractBaseModel):
         admin_marker = "[ADMIN] " if self.is_admin_action else ""
         performer = self.performed_by.user.username if self.performed_by else "N/A"
         return f"{admin_marker}{performer}: {self.action} {self.path}"
+
+
+class AdminAccessToken(AbstractBaseModel):
+    """
+    Temporary access token for admin override access to user files.
+
+    Admins must request explicit access with justification to view another
+    user's files. This creates an audit trail and time-limited access.
+    """
+
+    # Token for authentication
+    token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
+
+    # Admin who requested access
+    admin = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="admin_access_tokens",
+        help_text="Admin account who requested access",
+    )
+
+    # Target user whose files are being accessed
+    target_user = models.ForeignKey(
+        "accounts.Account",
+        on_delete=models.CASCADE,
+        related_name="access_tokens_received",
+        help_text="User whose files will be accessed",
+    )
+
+    # Optional path prefix to restrict access scope
+    path_prefix = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Optional: restrict access to files under this path",
+    )
+
+    # Required justification
+    justification = models.TextField(
+        help_text="Required justification for the access request",
+    )
+
+    # Expiration
+    expires_at = models.DateTimeField(
+        help_text="When this access token expires",
+    )
+
+    # Revocation
+    is_revoked = models.BooleanField(
+        default=False,
+        help_text="Whether this token has been revoked",
+    )
+
+    class Meta:
+        verbose_name = "Admin Access Token"
+        verbose_name_plural = "Admin Access Tokens"
+        indexes = [
+            models.Index(fields=["admin", "-created_at"]),
+            models.Index(fields=["target_user", "-created_at"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def is_valid(self) -> bool:
+        """Check if token is active and not expired."""
+        if self.is_revoked:
+            return False
+        from django.utils import timezone
+
+        return timezone.now() < self.expires_at
+
+    def __str__(self) -> str:
+        admin_name = self.admin.user.username if self.admin else "N/A"
+        target_name = self.target_user.user.username if self.target_user else "N/A"
+        return f"{admin_name} -> {target_name} ({self.token})"

@@ -180,7 +180,8 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
         return Response(
             {
                 "path": dir_path,
-                "items": serializer.data,
+                "storage_type": "org",
+                "entries": serializer.data,
                 "next_cursor": next_cursor,
             }
         )
@@ -360,6 +361,7 @@ class SharedFileDetailView(SharedStorageBaseMixin, StormCloudBaseAPIView):
 
         response_data = {
             "path": stored_file.path,
+            "storage_type": "org",
             "name": stored_file.name,
             "size": stored_file.size,
             "content_type": stored_file.content_type,
@@ -503,6 +505,14 @@ class SharedFileUploadView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         if db_parent_path == ".":
             db_parent_path = ""
 
+        # Get old file size for delta calculation (before overwrite)
+        old_size = 0
+        try:
+            existing = StoredFile.objects.get(organization=org, path=file_path)
+            old_size = existing.size
+        except StoredFile.DoesNotExist:
+            pass
+
         stored_file, created = StoredFile.objects.update_or_create(
             organization=org,
             path=file_path,
@@ -517,6 +527,10 @@ class SharedFileUploadView(SharedStorageBaseMixin, StormCloudBaseAPIView):
                 "encrypted_size": file_info.encrypted_size,
             },
         )
+
+        # Update org storage usage
+        storage_delta = file_info.size - old_size
+        org.update_storage_usage(storage_delta)
 
         emit_shared_file_action(
             sender=self.__class__,
@@ -696,6 +710,21 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # Calculate total size being deleted (for storage tracking)
+        if stored_file.is_directory:
+            # Sum all children sizes + directory itself
+            from django.db.models import Sum
+
+            children_size = (
+                StoredFile.objects.filter(
+                    organization=org, path__startswith=f"{file_path}/"
+                ).aggregate(total=Sum("size"))["total"]
+                or 0
+            )
+            deleted_size = stored_file.size + children_size
+        else:
+            deleted_size = stored_file.size
+
         # If directory, recursively delete contents
         if stored_file.is_directory:
             # Delete all children from DB
@@ -719,6 +748,10 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         # Delete DB record
         stored_file.delete()
 
+        # Update org storage usage
+        if deleted_size > 0:
+            org.update_storage_usage(-deleted_size)
+
         emit_shared_file_action(
             sender=self.__class__,
             request=request,
@@ -727,6 +760,125 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
         )
 
         return Response({"message": f"Deleted: {file_path}"}, status=status.HTTP_200_OK)
+
+
+class SharedFileCreateView(SharedStorageBaseMixin, StormCloudBaseAPIView):
+    """Create empty file in shared storage."""
+
+    @extend_schema(
+        operation_id="v1_shared_files_create",
+        summary="Create empty shared file",
+        description="Create an empty file in the organization's shared storage. Parent directories are created automatically.",
+        request=None,
+        responses={
+            201: FileInfoResponseSerializer,
+            409: {"description": "File already exists"},
+        },
+        tags=["Shared Storage"],
+    )
+    def post(self, request: Request, file_path: str) -> Response:
+        """Create empty file in shared storage."""
+        error = self.check_org_access(request)
+        if error:
+            return error
+
+        # Check permission
+        check_user_permission(request.user, "can_upload")
+
+        org, backend = self.get_org_and_backend(request)
+
+        # Normalize path
+        try:
+            file_path = normalize_path(file_path)
+        except PathValidationError as e:
+            return Response(
+                {"error": {"code": "INVALID_PATH", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if file already exists
+        if backend.exists_shared(org.id, file_path):
+            emit_shared_file_action(
+                sender=self.__class__,
+                request=request,
+                action=FileAuditLog.ACTION_UPLOAD,
+                path=file_path,
+                success=False,
+                error_code="ALREADY_EXISTS",
+                error_message=f"File '{file_path}' already exists.",
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "ALREADY_EXISTS",
+                        "message": f"File '{file_path}' already exists.",
+                        "path": file_path,
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # Ensure parent directory exists
+        parent_path = str(Path(file_path).parent) if "/" in file_path else ""
+        if parent_path and parent_path != ".":
+            if not backend.exists_shared(org.id, parent_path):
+                backend.mkdir_shared(org.id, parent_path)
+        else:
+            # Ensure org root exists
+            backend.get_org_storage_root(org.id)
+
+        # Create empty file
+        empty_file = BytesIO(b"")
+        file_info = backend.save_shared(org.id, file_path, empty_file)
+
+        # Detect content type from extension
+        import mimetypes
+
+        content_type = mimetypes.guess_type(file_path)[0] or ""
+
+        # Create database record
+        db_parent_path = str(Path(file_path).parent) if "/" in file_path else ""
+        if db_parent_path == ".":
+            db_parent_path = ""
+
+        stored_file, created = StoredFile.objects.update_or_create(
+            organization=org,
+            path=file_path,
+            defaults={
+                "name": file_info.name,
+                "size": file_info.size,
+                "content_type": content_type,
+                "is_directory": False,
+                "parent_path": db_parent_path,
+                "encryption_method": file_info.encryption_method,
+                "key_id": file_info.encryption_key_id,
+                "encrypted_size": file_info.encrypted_size,
+            },
+        )
+
+        emit_shared_file_action(
+            sender=self.__class__,
+            request=request,
+            action=FileAuditLog.ACTION_UPLOAD,
+            path=file_path,
+            file_size=0,
+            content_type=content_type,
+        )
+
+        return Response(
+            {
+                "path": file_path,
+                "name": file_info.name,
+                "size": file_info.size,
+                "content_type": content_type,
+                "is_directory": False,
+                "created_at": stored_file.created_at,
+                "modified_at": file_info.modified_at,
+                "encryption_method": stored_file.encryption_method,
+                "storage_type": "org",
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
@@ -882,20 +1034,21 @@ class SharedFileContentView(SharedStorageBaseMixin, StormCloudBaseAPIView):
             )
 
         # Get content from request body
-        content = request.body
-        if isinstance(content, bytes):
-            try:
-                content = content.decode("utf-8")
-            except UnicodeDecodeError:
-                return Response(
-                    {
-                        "error": {
-                            "code": "INVALID_CONTENT",
-                            "message": "Content must be valid UTF-8",
-                        }
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        raw_body = request.body
+        try:
+            content: str = (
+                raw_body.decode("utf-8") if isinstance(raw_body, bytes) else raw_body
+            )
+        except UnicodeDecodeError:
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_CONTENT",
+                        "message": "Content must be valid UTF-8",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Check size limit
         max_size = settings.STORMCLOUD_MAX_UPLOAD_SIZE_MB * 1024 * 1024

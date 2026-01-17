@@ -706,13 +706,30 @@ class EmailStatusTest(StormCloudAPITestCase):
             [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN],
         )
 
-    def test_email_status_returns_configured(self):
-        """Email status returns configuration status."""
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+        EMAIL_HOST="",
+    )
+    def test_email_status_returns_not_configured(self):
+        """Email status returns False when using console backend."""
         self.authenticate()
 
         response = self.client.get("/api/v1/enrollment/email-status/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("configured", response.data)
-        # In test environment with console backend, should be False
         self.assertFalse(response.data["configured"])
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.example.com",
+    )
+    def test_email_status_returns_configured(self):
+        """Email status returns True when email is configured."""
+        self.authenticate()
+
+        response = self.client.get("/api/v1/enrollment/email-status/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("configured", response.data)
+        self.assertTrue(response.data["configured"])

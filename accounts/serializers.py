@@ -54,6 +54,9 @@ class AccountSerializer(serializers.ModelSerializer):
             # Storage
             "storage_quota_bytes",
             "storage_used_bytes",
+            # Visibility settings
+            "show_email_to_org",
+            "show_name_to_org",
         ]
         read_only_fields = ["id", "storage_used_bytes"]
 
@@ -152,6 +155,7 @@ class AuthMeResponseSerializer(serializers.Serializer):
     user = UserSerializer()
     account = AccountSerializer()
     api_key = serializers.SerializerMethodField()
+    organization = serializers.SerializerMethodField()
 
     @extend_schema_field(
         {
@@ -176,6 +180,28 @@ class AuthMeResponseSerializer(serializers.Serializer):
                 "id": str(api_key.id),
                 "name": api_key.name,
                 "last_used_at": api_key.last_used_at,
+            }
+        return None
+
+    @extend_schema_field(
+        {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "format": "uuid"},
+                "name": {"type": "string"},
+                "slug": {"type": "string"},
+            },
+            "nullable": True,
+        }
+    )
+    def get_organization(self, obj):
+        """Return organization info from account."""
+        account = obj.get("account")
+        if account and account.organization:
+            return {
+                "id": str(account.organization.id),
+                "name": account.organization.name,
+                "slug": account.organization.slug,
             }
         return None
 

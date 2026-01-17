@@ -328,6 +328,32 @@ class EnrollmentInviteCreateView(StormCloudBaseAPIView):
         # Get permissions if provided
         permissions = serializer.validated_data.get("permissions") or {}
 
+        # Get storage quota if provided
+        storage_quota_bytes = serializer.validated_data.get("storage_quota_bytes", 0)
+        if storage_quota_bytes:
+            permissions["storage_quota_bytes"] = storage_quota_bytes
+
+        # Check if combined user quotas would exceed org quota (warning only)
+        warning = None
+        if storage_quota_bytes and account.organization.storage_quota_bytes > 0:
+            from django.db.models import Sum
+
+            current_total = (
+                Account.objects.filter(organization=account.organization).aggregate(
+                    total=Sum("storage_quota_bytes")
+                )["total"]
+                or 0
+            )
+            if (
+                current_total + storage_quota_bytes
+                > account.organization.storage_quota_bytes
+            ):
+                warning = (
+                    f"Combined user quotas ({(current_total + storage_quota_bytes) // (1024*1024*1024)}GB) "
+                    f"exceed org quota ({account.organization.storage_quota_bytes // (1024*1024*1024)}GB). "
+                    "Users may hit org limit before personal limit."
+                )
+
         # Create enrollment key
         enrollment_key = EnrollmentKey.objects.create(
             organization=account.organization,
@@ -376,8 +402,12 @@ class EnrollmentInviteCreateView(StormCloudBaseAPIView):
             "email_sent": email_sent,
         }
 
+        # Add warning if quotas exceed org limit
+        if warning:
+            response_data["warning"] = warning
+
         return Response(
-            InviteCreateResponseSerializer(response_data).data,
+            response_data,
             status=status.HTTP_201_CREATED,
         )
 

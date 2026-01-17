@@ -84,6 +84,7 @@ class EncryptionService:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
         nonce = os.urandom(NONCE_SIZE)
+        assert self._master_key is not None  # Guaranteed by is_enabled check above
         cipher = AESGCM(self._master_key)
 
         # GCM encrypt returns ciphertext with tag appended
@@ -126,6 +127,7 @@ class EncryptionService:
             nonce = encrypted[1 : 1 + NONCE_SIZE]
             ciphertext_with_tag = encrypted[1 + NONCE_SIZE :]
 
+            assert self._master_key is not None  # Guaranteed by is_enabled check above
             cipher = AESGCM(self._master_key)
             return cipher.decrypt(nonce, ciphertext_with_tag, None)
 

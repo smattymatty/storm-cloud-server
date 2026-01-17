@@ -10,6 +10,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
+from .permissions import IsAccountActive
+
 from core.views import StormCloudBaseAPIView
 from core.throttling import (
     LoginRateThrottle,
@@ -727,6 +729,75 @@ class AuthMeView(StormCloudBaseAPIView):
 
         return Response(serializer.data)
 
+    @extend_schema(
+        summary="Update current user settings",
+        description="Update the current user's profile and account settings.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "first_name": {"type": "string"},
+                    "last_name": {"type": "string"},
+                    "show_email_to_org": {"type": "boolean"},
+                    "show_name_to_org": {"type": "boolean"},
+                },
+            }
+        },
+        responses={200: AuthMeResponseSerializer},
+        tags=["Authentication"],
+    )
+    def patch(self, request: Request) -> Response:
+        """Update current user's profile and account settings."""
+        if isinstance(request.user, APIKeyUser):
+            return Response(
+                {
+                    "error": {
+                        "code": "NOT_ALLOWED",
+                        "message": "API keys cannot update account settings",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            account = Account.objects.get(user=request.user)
+        except Account.DoesNotExist:
+            return Response(
+                {"error": {"code": "NO_ACCOUNT", "message": "Account not found"}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Update User fields (first_name, last_name)
+        user_allowed_fields = ["first_name", "last_name"]
+        user_updated_fields = []
+
+        for field in user_allowed_fields:
+            if field in request.data:
+                setattr(request.user, field, request.data[field])
+                user_updated_fields.append(field)
+
+        if user_updated_fields:
+            request.user.save(update_fields=user_updated_fields)
+
+        # Update Account fields (visibility settings)
+        account_allowed_fields = ["show_email_to_org", "show_name_to_org"]
+        account_updated_fields = []
+
+        for field in account_allowed_fields:
+            if field in request.data:
+                setattr(account, field, request.data[field])
+                account_updated_fields.append(field)
+
+        if account_updated_fields:
+            account.save(update_fields=account_updated_fields + ["updated_at"])
+
+        # Return same response as GET
+        serializer = AuthMeResponseSerializer(
+            {"user": request.user, "account": account},
+            context={"api_key": None},
+        )
+        return Response(serializer.data)
+
 
 class DeactivateAccountView(StormCloudBaseAPIView):
     """Deactivate user account."""
@@ -850,6 +921,66 @@ class DeleteAccountView(StormCloudBaseAPIView):
         account_deleted.send(sender=User, user_id=user_id, username=username)
 
         return Response({"message": "Account deleted"})
+
+
+# =============================================================================
+# Organization Endpoints
+# =============================================================================
+
+
+class OrgMembersView(StormCloudBaseAPIView):
+    """GET /api/v1/org/members/ - List members of current user's org."""
+
+    permission_classes = [IsAuthenticated, IsAccountActive]
+
+    @extend_schema(
+        summary="List organization members",
+        description="Returns all members of the current user's organization with storage info.",
+        responses={200: None},
+        tags=["Organization"],
+    )
+    def get(self, request: Request) -> Response:
+        """List members of the user's organization."""
+        account = request.user.account
+        org = account.organization
+
+        accounts = Account.objects.filter(organization=org).select_related("user")
+
+        members = []
+        for acc in accounts:
+            effective_quota = (
+                acc.storage_quota_bytes
+                if acc.storage_quota_bytes > 0
+                else org.storage_quota_bytes
+            )
+            members.append(
+                {
+                    "id": acc.user.id,
+                    "username": acc.user.username,
+                    "email": acc.user.email if acc.show_email_to_org else None,
+                    "display_name": (
+                        f"{acc.user.first_name} {acc.user.last_name}".strip()
+                        if acc.show_name_to_org
+                        else None
+                    )
+                    or None,
+                    "is_owner": acc.is_owner,
+                    "storage_used_bytes": acc.storage_used_bytes,
+                    "storage_quota_bytes": (
+                        acc.storage_quota_bytes if acc.storage_quota_bytes > 0 else None
+                    ),
+                    "effective_quota_bytes": effective_quota,
+                }
+            )
+
+        return Response(
+            {
+                "organization_id": str(org.id),
+                "organization_name": org.name,
+                "members": members,
+                "total": len(members),
+            }
+        )
 
 
 # =============================================================================

@@ -1,6 +1,7 @@
 """Abstract storage backend interface."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import BinaryIO, Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -178,5 +179,73 @@ class AbstractStorageBackend(ABC):
         Raises:
             FileNotFoundError: If source doesn't exist
             NotADirectoryError: If destination is not a directory
+        """
+        pass
+
+    @abstractmethod
+    def open_raw(self, path: str) -> BinaryIO:
+        """
+        Open file without decryption (for migration, debugging, encryption detection).
+
+        Args:
+            path: Relative path to file
+
+        Returns:
+            File-like object in binary read mode (raw bytes, no decryption)
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            IsADirectoryError: If path points to a directory
+        """
+        pass
+
+    @abstractmethod
+    def get_org_storage_root(self, org_id: str | int) -> Path:
+        """
+        Get the storage root directory for an organization's shared files.
+
+        Args:
+            org_id: Organization ID
+
+        Returns:
+            Path to org's shared storage root
+        """
+        pass
+
+    @abstractmethod
+    def list_shared(
+        self, org_id: str | int, path: str = "", glob_pattern: str | None = None
+    ) -> Iterator[FileInfo]:
+        """
+        List contents of shared organization directory.
+
+        Args:
+            org_id: Organization ID
+            path: Relative path within org's shared storage (empty for root)
+            glob_pattern: Optional glob pattern to filter results
+
+        Yields:
+            FileInfo objects for each entry
+
+        Raises:
+            FileNotFoundError: If directory doesn't exist
+            NotADirectoryError: If path points to a file
+        """
+        pass
+
+    @abstractmethod
+    def _resolve_shared_path(self, org_id: str | int, path: str) -> Path:
+        """
+        Convert relative path to absolute filesystem path in shared storage.
+
+        Args:
+            org_id: Organization ID
+            path: Relative path within org's shared storage
+
+        Returns:
+            Absolute Path object
+
+        Raises:
+            ValueError: If path attempts directory traversal
         """
         pass

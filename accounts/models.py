@@ -43,6 +43,10 @@ class Organization(AbstractBaseModel):
 
     is_active = models.BooleanField(default=True)
 
+    # Visibility defaults for new accounts
+    default_show_email_to_org = models.BooleanField(default=True)
+    default_show_name_to_org = models.BooleanField(default=True)
+
     class Meta:
         verbose_name = "Organization"
         verbose_name_plural = "Organizations"
@@ -144,6 +148,14 @@ class Account(AbstractBaseModel):
     is_owner = models.BooleanField(
         default=False,
         help_text="Account is an org owner. At least one owner must exist per org.",
+    )
+
+    # Visibility settings
+    show_email_to_org = models.BooleanField(
+        default=True, help_text="Show email to other org members."
+    )
+    show_name_to_org = models.BooleanField(
+        default=True, help_text="Show name to other org members."
     )
 
     is_active = models.BooleanField(default=True)

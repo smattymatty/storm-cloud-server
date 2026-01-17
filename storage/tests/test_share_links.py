@@ -22,7 +22,7 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         test_file = BytesIO(b"test content for sharing")
         test_file.name = "shareable.txt"
         upload_response = self.client.post(
-            "/api/v1/files/shareable.txt/upload/", {"file": test_file}
+            "/api/v1/user/files/shareable.txt/upload/", {"file": test_file}
         )
         self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
 
@@ -58,7 +58,7 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         # Upload file
         test_file = BytesIO(b"custom slug content")
         test_file.name = "custom.txt"
-        self.client.post("/api/v1/files/custom.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/custom.txt/upload/", {"file": test_file})
 
         # Create share with custom slug
         response = self.client.post(
@@ -81,7 +81,7 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         # Upload file
         test_file = BytesIO(b"invalid slug test")
         test_file.name = "test.txt"
-        self.client.post("/api/v1/files/test.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/test.txt/upload/", {"file": test_file})
 
         # Test invalid characters
         response = self.client.post(
@@ -103,7 +103,9 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         for filename in ["file1.txt", "file2.txt"]:
             test_file = BytesIO(b"content")
             test_file.name = filename
-            self.client.post(f"/api/v1/files/{filename}/upload/", {"file": test_file})
+            self.client.post(
+                f"/api/v1/user/files/{filename}/upload/", {"file": test_file}
+            )
 
         # Create first share link
         self.client.post(
@@ -127,7 +129,7 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         # Upload file
         test_file = BytesIO(b"password protected")
         test_file.name = "secret.txt"
-        self.client.post("/api/v1/files/secret.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/secret.txt/upload/", {"file": test_file})
 
         # Create password-protected share
         response = self.client.post(
@@ -151,7 +153,7 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         # Upload file
         test_file = BytesIO(b"expiry test")
         test_file.name = "expiry.txt"
-        self.client.post("/api/v1/files/expiry.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/expiry.txt/upload/", {"file": test_file})
 
         # Create share with 30 day expiry
         before_creation = timezone.now()
@@ -179,7 +181,9 @@ class ShareLinkCreationTest(StormCloudAPITestCase):
         # Upload file
         test_file = BytesIO(b"unlimited content")
         test_file.name = "unlimited.txt"
-        self.client.post("/api/v1/files/unlimited.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/unlimited.txt/upload/", {"file": test_file}
+        )
 
         # Create unlimited share
         response = self.client.post(
@@ -214,7 +218,9 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
         for i in range(3):
             test_file = BytesIO(f"content {i}".encode())
             test_file.name = f"file{i}.txt"
-            self.client.post(f"/api/v1/files/file{i}.txt/upload/", {"file": test_file})
+            self.client.post(
+                f"/api/v1/user/files/file{i}.txt/upload/", {"file": test_file}
+            )
             self.client.post("/api/v1/shares/", {"file_path": f"file{i}.txt"})
 
         # Create another user with shares
@@ -241,7 +247,7 @@ class ShareLinkListDetailTest(StormCloudAPITestCase):
         # Upload and create share
         test_file = BytesIO(b"detail test")
         test_file.name = "detail.txt"
-        self.client.post("/api/v1/files/detail.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/detail.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "detail.txt"}
         )
@@ -357,7 +363,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"public content")
         test_file.name = "public.txt"
-        self.client.post("/api/v1/files/public.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/public.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "public.txt"}
         )
@@ -380,7 +386,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"slug content")
         test_file.name = "slug.txt"
-        self.client.post("/api/v1/files/slug.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/slug.txt/upload/", {"file": test_file})
         self.client.post(
             "/api/v1/shares/",
             {"file_path": "slug.txt", "custom_slug": "my-custom-slug"},
@@ -426,7 +432,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"secret content")
         test_file.name = "secret.txt"
-        self.client.post("/api/v1/files/secret.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/secret.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "secret.txt", "password": "secret123"}
         )
@@ -445,7 +451,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"secret content")
         test_file.name = "secret.txt"
-        self.client.post("/api/v1/files/secret.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/secret.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "secret.txt", "password": "secret123"}
         )
@@ -466,7 +472,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"secret content")
         test_file.name = "secret.txt"
-        self.client.post("/api/v1/files/secret.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/secret.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "secret.txt", "password": "secret123"}
         )
@@ -488,7 +494,7 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         file_content = b"downloadable content for testing"
         test_file = BytesIO(file_content)
         test_file.name = "download.txt"
-        self.client.post("/api/v1/files/download.txt/upload/", {"file": test_file})
+        self.client.post("/api/v1/user/files/download.txt/upload/", {"file": test_file})
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "download.txt"}
         )
@@ -509,7 +515,9 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"secret download")
         test_file.name = "secret-dl.txt"
-        self.client.post("/api/v1/files/secret-dl.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/secret-dl.txt/upload/", {"file": test_file}
+        )
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "secret-dl.txt", "password": "download123"}
         )
@@ -533,7 +541,9 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"analytics test")
         test_file.name = "analytics.txt"
-        self.client.post("/api/v1/files/analytics.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/analytics.txt/upload/", {"file": test_file}
+        )
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "analytics.txt"}
         )
@@ -573,7 +583,9 @@ class PublicShareAccessTest(StormCloudAPITestCase):
         self.authenticate()
         test_file = BytesIO(b"download analytics")
         test_file.name = "dl-analytics.txt"
-        self.client.post("/api/v1/files/dl-analytics.txt/upload/", {"file": test_file})
+        self.client.post(
+            "/api/v1/user/files/dl-analytics.txt/upload/", {"file": test_file}
+        )
         create_response = self.client.post(
             "/api/v1/shares/", {"file_path": "dl-analytics.txt"}
         )

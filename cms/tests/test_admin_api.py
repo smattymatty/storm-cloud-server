@@ -13,7 +13,7 @@ from core.tests.base import StormCloudAdminTestCase
 from storage.models import StoredFile
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser as User
+    from accounts.typing import UserProtocol as User
 else:
     User = get_user_model()
 

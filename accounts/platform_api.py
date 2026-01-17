@@ -341,6 +341,8 @@ class PlatformSetupOrgView(APIView):
                 name=data["organization_name"],
                 slug=data.get("organization_slug") or None,  # Let model auto-generate
                 storage_quota_bytes=quota_bytes,
+                default_show_email_to_org=data.get("default_show_email_to_org", True),
+                default_show_name_to_org=data.get("default_show_name_to_org", True),
             )
 
             # Create account (org owner)

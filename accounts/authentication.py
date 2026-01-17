@@ -11,7 +11,7 @@ from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from .models import APIKey
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser as User
+    from accounts.typing import UserProtocol as User
     from .models import Organization
 else:
     User = get_user_model()

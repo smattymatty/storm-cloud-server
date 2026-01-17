@@ -169,12 +169,12 @@ class BulkStatusView(StormCloudBaseAPIView):
     )
     def get(self, request: Request, task_id: str) -> Response:
         """Get bulk operation task status."""
-        from django_tasks.task import TaskResult  # type: ignore[import]
+        from django_tasks.task import TaskResult
         from storage.serializers import BulkOperationStatusResponseSerializer
 
         # Get task result
         try:
-            task_result = TaskResult.objects.get(id=task_id)  # type: ignore[attr-defined]
+            task_result = TaskResult.objects.get(id=task_id)
         except Exception:
             return Response(
                 {

@@ -52,6 +52,7 @@ class DirectoryListBaseView(StormCloudBaseAPIView):
         return Response(
             {
                 "path": result.path,
+                "storage_type": "user",
                 "entries": result.entries,
                 "count": result.count,
                 "total": result.total,
