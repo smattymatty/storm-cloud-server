@@ -30,7 +30,7 @@ EMAIL_HOST_PASSWORD={{ email_password | default('') }}
 {% else %}
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 {% endif %}
-DEFAULT_FROM_EMAIL=noreply@{{ domain }}
+DEFAULT_FROM_EMAIL={{ default_from_email | default('noreply@' ~ domain) }}
 
 # Security (production settings)
 SECURE_HSTS_SECONDS=31536000
