@@ -97,6 +97,9 @@ SECURE_BROWSER_XSS_FILTER = True  # Enable browser XSS protection
 SECURE_CONTENT_TYPE_NOSNIFF = True  # Prevent MIME type sniffing
 X_FRAME_OPTIONS = "DENY"  # Prevent clickjacking
 
+# Trust nginx's X-Forwarded-Proto header (for build_absolute_uri to use https)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # Logging configuration for production
 # Docker deployments use console logging only (captured by docker logs)
 # For traditional VPS deployments, add file handlers as needed
