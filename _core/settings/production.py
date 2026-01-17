@@ -145,5 +145,5 @@ ADMINS = [
 MANAGERS = ADMINS
 
 STORMCLOUD_FRONTEND_URL = config(
-    "STORMCLOUD_FRONTEND_URL", default="https://cloud.stormdevelopments.ca"
+    "STORMCLOUD_FRONTEND_URL", default="https://stormdevelopments.ca"
 )
