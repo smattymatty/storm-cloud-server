@@ -43,6 +43,11 @@ SECURE_SSL_REDIRECT=False  # nginx handles this
 # Leave empty to disable CORS (most secure, but frontend won't work)
 STORMCLOUD_CORS_ORIGINS={{ _cors_origins }}
 
+# Cookie domain for cross-subdomain session auth
+# Use leading dot for all subdomains (e.g., ".example.com")
+# Leave empty for single-domain setups
+STORMCLOUD_COOKIE_DOMAIN={{ cookie_domain | default('') }}
+
 # File Upload Limits (P0-3 Security Fix)
 # Maximum file size in MB (set in deploy/config.yml)
 STORMCLOUD_MAX_UPLOAD_SIZE_MB={{ _max_upload_size_mb }}

@@ -77,12 +77,14 @@ SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=True, cast=bool)
 CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=True, cast=bool)
 
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8044",  # Local dev
-    "http://127.0.0.1:8044",  # Local dev alt
-    "https://cloud.stormdevelopments.ca",  # Production
-]
+# Reuse CORS origins for CSRF (they're the same - frontend URLs)
+CSRF_TRUSTED_ORIGINS = STORMCLOUD_CORS_ORIGINS
 
+# Cross-subdomain cookie support (for split frontend/API domains)
+_cookie_domain = config("STORMCLOUD_COOKIE_DOMAIN", default="")
+if _cookie_domain:
+    SESSION_COOKIE_DOMAIN = _cookie_domain
+    CSRF_COOKIE_DOMAIN = _cookie_domain
 
 # SameSite Cookie Policy
 # 'Lax' is secure default for same-site requests (navigation + top-level GET)
