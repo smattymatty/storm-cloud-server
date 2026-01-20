@@ -297,9 +297,10 @@ class FileUploadView(StormCloudBaseAPIView):
         full_path = f"{user_prefix}/{file_path}"
 
         # Check if this is an overwrite (file already exists)
-        is_overwrite = StoredFile.objects.filter(
+        old_file = StoredFile.objects.filter(
             owner=request.user.account, path=file_path
-        ).exists()
+        ).first()
+        is_overwrite = old_file is not None
         if is_overwrite:
             check_user_permission(request.user, "can_overwrite")
 
@@ -321,9 +322,7 @@ class FileUploadView(StormCloudBaseAPIView):
             # For file replacement (overwrite), calculate delta instead of full size
             size_delta = uploaded_file.size
             if is_overwrite:
-                old_file = StoredFile.objects.get(
-                    owner=request.user.account, path=file_path
-                )
+                # old_file was fetched earlier when checking is_overwrite
                 size_delta = uploaded_file.size - old_file.size
 
             if current_usage + size_delta > quota_bytes:

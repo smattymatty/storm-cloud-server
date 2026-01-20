@@ -17,26 +17,31 @@ class RebuildStorageIndexTaskTestCase(TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test storage directory."""
+        """Set up test storage directories."""
         super().setUpClass()
         cls.test_storage_root = settings.BASE_DIR / "storage_root_test_tasks"
         cls.test_storage_root.mkdir(exist_ok=True)
+        cls.test_shared_root = settings.BASE_DIR / "shared_storage_test_tasks"
+        cls.test_shared_root.mkdir(exist_ok=True)
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up test storage directory."""
+        """Clean up test storage directories."""
         super().tearDownClass()
         if cls.test_storage_root.exists():
             shutil.rmtree(cls.test_storage_root)
+        if cls.test_shared_root.exists():
+            shutil.rmtree(cls.test_shared_root)
 
     def setUp(self):
         """Set up test environment."""
         super().setUp()
         self.user = UserWithProfileFactory(verified=True)
 
-        # Use test storage root
+        # Use test storage roots
         self.settings_override = override_settings(
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.test_shared_root,
         )
         self.settings_override.enable()
 

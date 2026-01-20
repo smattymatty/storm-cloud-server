@@ -30,7 +30,7 @@ class WebhookConfigTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.data["webhook_url"])
         self.assertFalse(response.data["webhook_enabled"])
-        self.assertIsNone(response.data["webhook_secret"])
+        self.assertFalse(response.data["has_webhook_secret"])
 
     def test_set_webhook_url(self):
         """PUT sets webhook URL and generates secret."""
@@ -80,8 +80,9 @@ class WebhookConfigTests(TestCase):
             response.data["webhook_url"], "https://new.example.com/webhook/"
         )
         self.assertEqual(response.data["message"], "Webhook URL updated.")
-        # Secret should remain the same when just updating URL
-        self.assertEqual(response.data["webhook_secret"], old_secret)
+        # Secret should remain the same when just updating URL (verify in DB)
+        self.api_key.refresh_from_db()
+        self.assertEqual(self.api_key.webhook_secret, old_secret)
 
     def test_delete_webhook(self):
         """DELETE clears webhook config."""
@@ -444,7 +445,10 @@ class UserKeyWebhookTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["webhook_secret"], original_secret)
+        # Verify secret was copied (check DB, not response - security fix)
+        self.key2.refresh_from_db()
+        self.assertEqual(self.key2.webhook_secret, original_secret)
+        self.assertTrue(response.data["has_webhook_secret"])
         self.assertTrue(response.data["webhook_enabled"])
 
     def test_copy_from_key_without_webhook_fails(self):

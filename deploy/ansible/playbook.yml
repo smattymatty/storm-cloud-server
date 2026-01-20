@@ -291,6 +291,7 @@
         - /var/stormcloud
         - /var/stormcloud/uploads
         - /var/stormcloud/backups
+        - /var/stormcloud/shared
       tags: [system, app]
 
     # -------------------------------------------------------------------------

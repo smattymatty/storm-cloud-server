@@ -150,3 +150,14 @@ MANAGERS = ADMINS
 STORMCLOUD_FRONTEND_URL = config(
     "STORMCLOUD_FRONTEND_URL", default="https://stormdevelopments.ca"
 )
+
+# =============================================================================
+# DJANGO TASKS FRAMEWORK (Production)
+# =============================================================================
+# Use ImmediateBackend for now (tasks run synchronously).
+# TODO: Configure proper async backend (Celery/RQ) when needed.
+TASKS = {
+    "default": {
+        "BACKEND": "django.tasks.backends.immediate.ImmediateBackend",
+    }
+}

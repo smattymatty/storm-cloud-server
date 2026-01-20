@@ -102,9 +102,9 @@ class SharedDirectoryListTest(SharedStorageAPITestCase):
         response = self.client.get("/api/v1/org/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("items", response.data)
-        self.assertTrue(len(response.data["items"]) > 0)
-        self.assertIn("modified_at", response.data["items"][0])
+        self.assertIn("entries", response.data)
+        self.assertTrue(len(response.data["entries"]) > 0)
+        self.assertIn("modified_at", response.data["entries"][0])
 
     # NOTE: test_list_shared_requires_organization removed - Account.organization_id
     # is now NOT NULL at database level, so accounts without orgs cannot exist.

@@ -20,6 +20,7 @@ from storage.models import ShareLink, StoredFile
 from storage.serializers import (
     PublicShareInfoSerializer,
     ShareLinkCreateSerializer,
+    ShareLinkListSerializer,
     ShareLinkResponseSerializer,
 )
 from storage.services import get_user_storage_path
@@ -33,7 +34,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
         summary="List share links",
         description="Get all share links for the authenticated user",
         responses={
-            200: ShareLinkResponseSerializer(many=True),
+            200: ShareLinkListSerializer(many=True),
         },
         tags=["Share Links"],
     )
@@ -44,7 +45,7 @@ class ShareLinkListCreateView(StormCloudBaseAPIView):
             .select_related("stored_file")
             .order_by("-created_at")
         )
-        serializer = ShareLinkResponseSerializer(links, many=True)
+        serializer = ShareLinkListSerializer(links, many=True)
         return Response(serializer.data)
 
     @extend_schema(

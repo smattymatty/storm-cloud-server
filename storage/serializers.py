@@ -105,6 +105,50 @@ class ShareLinkCreateSerializer(serializers.Serializer):
         return value
 
 
+class ShareLinkListSerializer(serializers.ModelSerializer):
+    """Serializer for share link list responses - excludes sensitive token."""
+
+    url = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShareLink
+        fields = [
+            "id",
+            "owner",
+            "file_path",
+            "custom_slug",
+            "url",
+            "has_password",
+            "expiry_days",
+            "expires_at",
+            "created_at",
+            "view_count",
+            "download_count",
+            "last_accessed_at",
+            "is_active",
+            "is_expired",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_url(self, obj: ShareLink) -> str:
+        """Build full public URL for this share link."""
+        key = obj.get_public_url_key()
+        return f"/share/{key}/"
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_has_password(self, obj: ShareLink) -> bool:
+        """Check if this link has password protection."""
+        return bool(obj.password_hash)
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_expired(self, obj: ShareLink) -> bool:
+        """Check if this link has expired."""
+        return obj.is_expired()
+
+
 class ShareLinkResponseSerializer(serializers.ModelSerializer):
     """Serializer for share link responses."""
 

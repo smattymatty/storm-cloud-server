@@ -62,6 +62,10 @@ UPLOADS_PATH=/var/stormcloud/uploads
 BACKUPS_PATH=/var/stormcloud/backups
 STORMCLOUD_STORAGE_ROOT=/app/uploads
 
+# Shared/Org Storage (persistent volume for organization files)
+SHARED_STORAGE_PATH=/var/stormcloud/shared
+STORMCLOUD_SHARED_STORAGE_ROOT=/app/shared_storage
+
 # Encryption (ADR 010)
 # Generate key with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 STORAGE_ENCRYPTION_METHOD={{ storage_encryption_method | default('none') }}

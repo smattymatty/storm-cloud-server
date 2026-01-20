@@ -204,6 +204,18 @@ class LocalStorageBackend(AbstractStorageBackend):
 
         return BytesIO(plaintext)
 
+    def open_raw_shared(self, org_id: str | int, path: str) -> BinaryIO:
+        """Open shared file without decryption (for migration, debugging)."""
+        full_path = self._resolve_shared_path(org_id, path)
+
+        if not full_path.exists():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        if full_path.is_dir():
+            raise IsADirectoryError(f"Path is a directory: {path}")
+
+        return full_path.open("rb")
+
     def delete_shared(self, org_id: str | int, path: str) -> None:
         """Delete shared file or empty directory."""
         full_path = self._resolve_shared_path(org_id, path)

@@ -51,7 +51,11 @@ class EncryptExistingFilesCommandTest(TestCase):
     def setUp(self):
         """Create temp directory and test user."""
         self.temp_dir = tempfile.mkdtemp()
-        self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
+        self.shared_dir = tempfile.mkdtemp()
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
         self.user = User.objects.create_user(
             username="testuser", email="test@example.com", password="testpass"
         )
@@ -65,8 +69,9 @@ class EncryptExistingFilesCommandTest(TestCase):
         user_dir.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directories."""
         shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
 
     def _create_plaintext_file(self, filename: str, content: bytes) -> StoredFile:
         """Create a plaintext file directly on disk and in DB."""
@@ -90,7 +95,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         self._create_plaintext_file("test.txt", b"test content")
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command(
                 "encrypt_existing_files", "--mode", "audit", stdout=out, verbosity=2
             )
@@ -105,7 +113,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         self._create_plaintext_file("file2.txt", b"content 2")
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command("encrypt_existing_files", "--mode", "audit", stdout=out)
 
         output = out.getvalue()
@@ -123,7 +134,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         stored_file = self._create_plaintext_file("test.txt", b"test content")
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command(
                 "encrypt_existing_files",
                 "--mode",
@@ -148,7 +162,10 @@ class EncryptExistingFilesCommandTest(TestCase):
     def test_encrypt_mode_encrypts_files(self):
         """Encrypt mode with --force should encrypt files."""
         # Override storage root for this test
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             stored_file = self._create_plaintext_file("test.txt", b"test content")
 
             out = StringIO()
@@ -206,7 +223,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         )
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command(
                 "encrypt_existing_files",
                 "--mode",
@@ -236,7 +256,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         )
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command("encrypt_existing_files", "--mode", "audit", stdout=out)
 
         output = out.getvalue()
@@ -250,7 +273,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         user_prefix = str(self.account.id)
         content = BytesIO(b"encrypted content")
 
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
             file_info = backend.save(f"{user_prefix}/encrypted.txt", content)
 
@@ -267,7 +293,10 @@ class EncryptExistingFilesCommandTest(TestCase):
         )
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command(
                 "encrypt_existing_files", "--mode", "audit", stdout=out, verbosity=2
             )
@@ -278,12 +307,16 @@ class EncryptExistingFilesCommandTest(TestCase):
 
     def test_invalid_user_id_raises_error(self):
         """Invalid --user-id should raise error."""
-        with self.assertRaises(CommandError) as ctx:
-            call_command(
-                "encrypt_existing_files", "--mode", "audit", "--user-id", "99999"
-            )
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            with self.assertRaises(CommandError) as ctx:
+                call_command(
+                    "encrypt_existing_files", "--mode", "audit", "--user-id", "99999"
+                )
 
-        self.assertIn("not found", str(ctx.exception))
+            self.assertIn("not found", str(ctx.exception))
 
     def test_summary_shows_all_encrypted(self):
         """Summary should show success message when all files encrypted."""
@@ -299,8 +332,313 @@ class EncryptExistingFilesCommandTest(TestCase):
         )
 
         out = StringIO()
-        with override_settings(STORMCLOUD_STORAGE_ROOT=self.temp_dir):
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
             call_command("encrypt_existing_files", "--mode", "audit", stdout=out)
 
         output = out.getvalue()
         self.assertIn("All files are encrypted", output)
+
+
+@override_settings(
+    STORAGE_ENCRYPTION_METHOD="server",
+    STORAGE_ENCRYPTION_KEY=TEST_KEY,
+    STORAGE_ENCRYPTION_KEY_ID="test-key-1",
+)
+class EncryptExistingFilesOrgCommandTest(TestCase):
+    """Tests for encrypt_existing_files command with org/shared files."""
+
+    def setUp(self):
+        """Create temp directories, test user, and test org."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.shared_dir = tempfile.mkdtemp()
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
+        # Create organization
+        self.org = Organization.objects.create(
+            name="Test Org Encrypt", slug="test-org-encrypt-cmd"
+        )
+        # Create user and account
+        self.user = User.objects.create_user(
+            username="orguser", email="orguser@example.com", password="testpass"
+        )
+        self.account = Account.objects.create(
+            user=self.user, organization=self.org, email_verified=True
+        )
+        # Create org directory in shared storage
+        org_dir = Path(self.shared_dir) / str(self.org.id)
+        org_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        """Clean up temp directories."""
+        shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
+
+    def _create_shared_plaintext_file(
+        self, filename: str, content: bytes
+    ) -> StoredFile:
+        """Create a plaintext shared file directly on disk and in DB."""
+        org_dir = Path(self.shared_dir) / str(self.org.id)
+        file_path = org_dir / filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(content)
+
+        return StoredFile.objects.create(
+            organization=self.org,
+            path=filename,
+            name=filename,
+            size=len(content),
+            content_type="text/plain",
+            is_directory=False,
+            parent_path="",
+            encryption_method=StoredFile.ENCRYPTION_NONE,
+        )
+
+    def test_audit_mode_lists_unencrypted_org_files(self):
+        """Audit mode should list unencrypted org files."""
+        self._create_shared_plaintext_file("org_test.txt", b"org test content")
+
+        out = StringIO()
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files", "--mode", "audit", stdout=out, verbosity=2
+            )
+
+        output = out.getvalue()
+        self.assertIn("[UNENCRYPTED]", output)
+        self.assertIn("org_test.txt", output)
+        self.assertIn("Organization Files:", output)
+
+    def test_encrypt_org_files_with_force(self):
+        """Encrypt mode with --force should encrypt org files."""
+        stored_file = self._create_shared_plaintext_file(
+            "org_encrypt.txt", b"secret org data"
+        )
+
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files",
+                "--mode",
+                "encrypt",
+                "--force",
+            )
+
+        # Check file is encrypted on disk
+        file_path = Path(self.shared_dir) / str(self.org.id) / "org_encrypt.txt"
+        raw_content = file_path.read_bytes()
+        self.assertEqual(raw_content[0:1], VERSION_AES_256_GCM)
+
+        # DB should be updated
+        stored_file.refresh_from_db()
+        self.assertEqual(stored_file.encryption_method, StoredFile.ENCRYPTION_SERVER)
+        self.assertEqual(stored_file.size, 15)  # Original size
+        self.assertEqual(stored_file.encrypted_size, 15 + OVERHEAD)
+        self.assertEqual(stored_file.key_id, "test-key-1")
+
+    def test_org_id_filter(self):
+        """--org-id should filter to specific organization."""
+        # Create second org
+        org2 = Organization.objects.create(name="Other Org", slug="other-org-encrypt")
+        org2_dir = Path(self.shared_dir) / str(org2.id)
+        org2_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create files in both orgs
+        self._create_shared_plaintext_file("org1_file.txt", b"org1 content")
+
+        (org2_dir / "org2_file.txt").write_bytes(b"org2 content")
+        StoredFile.objects.create(
+            organization=org2,
+            path="org2_file.txt",
+            name="org2_file.txt",
+            size=12,
+            content_type="text/plain",
+            is_directory=False,
+            parent_path="",
+            encryption_method=StoredFile.ENCRYPTION_NONE,
+        )
+
+        out = StringIO()
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files",
+                "--mode",
+                "audit",
+                "--org-id",
+                str(self.org.id),
+                stdout=out,
+            )
+
+        output = out.getvalue()
+        self.assertIn("Organizations scanned: 1", output)
+        self.assertIn("Unencrypted files: 1", output)
+
+    def test_orgs_only_skips_user_files(self):
+        """--orgs-only flag should skip user files."""
+        # Create user directory and file
+        user_dir = Path(self.temp_dir) / str(self.account.id)
+        user_dir.mkdir(parents=True, exist_ok=True)
+        (user_dir / "user_file.txt").write_bytes(b"user content")
+        StoredFile.objects.create(
+            owner=self.account,
+            path="user_file.txt",
+            name="user_file.txt",
+            size=12,
+            is_directory=False,
+            parent_path="",
+            encryption_method=StoredFile.ENCRYPTION_NONE,
+        )
+
+        # Create org file
+        self._create_shared_plaintext_file("org_file.txt", b"org content")
+
+        out = StringIO()
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files",
+                "--mode",
+                "audit",
+                "--orgs-only",
+                stdout=out,
+            )
+
+        output = out.getvalue()
+        # Should only process org files
+        self.assertIn("Organizations scanned: 1", output)
+        self.assertNotIn("Users scanned:", output)
+
+    def test_users_only_skips_org_files(self):
+        """--users-only flag should skip org files."""
+        # Create user directory and file
+        user_dir = Path(self.temp_dir) / str(self.account.id)
+        user_dir.mkdir(parents=True, exist_ok=True)
+        (user_dir / "user_file.txt").write_bytes(b"user content")
+        StoredFile.objects.create(
+            owner=self.account,
+            path="user_file.txt",
+            name="user_file.txt",
+            size=12,
+            is_directory=False,
+            parent_path="",
+            encryption_method=StoredFile.ENCRYPTION_NONE,
+        )
+
+        # Create org file
+        self._create_shared_plaintext_file("org_file.txt", b"org content")
+
+        out = StringIO()
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files",
+                "--mode",
+                "audit",
+                "--users-only",
+                stdout=out,
+            )
+
+        output = out.getvalue()
+        # Should only process user files
+        self.assertIn("Users scanned:", output)
+        self.assertNotIn("Organizations scanned:", output)
+
+    def test_mutually_exclusive_flags(self):
+        """--users-only and --orgs-only should be mutually exclusive."""
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            with self.assertRaises(CommandError) as ctx:
+                call_command(
+                    "encrypt_existing_files",
+                    "--mode",
+                    "audit",
+                    "--users-only",
+                    "--orgs-only",
+                )
+
+            self.assertIn(
+                "Cannot use --users-only with --orgs-only", str(ctx.exception)
+            )
+
+    def test_invalid_org_id_raises_error(self):
+        """Invalid --org-id should raise error."""
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            with self.assertRaises(CommandError) as ctx:
+                # Use a valid UUID format that doesn't exist
+                call_command(
+                    "encrypt_existing_files",
+                    "--mode",
+                    "audit",
+                    "--org-id",
+                    "00000000-0000-0000-0000-000000000000",
+                )
+
+            self.assertIn("not found", str(ctx.exception))
+
+    def test_skips_already_encrypted_org_files(self):
+        """Command should skip already encrypted org files."""
+        from io import BytesIO
+
+        # Create an encrypted file via the backend
+        content = BytesIO(b"encrypted org content")
+
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            backend = LocalStorageBackend(
+                storage_root=Path(self.temp_dir),
+                shared_root=Path(self.shared_dir),
+            )
+            file_info = backend.save_shared(self.org.id, "encrypted_org.txt", content)
+
+        StoredFile.objects.create(
+            organization=self.org,
+            path="encrypted_org.txt",
+            name="encrypted_org.txt",
+            size=file_info.size,
+            encrypted_size=file_info.encrypted_size,
+            is_directory=False,
+            parent_path="",
+            encryption_method=StoredFile.ENCRYPTION_SERVER,
+            key_id=file_info.encryption_key_id,
+        )
+
+        out = StringIO()
+        with override_settings(
+            STORMCLOUD_STORAGE_ROOT=self.temp_dir,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.shared_dir,
+        ):
+            call_command(
+                "encrypt_existing_files",
+                "--mode",
+                "audit",
+                "--orgs-only",
+                stdout=out,
+                verbosity=2,
+            )
+
+        output = out.getvalue()
+        self.assertIn("Already encrypted: 1", output)
+        self.assertIn("Unencrypted files: 0", output)

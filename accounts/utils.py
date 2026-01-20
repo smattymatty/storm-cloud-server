@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 from django.conf import settings
-from django.core.mail import send_mail
+from .tasks import send_simple_email_async, send_html_email_async
 from django.utils import timezone
 
 from .models import EmailVerificationToken
@@ -41,12 +41,11 @@ def send_verification_email(user, request):
         expiry_hours=settings.STORMCLOUD_EMAIL_VERIFICATION_EXPIRY_HOURS,
     )
 
-    send_mail(
+    send_simple_email_async.enqueue(
         subject=settings.STORMCLOUD_EMAIL_VERIFICATION_SUBJECT,
         message=email_body,
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
-        fail_silently=False,
     )
 
 
@@ -67,7 +66,6 @@ def send_enrollment_invite_email(
         server_url: Backend server URL for the server param
     """
     from urllib.parse import urlencode
-    from django.core.mail import EmailMultiAlternatives
 
     # Get frontend URL from settings
     frontend_url = getattr(settings, "STORMCLOUD_FRONTEND_URL", None)
@@ -158,14 +156,13 @@ If you did not expect this invitation, you can safely ignore this email.
 </body>
 </html>"""
 
-    msg = EmailMultiAlternatives(
+    send_html_email_async.enqueue(
         subject=subject,
-        body=text_content,
+        text_content=text_content,
+        html_content=html_content,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[email],
+        recipient_list=[email],
     )
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)
 
 
 def send_platform_invite_email(
@@ -185,7 +182,6 @@ def send_platform_invite_email(
         server_url: Backend server URL for the server param
     """
     from urllib.parse import urlencode
-    from django.core.mail import EmailMultiAlternatives
 
     # Get frontend URL from settings
     frontend_url = getattr(settings, "STORMCLOUD_FRONTEND_URL", None)
@@ -282,11 +278,10 @@ If you did not expect this invitation, you can safely ignore this email.
 </body>
 </html>"""
 
-    msg = EmailMultiAlternatives(
+    send_html_email_async.enqueue(
         subject=subject,
-        body=text_content,
+        text_content=text_content,
+        html_content=html_content,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[email],
+        recipient_list=[email],
     )
-    msg.attach_alternative(html_content, "text/html")
-    msg.send(fail_silently=False)

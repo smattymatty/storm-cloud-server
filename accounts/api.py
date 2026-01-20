@@ -2,7 +2,7 @@
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -941,6 +941,8 @@ class OrgMembersView(StormCloudBaseAPIView):
     )
     def get(self, request: Request) -> Response:
         """List members of the user's organization."""
+        from storage.models import StoredFile
+
         account = request.user.account
         org = account.organization
 
@@ -953,6 +955,17 @@ class OrgMembersView(StormCloudBaseAPIView):
                 if acc.storage_quota_bytes > 0
                 else org.storage_quota_bytes
             )
+
+            # Calculate storage from files if counter is 0 (migration fallback)
+            storage_used = acc.storage_used_bytes
+            if storage_used == 0:
+                storage_used = (
+                    StoredFile.objects.filter(owner=acc, is_directory=False).aggregate(
+                        total=Sum("size")
+                    )["total"]
+                    or 0
+                )
+
             members.append(
                 {
                     "id": acc.user.id,
@@ -965,7 +978,7 @@ class OrgMembersView(StormCloudBaseAPIView):
                     )
                     or None,
                     "is_owner": acc.is_owner,
-                    "storage_used_bytes": acc.storage_used_bytes,
+                    "storage_used_bytes": storage_used,
                     "storage_quota_bytes": (
                         acc.storage_quota_bytes if acc.storage_quota_bytes > 0 else None
                     ),
@@ -1134,6 +1147,8 @@ class AdminUserListView(StormCloudBaseAPIView):
                     "id": user.id,
                     "username": user.username,
                     "email": user.email,
+                    "first_name": user.first_name or None,
+                    "last_name": user.last_name or None,
                     "is_active": user.is_active,
                     "is_staff": user.is_staff,
                     "is_email_verified": user.account.email_verified,
@@ -1983,7 +1998,7 @@ class WebhookConfigView(StormCloudBaseAPIView):
             {
                 "webhook_url": api_key.webhook_url,
                 "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
+                "has_webhook_secret": bool(api_key.webhook_secret),
                 "webhook_last_triggered": api_key.webhook_last_triggered,
                 "webhook_last_status": api_key.webhook_last_status,
             }
@@ -2042,7 +2057,10 @@ class WebhookConfigView(StormCloudBaseAPIView):
         api_key.webhook_url = webhook_url
         api_key.save()
 
-        if webhook_url and not old_url:
+        # Determine if this is first-time setup (new secret generated)
+        is_new_setup = webhook_url and not old_url
+
+        if is_new_setup:
             message = "Webhook configured. Secret generated."
         elif webhook_url and old_url != webhook_url:
             message = "Webhook URL updated."
@@ -2051,14 +2069,16 @@ class WebhookConfigView(StormCloudBaseAPIView):
         else:
             message = "No changes."
 
-        return Response(
-            {
-                "webhook_url": api_key.webhook_url,
-                "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
-                "message": message,
-            }
-        )
+        response_data = {
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "message": message,
+        }
+        # Only return secret on first-time setup (one-time display)
+        if is_new_setup:
+            response_data["webhook_secret"] = api_key.webhook_secret
+
+        return Response(response_data)
 
     @extend_schema(
         summary="Disable webhook",
@@ -2283,7 +2303,7 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
             {
                 "webhook_url": api_key.webhook_url,
                 "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
+                "has_webhook_secret": bool(api_key.webhook_secret),
                 "webhook_last_triggered": api_key.webhook_last_triggered,
                 "webhook_last_status": api_key.webhook_last_status,
             }
@@ -2345,19 +2365,22 @@ class AdminUserKeyWebhookView(StormCloudBaseAPIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+        # Track if this is first-time setup
+        old_url = api_key.webhook_url
         api_key.webhook_url = webhook_url
         api_key.save()
 
-        return Response(
-            {
-                "webhook_url": api_key.webhook_url,
-                "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
-                "message": (
-                    "Webhook configured." if webhook_url else "Webhook disabled."
-                ),
-            }
-        )
+        is_new_setup = webhook_url and not old_url
+        response_data = {
+            "webhook_url": api_key.webhook_url,
+            "webhook_enabled": api_key.webhook_enabled,
+            "message": ("Webhook configured." if webhook_url else "Webhook disabled."),
+        }
+        # Only return secret on first-time setup (one-time display)
+        if is_new_setup:
+            response_data["webhook_secret"] = api_key.webhook_secret
+
+        return Response(response_data)
 
     @extend_schema(
         summary="Admin: Disable webhook",
@@ -2647,13 +2670,36 @@ class AdminOrganizationMembersView(StormCloudBaseAPIView):
     GET /api/v1/admin/organizations/{org_id}/members/
 
     List organization members with their quota info.
+    Accessible by: staff admins (any org) or org members (own org only).
     """
 
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request: Request, org_id: str) -> Response:
         """List members with their quota info."""
         org = get_object_or_404(Organization, id=org_id)
+
+        # Allow: staff admin OR member of this org
+        is_admin = request.user.is_staff
+        try:
+            account = request.user.account
+            is_member = account is not None and account.organization_id == org.id
+        except Account.DoesNotExist:
+            is_member = False
+
+        if not (is_admin or is_member):
+            return Response(
+                {
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "You don't have access to this organization.",
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from storage.models import StoredFile
+
         accounts = Account.objects.filter(organization=org).select_related("user")
 
         members = []
@@ -2664,13 +2710,44 @@ class AdminOrganizationMembersView(StormCloudBaseAPIView):
                 if account.storage_quota_bytes > 0
                 else org.storage_quota_bytes
             )
+
+            # Calculate storage from files if counter is 0 (migration fallback)
+            storage_used = account.storage_used_bytes
+            if storage_used == 0:
+                storage_used = (
+                    StoredFile.objects.filter(
+                        owner=account, is_directory=False
+                    ).aggregate(total=Sum("size"))["total"]
+                    or 0
+                )
+
+            # Privacy: admins see all, members respect privacy settings
+            if is_admin:
+                email = account.user.email
+                first_name = account.user.first_name or None
+                last_name = account.user.last_name or None
+            else:
+                email = account.user.email if account.show_email_to_org else None
+                first_name = (
+                    (account.user.first_name or None)
+                    if account.show_name_to_org
+                    else None
+                )
+                last_name = (
+                    (account.user.last_name or None)
+                    if account.show_name_to_org
+                    else None
+                )
+
             members.append(
                 {
                     "id": account.user.id,
                     "username": account.user.username,
-                    "email": account.user.email,
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
                     "is_owner": account.is_owner,
-                    "storage_used_bytes": account.storage_used_bytes,
+                    "storage_used_bytes": storage_used,
                     "storage_quota_bytes": (
                         account.storage_quota_bytes
                         if account.storage_quota_bytes > 0
@@ -2717,7 +2794,7 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
                 "properties": {
                     "webhook_url": {"type": "string", "nullable": True},
                     "webhook_enabled": {"type": "boolean"},
-                    "webhook_secret": {"type": "string", "nullable": True},
+                    "has_webhook_secret": {"type": "boolean"},
                     "webhook_last_triggered": {"type": "string", "nullable": True},
                     "webhook_last_status": {"type": "string", "nullable": True},
                 },
@@ -2738,7 +2815,7 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
             {
                 "webhook_url": api_key.webhook_url,
                 "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
+                "has_webhook_secret": bool(api_key.webhook_secret),
                 "webhook_last_triggered": api_key.webhook_last_triggered,
                 "webhook_last_status": api_key.webhook_last_status,
             }
@@ -2763,7 +2840,7 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
                 "properties": {
                     "webhook_url": {"type": "string", "nullable": True},
                     "webhook_enabled": {"type": "boolean"},
-                    "webhook_secret": {"type": "string", "nullable": True},
+                    "has_webhook_secret": {"type": "boolean"},
                     "message": {"type": "string"},
                 },
             },
@@ -2848,7 +2925,7 @@ class UserKeyWebhookView(StormCloudBaseAPIView):
             {
                 "webhook_url": api_key.webhook_url,
                 "webhook_enabled": api_key.webhook_enabled,
-                "webhook_secret": api_key.webhook_secret,
+                "has_webhook_secret": bool(api_key.webhook_secret),
                 "message": (
                     "Webhook configured." if webhook_url else "Webhook disabled."
                 ),

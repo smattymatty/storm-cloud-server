@@ -50,6 +50,24 @@ services:
     #   - "traefik.http.routers.stormcloud.tls.certresolver=letsencrypt"
     #   - "traefik.http.services.stormcloud.loadbalancer.server.port=8000"
 
+  # Background task worker (Django Tasks Framework)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-stormcloud}_worker
+    command: python manage.py taskworker
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - stormcloud_network
+
 volumes:
   postgres_data:
     driver: local

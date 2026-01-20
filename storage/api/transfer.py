@@ -340,11 +340,16 @@ class StorageTransferView(StormCloudBaseAPIView):
             )
 
         except Exception as e:
+            # Log the actual error for debugging, but don't expose to client
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.exception(f"Transfer failed: {e}")
             return Response(
                 {
                     "error": {
                         "code": "TRANSFER_FAILED",
-                        "message": f"Transfer failed: {str(e)}",
+                        "message": "Transfer failed. Please try again.",
                     }
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -176,6 +176,14 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
             path=dir_path or "/",
         )
 
+        # Calculate org storage usage for quota info
+        org_used_bytes = (
+            StoredFile.objects.filter(organization=org, is_directory=False).aggregate(
+                total=Sum("size")
+            )["total"]
+            or 0
+        )
+
         serializer = FileListItemSerializer(items, many=True)
         return Response(
             {
@@ -183,6 +191,12 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
                 "storage_type": "org",
                 "entries": serializer.data,
                 "next_cursor": next_cursor,
+                "quota": {
+                    "used_bytes": org_used_bytes,
+                    "quota_bytes": org.storage_quota_bytes,
+                    "org_used_bytes": org_used_bytes,
+                    "org_quota_bytes": org.storage_quota_bytes,
+                },
             }
         )
 

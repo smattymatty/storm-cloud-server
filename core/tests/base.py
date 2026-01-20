@@ -16,17 +16,21 @@ class StormCloudAPITestCase(APITestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test storage directory."""
+        """Set up test storage directories."""
         super().setUpClass()
         cls.test_storage_root = settings.BASE_DIR / "storage_root_test"
         cls.test_storage_root.mkdir(exist_ok=True)
+        cls.test_shared_root = settings.BASE_DIR / "shared_storage_test"
+        cls.test_shared_root.mkdir(exist_ok=True)
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up test storage directory."""
+        """Clean up test storage directories."""
         super().tearDownClass()
         if cls.test_storage_root.exists():
             shutil.rmtree(cls.test_storage_root)
+        if cls.test_shared_root.exists():
+            shutil.rmtree(cls.test_shared_root)
 
     def setUp(self):
         super().setUp()
@@ -39,10 +43,11 @@ class StormCloudAPITestCase(APITestCase):
             created_by=self.user.account,  # Required for APIKeyUser.account to work
         )
 
-        # Use test storage root for this test run
+        # Use test storage roots for this test run
         # Disable throttling by using DummyCache (doesn't store anything)
         self.settings_override = override_settings(
             STORMCLOUD_STORAGE_ROOT=self.test_storage_root,
+            STORMCLOUD_SHARED_STORAGE_ROOT=self.test_shared_root,
             CACHES={
                 "default": {
                     "BACKEND": "django.core.cache.backends.dummy.DummyCache",

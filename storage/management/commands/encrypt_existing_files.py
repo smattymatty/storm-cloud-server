@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.services.encryption import DecryptionError, EncryptionService
 from core.storage.local import LocalStorageBackend
+from accounts.models import Organization
 from storage.models import StoredFile
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,21 @@ class Command(BaseCommand):
             help="Target specific user only (default: all users)",
         )
         parser.add_argument(
+            "--org-id",
+            type=str,
+            help="Target specific organization only (implies --orgs-only)",
+        )
+        parser.add_argument(
+            "--users-only",
+            action="store_true",
+            help="Process only user files (skip organization files)",
+        )
+        parser.add_argument(
+            "--orgs-only",
+            action="store_true",
+            help="Process only organization files (skip user files)",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Preview changes without applying them",
@@ -63,12 +79,14 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         mode = options["mode"]
         user_id = options.get("user_id")
+        org_id = options.get("org_id")
+        users_only = options.get("users_only", False)
+        orgs_only = options.get("orgs_only", False)
         dry_run = options["dry_run"]
         force = options["force"]
         verbosity = options["verbosity"]
 
-        # Initialize services
-        self.backend = LocalStorageBackend()
+        # Initialize encryption service first to validate before creating backend
         self.encryption = EncryptionService()
 
         # Validate encryption is enabled
@@ -84,6 +102,17 @@ class Command(BaseCommand):
                 "Mode 'encrypt' requires --force flag (or --dry-run for preview)"
             )
 
+        # Validate mutually exclusive flags
+        if users_only and orgs_only:
+            raise CommandError("Cannot use --users-only with --orgs-only")
+
+        # Initialize storage backend after validation
+        self.backend = LocalStorageBackend()
+
+        # --org-id implies --orgs-only
+        if org_id:
+            orgs_only = True
+
         # Header
         if verbosity >= 1:
             self.stdout.write(self.style.SUCCESS("=" * 60))
@@ -96,19 +125,19 @@ class Command(BaseCommand):
             self.stdout.write(f"Key ID: {self.encryption.key_id}")
             if user_id:
                 self.stdout.write(f"User ID: {user_id}")
+            if org_id:
+                self.stdout.write(f"Organization ID: {org_id}")
+            if users_only:
+                self.stdout.write("Scope: User files only")
+            elif orgs_only:
+                self.stdout.write("Scope: Organization files only")
+            else:
+                self.stdout.write("Scope: All files (users + organizations)")
             if dry_run:
                 self.stdout.write(
                     self.style.WARNING("DRY RUN: No changes will be made")
                 )
             self.stdout.write("")
-
-        # Get users to process
-        if user_id:
-            users = User.objects.filter(id=user_id)
-            if not users.exists():
-                raise CommandError(f"User with ID {user_id} not found")
-        else:
-            users = User.objects.all()
 
         # Statistics
         stats = {
@@ -118,12 +147,40 @@ class Command(BaseCommand):
             "unencrypted": 0,
             "encrypted": 0,
             "errors": 0,
+            # Org-specific stats
+            "orgs_scanned": 0,
+            "org_files_scanned": 0,
+            "org_already_encrypted": 0,
+            "org_unencrypted": 0,
+            "org_encrypted": 0,
+            "org_errors": 0,
         }
 
-        # Process each user
-        for user in users:
-            stats["users_scanned"] += 1
-            self._process_user(user, mode, dry_run, verbosity, stats)
+        # Process user files (unless --orgs-only)
+        if not orgs_only:
+            if user_id:
+                users = User.objects.filter(id=user_id)
+                if not users.exists():
+                    raise CommandError(f"User with ID {user_id} not found")
+            else:
+                users = User.objects.all()
+
+            for user in users:
+                stats["users_scanned"] += 1
+                self._process_user(user, mode, dry_run, verbosity, stats)
+
+        # Process org files (unless --users-only)
+        if not users_only:
+            if org_id:
+                orgs = Organization.objects.filter(id=org_id)
+                if not orgs.exists():
+                    raise CommandError(f"Organization with ID {org_id} not found")
+            else:
+                orgs = Organization.objects.all()
+
+            for org in orgs:
+                stats["orgs_scanned"] += 1
+                self._process_org(org, mode, dry_run, verbosity, stats)
 
         # Summary
         self._display_summary(stats, mode, dry_run, verbosity)
@@ -202,6 +259,82 @@ class Command(BaseCommand):
                 )
                 logger.exception(f"Error processing {stored_file.path}")
 
+    def _process_org(
+        self, org: Organization, mode: str, dry_run: bool, verbosity: int, stats: dict
+    ):
+        """Process all shared files for a single organization."""
+        org_id = org.id
+
+        if verbosity >= 1:
+            self.stdout.write(f"\nProcessing organization: {org.name} (ID: {org_id})")
+
+        # Get all non-directory files for this organization
+        files = StoredFile.objects.filter(organization=org, is_directory=False)
+
+        for stored_file in files:
+            stats["org_files_scanned"] += 1
+
+            try:
+                # Check current encryption status
+                if stored_file.encryption_method != StoredFile.ENCRYPTION_NONE:
+                    stats["org_already_encrypted"] += 1
+                    if verbosity >= 2:
+                        self.stdout.write(
+                            f"  [SKIP] {stored_file.path} (already encrypted)"
+                        )
+                    continue
+
+                # Verify file exists and check actual encryption
+                try:
+                    raw_handle = self.backend.open_raw_shared(org_id, stored_file.path)
+                    header = raw_handle.read(32)
+                    raw_handle.close()
+                except FileNotFoundError:
+                    if verbosity >= 2:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f"  [SKIP] {stored_file.path} (file not found)"
+                            )
+                        )
+                    continue
+
+                # Check if file is actually encrypted on disk (DB might be out of sync)
+                detected = self.encryption.detect_encryption(header)
+                if detected != "none":
+                    stats["org_already_encrypted"] += 1
+                    if verbosity >= 2:
+                        self.stdout.write(
+                            f"  [SKIP] {stored_file.path} (encrypted on disk, updating DB)"
+                        )
+                    # Update DB to reflect actual state
+                    if not dry_run:
+                        self._update_db_encryption_state_shared(stored_file, org_id)
+                    continue
+
+                # File is unencrypted
+                stats["org_unencrypted"] += 1
+
+                if mode == "audit":
+                    if verbosity >= 1:
+                        self.stdout.write(f"  [UNENCRYPTED] {stored_file.path}")
+                    continue
+
+                # Encrypt mode
+                if verbosity >= 1:
+                    action = "Would encrypt" if dry_run else "Encrypting"
+                    self.stdout.write(f"  [{action}] {stored_file.path}")
+
+                if not dry_run:
+                    self._encrypt_file_shared(stored_file, org_id)
+                    stats["org_encrypted"] += 1
+
+            except Exception as e:
+                stats["org_errors"] += 1
+                self.stdout.write(
+                    self.style.ERROR(f"  [ERROR] {stored_file.path}: {e}")
+                )
+                logger.exception(f"Error processing org file {stored_file.path}")
+
     def _encrypt_file(self, stored_file: StoredFile, full_path: str):
         """Encrypt a single file in place."""
         # Read plaintext
@@ -272,6 +405,74 @@ class Command(BaseCommand):
         except Exception as e:
             logger.error(f"Error updating encryption state for {stored_file.path}: {e}")
 
+    def _encrypt_file_shared(self, stored_file: StoredFile, org_id: int):
+        """Encrypt a single shared file in place."""
+        # Read plaintext
+        raw_handle = self.backend.open_raw_shared(org_id, stored_file.path)
+        plaintext = raw_handle.read()
+        raw_handle.close()
+
+        original_size = len(plaintext)
+
+        # Encrypt
+        encrypted = self.encryption.encrypt_file(plaintext)
+        encrypted_size = len(encrypted)
+
+        # Write encrypted content back to shared_root
+        file_path = self.backend.shared_root / str(org_id) / stored_file.path
+        file_path.write_bytes(encrypted)
+
+        # Update database record
+        stored_file.size = original_size
+        stored_file.encrypted_size = encrypted_size
+        stored_file.encryption_method = StoredFile.ENCRYPTION_SERVER
+        stored_file.key_id = self.encryption.key_id
+        stored_file.save(
+            update_fields=[
+                "size",
+                "encrypted_size",
+                "encryption_method",
+                "key_id",
+                "updated_at",
+            ]
+        )
+
+    def _update_db_encryption_state_shared(self, stored_file: StoredFile, org_id: int):
+        """Update DB record to reflect actual encryption state on disk for shared file."""
+        try:
+            # Read and decrypt to get original size
+            raw_handle = self.backend.open_raw_shared(org_id, stored_file.path)
+            encrypted_data = raw_handle.read()
+            raw_handle.close()
+
+            encrypted_size = len(encrypted_data)
+
+            try:
+                plaintext = self.encryption.decrypt_file(encrypted_data)
+                original_size = len(plaintext)
+            except DecryptionError:
+                # Can't decrypt, use on-disk size
+                original_size = encrypted_size
+                encrypted_size = None
+
+            stored_file.size = original_size
+            stored_file.encrypted_size = encrypted_size
+            stored_file.encryption_method = StoredFile.ENCRYPTION_SERVER
+            stored_file.key_id = self.encryption.key_id
+            stored_file.save(
+                update_fields=[
+                    "size",
+                    "encrypted_size",
+                    "encryption_method",
+                    "key_id",
+                    "updated_at",
+                ]
+            )
+        except Exception as e:
+            logger.error(
+                f"Error updating encryption state for shared file {stored_file.path}: {e}"
+            )
+
     def _display_summary(self, stats: dict, mode: str, dry_run: bool, verbosity: int):
         """Display summary statistics."""
         if verbosity < 1:
@@ -281,30 +482,59 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("=" * 60))
         self.stdout.write(self.style.SUCCESS("Summary"))
         self.stdout.write(self.style.SUCCESS("=" * 60))
-        self.stdout.write(f"Users scanned: {stats['users_scanned']}")
-        self.stdout.write(f"Files scanned: {stats['files_scanned']}")
-        self.stdout.write(f"Already encrypted: {stats['already_encrypted']}")
-        self.stdout.write(f"Unencrypted files: {stats['unencrypted']}")
 
-        if mode == "encrypt":
-            if dry_run:
-                self.stdout.write(f"Would encrypt: {stats['unencrypted']}")
-            else:
-                self.stdout.write(
-                    self.style.SUCCESS(f"Files encrypted: {stats['encrypted']}")
-                )
+        # User files section
+        if stats["users_scanned"] > 0:
+            self.stdout.write(self.style.SUCCESS("User Files:"))
+            self.stdout.write(f"  Users scanned: {stats['users_scanned']}")
+            self.stdout.write(f"  Files scanned: {stats['files_scanned']}")
+            self.stdout.write(f"  Already encrypted: {stats['already_encrypted']}")
+            self.stdout.write(f"  Unencrypted files: {stats['unencrypted']}")
 
-        if stats["errors"] > 0:
-            self.stdout.write(self.style.ERROR(f"Errors: {stats['errors']}"))
+            if mode == "encrypt":
+                if dry_run:
+                    self.stdout.write(f"  Would encrypt: {stats['unencrypted']}")
+                else:
+                    self.stdout.write(
+                        self.style.SUCCESS(f"  Files encrypted: {stats['encrypted']}")
+                    )
+
+            if stats["errors"] > 0:
+                self.stdout.write(self.style.ERROR(f"  Errors: {stats['errors']}"))
+
+        # Org files section
+        if stats["orgs_scanned"] > 0:
+            self.stdout.write("")
+            self.stdout.write(self.style.SUCCESS("Organization Files:"))
+            self.stdout.write(f"  Organizations scanned: {stats['orgs_scanned']}")
+            self.stdout.write(f"  Files scanned: {stats['org_files_scanned']}")
+            self.stdout.write(f"  Already encrypted: {stats['org_already_encrypted']}")
+            self.stdout.write(f"  Unencrypted files: {stats['org_unencrypted']}")
+
+            if mode == "encrypt":
+                if dry_run:
+                    self.stdout.write(f"  Would encrypt: {stats['org_unencrypted']}")
+                else:
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"  Files encrypted: {stats['org_encrypted']}"
+                        )
+                    )
+
+            if stats["org_errors"] > 0:
+                self.stdout.write(self.style.ERROR(f"  Errors: {stats['org_errors']}"))
 
         self.stdout.write("")
 
-        # Final status
+        # Final status - combine totals
+        total_unencrypted = stats["unencrypted"] + stats["org_unencrypted"]
+        total_errors = stats["errors"] + stats["org_errors"]
+
         if mode == "audit":
-            if stats["unencrypted"] > 0:
+            if total_unencrypted > 0:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"Found {stats['unencrypted']} unencrypted file(s). "
+                        f"Found {total_unencrypted} unencrypted file(s). "
                         "Run with --mode encrypt --force to encrypt them."
                     )
                 )
@@ -317,4 +547,11 @@ class Command(BaseCommand):
                 )
             )
         else:
-            self.stdout.write(self.style.SUCCESS("Encryption complete."))
+            if total_errors > 0:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Encryption complete with {total_errors} error(s)."
+                    )
+                )
+            else:
+                self.stdout.write(self.style.SUCCESS("Encryption complete."))

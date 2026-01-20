@@ -26,14 +26,19 @@ class LocalStorageBackendEncryptionDisabledTest(TestCase):
     """Tests for storage backend when encryption is disabled."""
 
     def setUp(self):
-        """Create temp directory for testing."""
+        """Create temp directories for testing."""
         self.temp_dir = tempfile.mkdtemp()
+        self.shared_dir = tempfile.mkdtemp()
         # Backend created AFTER class-level @override_settings applies
-        self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directories."""
         shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
 
     def test_save_stores_plaintext(self):
         """save should store plaintext when encryption disabled."""
@@ -71,13 +76,18 @@ class LocalStorageBackendEncryptionEnabledTest(TestCase):
     """Tests for storage backend when encryption is enabled."""
 
     def setUp(self):
-        """Create temp directory for testing."""
+        """Create temp directories for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
+        self.shared_dir = tempfile.mkdtemp()
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directories."""
         shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
 
     def test_save_encrypts_content(self):
         """save should encrypt content on disk."""
@@ -163,13 +173,18 @@ class LocalStorageBackendMixedModeTest(TestCase):
     """Tests for mixed mode (plaintext files when encryption enabled)."""
 
     def setUp(self):
-        """Create temp directory for testing."""
+        """Create temp directories for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
+        self.shared_dir = tempfile.mkdtemp()
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directories."""
         shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
 
     def test_open_plaintext_file(self):
         """open should return plaintext content for unencrypted files."""
@@ -209,13 +224,18 @@ class EncryptionServiceIntegrationTest(TestCase):
     """Integration tests for EncryptionService with storage backend."""
 
     def setUp(self):
-        """Create temp directory for testing."""
+        """Create temp directories for testing."""
         self.temp_dir = tempfile.mkdtemp()
-        self.backend = LocalStorageBackend(storage_root=Path(self.temp_dir))
+        self.shared_dir = tempfile.mkdtemp()
+        self.backend = LocalStorageBackend(
+            storage_root=Path(self.temp_dir),
+            shared_root=Path(self.shared_dir),
+        )
 
     def tearDown(self):
-        """Clean up temp directory."""
+        """Clean up temp directories."""
         shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.shared_dir)
 
     def test_backend_encryption_service_initialized(self):
         """Backend should initialize encryption service."""
