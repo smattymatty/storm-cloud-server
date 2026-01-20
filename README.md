@@ -4,7 +4,7 @@ Your files, your server, your rules.
 
 Storm Cloud is a self-hosted cloud storage backend. Think Dropbox or Google Drive, but you own it. Upload files, share them with links, manage everything through an API. There's also a markdown CMS baked in if you want to publish content.
 
-Built with Django 6.0 and DRF. Part of the [Storm Developments](https://github.com/stormdevelopments) stack.
+Built with Django 6.0 and DRF. Part of the [Storm Developments](https://stormdevelopments.ca) stack.
 
 ## Why?
 
@@ -63,7 +63,7 @@ cms/        # Markdown rendering (WIP)
 api/v1/     # All the endpoints
 ```
 
-Full API reference is in the Swagger docs. The detailed internal stuff lives in `CLAUDE.md` (which is really more of a dev reference than user docs).
+Full API reference is in the Swagger docs.
 
 ## Configuration
 
