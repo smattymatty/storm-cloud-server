@@ -223,24 +223,32 @@ class StorageTransferView(StormCloudBaseAPIView):
         # Execute the transfer
         try:
             # Get source physical path
+            # Note: _resolve_path expects a full relative path like "account_id/path"
+            # and _resolve_shared_path expects (org_id, path) as separate args
             if source_type == "user":
-                source_physical = backend._resolve_path(str(account.id), source_path)
+                source_physical = backend._resolve_path(f"{account.id}/{source_path}")
             else:
-                source_physical = backend._resolve_shared_path(str(org.id), source_path)
+                source_physical = backend._resolve_shared_path(org.id, source_path)
 
             # Get destination physical path
             if destination_type == "user":
-                dest_physical = backend._resolve_path(str(account.id), destination_path)
-            else:
-                dest_physical = backend._resolve_shared_path(
-                    str(org.id), destination_path
+                dest_physical = backend._resolve_path(
+                    f"{account.id}/{destination_path}"
                 )
+            else:
+                dest_physical = backend._resolve_shared_path(org.id, destination_path)
 
             # Ensure destination parent exists
             dest_physical.parent.mkdir(parents=True, exist_ok=True)
 
+            # NOTE: For cross-storage transfers (user <-> org), we use shutil.move/copy2
+            # instead of safe_move/safe_copy because source and dest may be in different
+            # root directories (storage_root vs shared_root). Symlink protection is
+            # provided by the _resolve_path/_resolve_shared_path methods which now
+            # include fast-reject symlink checks at path resolution time.
+
             if operation == "move":
-                # Move file
+                # Move file - os.rename is atomic on same filesystem
                 import shutil
 
                 shutil.move(str(source_physical), str(dest_physical))

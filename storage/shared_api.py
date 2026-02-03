@@ -185,11 +185,22 @@ class SharedDirectoryListRootView(SharedStorageBaseMixin, StormCloudBaseAPIView)
         )
 
         serializer = FileListItemSerializer(items, many=True)
+        entries_data = serializer.data
+
+        # Patch sizes with actual disk sizes (includes encryption overhead)
+        for entry in entries_data:
+            if not entry.get("is_directory"):
+                try:
+                    file_info = backend.info_shared(str(org.id), entry["path"])
+                    entry["size"] = file_info.size
+                except FileNotFoundError:
+                    pass  # keep DB size as fallback
+
         return Response(
             {
                 "path": dir_path,
                 "storage_type": "org",
-                "entries": serializer.data,
+                "entries": entries_data,
                 "next_cursor": next_cursor,
                 "quota": {
                     "used_bytes": org_used_bytes,
@@ -370,14 +381,21 @@ class SharedFileDetailView(SharedStorageBaseMixin, StormCloudBaseAPIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Generate ETag
-        etag = generate_etag(file_path, stored_file.size, stored_file.updated_at)
+        # Get actual disk size from backend (includes encryption overhead)
+        try:
+            file_info = backend.info_shared(str(org.id), file_path)
+            disk_size = file_info.size
+        except FileNotFoundError:
+            disk_size = stored_file.size
+
+        # Generate ETag using disk size for consistency
+        etag = generate_etag(file_path, disk_size, stored_file.updated_at)
 
         response_data = {
             "path": stored_file.path,
             "storage_type": "org",
             "name": stored_file.name,
-            "size": stored_file.size,
+            "size": disk_size,
             "content_type": stored_file.content_type,
             "is_directory": stored_file.is_directory,
             "created_at": stored_file.created_at,
@@ -746,12 +764,12 @@ class SharedFileDeleteView(SharedStorageBaseMixin, StormCloudBaseAPIView):
                 organization=org, path__startswith=f"{file_path}/"
             ).delete()
 
-            # Delete from filesystem recursively
-            import shutil
+            # Delete from filesystem recursively using fd-pinned safe_rmtree
+            from core.utils import safe_rmtree
 
             full_path = backend._resolve_shared_path(org.id, file_path)
             if full_path.exists():
-                shutil.rmtree(full_path)
+                safe_rmtree(full_path, backend.shared_root)
         else:
             # Delete single file
             try:

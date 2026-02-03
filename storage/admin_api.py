@@ -918,11 +918,11 @@ class AdminFileDeleteView(AdminFileBaseView):
 
         # Delete from filesystem
         if file_info.is_directory:
-            # Use shutil.rmtree for recursive directory deletion
-            import shutil
+            # Use fd-pinned safe_rmtree for recursive directory deletion
+            from core.utils import safe_rmtree
 
             resolved_path = backend._resolve_path(full_path)
-            shutil.rmtree(resolved_path)
+            safe_rmtree(resolved_path, backend.storage_root)
         else:
             backend.delete(full_path)
 

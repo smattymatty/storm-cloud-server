@@ -60,10 +60,18 @@ class LocalStorageBackend(AbstractStorageBackend):
             Absolute Path object
 
         Raises:
-            ValueError: If path attempts directory traversal
+            ValueError: If path attempts directory traversal or contains symlinks
         """
         # Strip leading slashes if present
         path = path.lstrip("/")
+
+        # Fast-reject layer: check for obvious symlinks (defense in depth only)
+        # This is NOT the security boundary - fd-based operations are
+        current = self.storage_root
+        for part in Path(path).parts:
+            current = current / part
+            if current.exists() and current.is_symlink():
+                raise ValueError(f"Invalid path: {path} (symlinks not allowed)")
 
         # Resolve to absolute path
         full_path = (self.storage_root / path).resolve()
@@ -88,13 +96,22 @@ class LocalStorageBackend(AbstractStorageBackend):
             Absolute Path object
 
         Raises:
-            ValueError: If path attempts directory traversal
+            ValueError: If path attempts directory traversal or contains symlinks
         """
         # Strip leading slashes if present
         path = path.lstrip("/") if path else ""
 
         # Org's shared storage root
         org_root = self.shared_root / str(org_id)
+
+        # Fast-reject layer: check for obvious symlinks (defense in depth only)
+        # This is NOT the security boundary - fd-based operations are
+        if path:
+            current = org_root
+            for part in Path(path).parts:
+                current = current / part
+                if current.exists() and current.is_symlink():
+                    raise ValueError(f"Invalid path: {path} (symlinks not allowed)")
 
         # Resolve to absolute path
         if path:
@@ -276,7 +293,7 @@ class LocalStorageBackend(AbstractStorageBackend):
 
     def move_shared(self, org_id: str | int, source: str, destination: str) -> FileInfo:
         """Move shared file or directory to new location."""
-        import shutil
+        from core.utils import safe_move
 
         source_full = self._resolve_shared_path(org_id, source)
         dest_full = self._resolve_shared_path(org_id, destination)
@@ -299,7 +316,8 @@ class LocalStorageBackend(AbstractStorageBackend):
                 f"File '{source_name}' already exists at destination: {destination}"
             )
 
-        shutil.move(str(source_full), str(new_full_path))
+        # Perform move using fd-pinned safe_move
+        safe_move(source_full, new_full_path, self.shared_root)
         new_relative_path = str(new_full_path.relative_to(org_root))
 
         return self._shared_file_info(new_full_path, new_relative_path, org_id)
@@ -312,7 +330,7 @@ class LocalStorageBackend(AbstractStorageBackend):
         new_name: str | None = None,
     ) -> FileInfo:
         """Copy shared file or directory to new location."""
-        import shutil
+        from core.utils import safe_copy
 
         source_full = self._resolve_shared_path(org_id, source)
         dest_full = self._resolve_shared_path(org_id, destination)
@@ -349,10 +367,8 @@ class LocalStorageBackend(AbstractStorageBackend):
 
         new_full_path = dest_full / final_name
 
-        if source_full.is_dir():
-            shutil.copytree(str(source_full), str(new_full_path))
-        else:
-            shutil.copy2(str(source_full), str(new_full_path))
+        # Perform copy using safe_copy with O_NOFOLLOW validation
+        safe_copy(source_full, new_full_path, self.shared_root)
 
         new_relative_path = str(new_full_path.relative_to(org_root))
 
@@ -505,7 +521,7 @@ class LocalStorageBackend(AbstractStorageBackend):
 
     def move(self, source: str, destination: str) -> FileInfo:
         """Move file or directory to new location."""
-        import shutil
+        from core.utils import safe_move
 
         source_full = self._resolve_path(source)
         dest_full = self._resolve_path(destination)
@@ -531,8 +547,8 @@ class LocalStorageBackend(AbstractStorageBackend):
                 f"File '{source_name}' already exists at destination: {destination}"
             )
 
-        # Perform move
-        shutil.move(str(source_full), str(new_full_path))
+        # Perform move using fd-pinned safe_move
+        safe_move(source_full, new_full_path, self.storage_root)
 
         # Calculate relative path for return value
         new_relative_path = str(new_full_path.relative_to(self.storage_root))
@@ -543,7 +559,7 @@ class LocalStorageBackend(AbstractStorageBackend):
         self, source: str, destination: str, new_name: str | None = None
     ) -> FileInfo:
         """Copy file or directory to new location."""
-        import shutil
+        from core.utils import safe_copy
 
         source_full = self._resolve_path(source)
         dest_full = self._resolve_path(destination)
@@ -582,11 +598,8 @@ class LocalStorageBackend(AbstractStorageBackend):
 
         new_full_path = dest_full / final_name
 
-        # Perform copy
-        if source_full.is_dir():
-            shutil.copytree(str(source_full), str(new_full_path))
-        else:
-            shutil.copy2(str(source_full), str(new_full_path))
+        # Perform copy using safe_copy with O_NOFOLLOW validation
+        safe_copy(source_full, new_full_path, self.storage_root)
 
         # Calculate relative path for return value
         new_relative_path = str(new_full_path.relative_to(self.storage_root))

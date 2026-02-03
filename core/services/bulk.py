@@ -17,7 +17,7 @@ from django.db import transaction
 from django.db.models import Sum
 
 from core.storage.base import AbstractStorageBackend
-from core.utils import normalize_path, PathValidationError
+from core.utils import normalize_path, PathValidationError, safe_rmtree
 from storage.models import StoredFile
 
 if TYPE_CHECKING:
@@ -302,10 +302,10 @@ class BulkOperationService:
                     file_info = self.backend.info(full_path)
 
                     if file_info.is_directory:
-                        # Recursive delete for directories
+                        # Recursive delete for directories using fd-pinned safe_rmtree
                         resolved_path = self.backend._resolve_path(full_path)  # type: ignore[attr-defined]
                         if resolved_path.exists():
-                            shutil.rmtree(resolved_path)
+                            safe_rmtree(resolved_path, self.backend.storage_root)  # type: ignore[attr-defined]
                     else:
                         # Regular file delete
                         self.backend.delete(full_path)
@@ -379,11 +379,11 @@ class BulkOperationService:
                 file_info = self.backend.info(full_path)
 
                 if file_info.is_directory:
-                    # Recursive delete for directories
+                    # Recursive delete for directories using fd-pinned safe_rmtree
                     # LocalStorageBackend has _resolve_path but it's not in abstract interface
                     resolved_path = self.backend._resolve_path(full_path)  # type: ignore[attr-defined]
                     if resolved_path.exists():
-                        shutil.rmtree(resolved_path)
+                        safe_rmtree(resolved_path, self.backend.storage_root)  # type: ignore[attr-defined]
                 else:
                     # Regular file delete
                     self.backend.delete(full_path)

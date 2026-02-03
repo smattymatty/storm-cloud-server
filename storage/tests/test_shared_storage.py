@@ -282,7 +282,8 @@ class SharedFileDetailTest(SharedStorageAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["name"], unique_file)
-        self.assertEqual(response.data["size"], len(content))
+        # Size is disk size (includes encryption overhead if enabled)
+        self.assertGreaterEqual(response.data["size"], len(content))
         self.assertIn("ETag", response)
 
     def test_get_nonexistent_shared_file_returns_404(self):
